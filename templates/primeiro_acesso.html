@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block titulo %}Primeiro acesso — Casa de Acolhida Restauração{% endblock %}
+
+{% block estilo %}
+  .entrar { max-width: 420px; margin: 56px auto; background: #fff; border: 1px solid var(--borda); border-radius: 12px; padding: 24px 24px 26px; }
+  .entrar h1 { margin-top: 0; }
+  .entrar form { display: grid; gap: 14px; margin-top: 18px; }
+  .entrar .botao { width: 100%; padding: 10px; }
+{% endblock %}
+
+{% block conteudo %}
+<main class="entrar">
+  <h1>Primeiro acesso</h1>
+  <p class="ajuda">Ainda não há nenhum usuário. Crie o seu para proteger os dados dos internos:
+    sempre que abrir o sistema, será preciso entrar com ele. Guarde bem a senha — ela tem pelo menos
+    {{ minimo }} caracteres e não pode ser recuperada, só trocada.</p>
+  {% if erro %}<p class="caixa-erros erro" role="alert">{{ erro }}</p>{% endif %}
+  <form method="post" action="{{ url_for('primeiro_acesso') }}">
+    <label>Nome de usuário
+      <input name="usuario" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus></label>
+    <label>Senha
+      <input name="senha" type="password" autocomplete="new-password" minlength="{{ minimo }}" required></label>
+    <label>Repita a senha
+      <input name="confirmacao" type="password" autocomplete="new-password" minlength="{{ minimo }}" required></label>
+    <button class="botao">Criar usuário e entrar</button>
+  </form>
+</main>
+{% endblock %}

@@ -1,0 +1,3 @@
+-r requirements.txt
+waitress>=3.0        # servidor do programa local (iniciar.py)
+pyinstaller>=6.16    # empacota tudo num .exe (construir_exe.bat)
