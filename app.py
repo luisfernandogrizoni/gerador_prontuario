@@ -45,7 +45,9 @@ from prontuario import fmt_data, fmt_reais, gerar_docx
 from validacao import fmt_cep, fmt_cpf, fmt_hora, fmt_rg
 from vagas import gerar_vagas
 
-app = Flask(__name__)
+# DADOS_DIR: onde ficam o banco e a chave da sessão (o programa iniciar.py usa a pasta do
+# usuário no Windows); sem ela, a pasta instance/ ao lado deste arquivo
+app = Flask(__name__, instance_path=os.environ.get("DADOS_DIR") or None)
 # o banco fica fora do git: SQLite local por padrão, ou o que estiver em DATABASE_URL (banco.py)
 app.config["SQLALCHEMY_DATABASE_URI"] = banco.url_do_banco()
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = banco.opcoes_do_motor(app.config["SQLALCHEMY_DATABASE_URI"])
@@ -53,10 +55,16 @@ app.config["SECRET_KEY"] = autenticacao.chave_secreta(app.instance_path)  # assi
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,       # o JavaScript da página não lê o cookie
     SESSION_COOKIE_SAMESITE="Lax",      # o navegador não manda o cookie em POST vindo de outro site
-    SESSION_COOKIE_SECURE=not app.debug,   # só trafega por HTTPS (exceto em desenvolvimento)
+    # só trafega por HTTPS — menos em desenvolvimento e no modo local (http://127.0.0.1, que
+    # nunca sai deste computador)
+    SESSION_COOKIE_SECURE=not (app.debug or autenticacao.modo_local()),
     SESSION_REFRESH_EACH_REQUEST=False,    # o login não se renova sozinho: vale 10 h e acabou
     PERMANENT_SESSION_LIFETIME=autenticacao.DURACAO_LOGIN,
 )
+if autenticacao.modo_local():
+    # só atende pedidos endereçados a este computador (barra ataques de "DNS rebinding", em que
+    # um site de fora faz o navegador falar com o sistema local)
+    app.config["TRUSTED_HOSTS"] = ["127.0.0.1", "localhost"]
 db.init_app(app)
 
 with app.app_context():
@@ -93,6 +101,8 @@ def _dados_para_novo(pessoa_id):
 def login():
     if g.usuario:
         return redirect(url_for("home"))
+    if autenticacao.primeiro_acesso_liberado():
+        return redirect(url_for("primeiro_acesso"))
     proximo = request.values.get("next", "")
     if request.method == "POST":
         usuario, erro = autenticacao.entrar(request.form.get("usuario"), request.form.get("senha"))
@@ -101,6 +111,25 @@ def login():
             return redirect(autenticacao.destino_seguro(proximo, url_for("home")))
         return render_template("login.html", erro=erro, proximo=proximo), 401
     return render_template("login.html", erro=None, proximo=proximo)
+
+
+@app.route("/primeiro-acesso", methods=["GET", "POST"])
+def primeiro_acesso():
+    """Só no programa local, e só até existir o primeiro usuário (autenticacao.py)."""
+    if not autenticacao.primeiro_acesso_liberado():
+        abort(404)
+    erro = None
+    if request.method == "POST":
+        if request.form.get("senha") != request.form.get("confirmacao"):
+            erro = "A confirmação não é igual à senha."
+        else:
+            usuario, erro = autenticacao.criar_usuario(request.form.get("usuario"), request.form.get("senha"))
+            if usuario:
+                autenticacao.abrir_sessao(usuario)
+                flash(f"Usuário {usuario.nome} criado. Da próxima vez, entre com ele.")
+                return redirect(url_for("home"))
+    return render_template("primeiro_acesso.html", erro=erro, minimo=autenticacao.SENHA_MINIMA), \
+        (400 if erro else 200)
 
 
 @app.post("/sair")
