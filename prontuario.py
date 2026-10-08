@@ -122,14 +122,29 @@ def classificar(convenio, valor):
         return 0.0, convenio
     if convenio not in CONVENIOS:
         return valor, CONVENIO_A_DEFINIR
-    categoria = CATEGORIA_VALOR_ZERO
-    for limite, nome in FAIXAS_PARTICULAR:
-        if valor > limite:
-            categoria = nome
-            break
+    categoria = categoria_particular(valor)
     if categoria == convenio:  # evita "Particular — Particular"
         return valor, convenio
     return valor, f"{convenio} — {categoria}"
+
+
+def categoria_particular(valor):
+    """Categoria do particular pela faixa de valor (valor 0,00 -> CATEGORIA_VALOR_ZERO)."""
+    for limite, nome in FAIXAS_PARTICULAR:
+        if valor > limite:
+            return nome
+    return CATEGORIA_VALOR_ZERO
+
+
+def categoria_vaga(convenio, valor):
+    """Categoria em que a pessoa ocupa vaga: o convênio gratuito ou a faixa do particular
+    (particular com valor 0,00 conta como Social Total). Sem convênio definido -> None."""
+    if convenio in CONVENIOS_GRATUITOS:
+        return convenio
+    if convenio not in CONVENIOS:
+        return None
+    categoria = categoria_particular(valor)
+    return "Social Total" if categoria == CATEGORIA_VALOR_ZERO else categoria
 
 
 def marca(escolhido, opcao):

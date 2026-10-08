@@ -7,6 +7,15 @@
   .cartao:hover { border-color: var(--vermelho); transform: translateY(-2px); }
   .cartao strong { display: block; font-size: 1.08rem; color: var(--vermelho); margin-bottom: 6px; }
   .cartao span { color: var(--suave); font-size: .88rem; }
+  .vagas { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 8px 0 28px; }
+  .vaga { border: 1px solid var(--borda); border-radius: 12px; padding: 12px 14px; background: #fff; }
+  .vaga h3 { margin: 0 0 4px; font-size: .88rem; font-weight: 600; }
+  .vaga .numeros { font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .vaga .numeros small { font-size: .9rem; font-weight: 400; color: inherit; opacity: .75; }
+  .vaga .situacao { font-size: .82rem; }
+  .vaga.disponivel, .vaga.lotada { background: var(--verde-claro); border-color: #a8d5b1; color: var(--verde); }
+  .vaga.excedida { background: #fff5f5; border-color: #f0b4b0; color: var(--vermelho); }
+  .vaga.sem_limite { color: var(--suave); }
   .quadro { background: #fff; border: 1px solid var(--borda); border-radius: 12px; padding: 6px 18px 14px; }
   .quadro h2 { display: flex; align-items: center; gap: 10px; }
   .contagem { background: var(--vermelho); color: #fff; border-radius: 999px; font-size: .8rem; padding: 1px 9px; }
@@ -39,6 +48,17 @@
       <strong>Novo prontuário</strong><span>Internação direta: gera o prontuário em Word e registra o interno.</span></a>
     <a class="cartao" href="{{ url_for('lista_internos') }}">
       <strong>Lista de internos</strong><span>Ativos e inativos, parcelas e prontuário de cada um.</span></a>
+  </div>
+
+  <h2>Vagas ocupadas</h2>
+  <div class="vagas" id="vagas">
+    {% for v in vagas %}
+    <div class="vaga {{ v.situacao }}">
+      <h3>{{ v.categoria }}</h3>
+      <div class="numeros">{{ v.ocupadas }}{% if v.limite is not none %} <small>/ {{ v.limite }}</small>{% endif %}</div>
+      <div class="situacao">{{ v.texto }}</div>
+    </div>
+    {% endfor %}
   </div>
 
   <section class="quadro" id="avisos">

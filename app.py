@@ -2,7 +2,7 @@
 Sistema de Prontuários — Casa de Acolhida Restauração
 
 Telas:
-    /                               home: atalhos + quadro de avisos
+    /                               home: atalhos + vagas por categoria + quadro de avisos
     /triagens                       lista de triagens (muda a situação pelo navegador)
     /triagens/nova                  formulário de triagem (?pessoa=<id> = paciente já cadastrado)
     /internos                       lista de internos (ativos / inativos)
@@ -17,7 +17,8 @@ Organização:
     modelos.py     tabelas (pessoas, internacoes, parcelas)
     servicos.py    regras de negócio: validar, gravar, mudar status, parcelas
     avisos.py      quadro de avisos
-    app.py         este arquivo: só liga as rotas às partes acima
+    vagas.py       ocupação das vagas por categoria
+    app.py        este arquivo: só liga as rotas às partes acima
 
 ATENÇÃO: o banco (instance/internos.db) guarda dados pessoais sensíveis.
 Rodar só na máquina local; para publicar na internet, antes é preciso login.
@@ -32,6 +33,7 @@ from modelos import STATUS_INTERNACAO, STATUS_TRIAGEM, AvisoDispensado, Internac
 from migracoes import migrar
 from prontuario import fmt_data, fmt_reais, gerar_docx
 from validacao import fmt_cep, fmt_cpf, fmt_hora, fmt_rg
+from vagas import gerar_vagas
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///internos.db"  # relativo à pasta instance/
@@ -64,7 +66,7 @@ def _dados_para_novo(pessoa_id):
 # ===================================================================== home
 @app.get("/")
 def home():
-    return render_template("home.html", avisos=gerar_avisos())
+    return render_template("home.html", avisos=gerar_avisos(), vagas=gerar_vagas())
 
 
 @app.post("/avisos/ciente")
