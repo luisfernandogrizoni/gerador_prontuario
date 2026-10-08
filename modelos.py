@@ -60,7 +60,8 @@ class CamposDeFormulario:
             elif isinstance(coluna.type, Float):
                 valor = ler_valor(bruto)
             else:
-                valor = bruto
+                # o Postgres recusa texto maior que a coluna (o SQLite aceitava): corta no limite
+                valor = bruto[:coluna.type.length] if coluna.type.length else bruto
             setattr(self, coluna.name, valor)
         self.normalizar()
 
@@ -296,3 +297,18 @@ class AvisoDispensado(db.Model):
 
     chave: Mapped[str] = mapped_column(String(200), primary_key=True)
     dispensado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+# =========================================================================
+class Usuario(db.Model):
+    """Quem pode entrar no sistema. A senha nunca é gravada: só o hash dela."""
+    __tablename__ = "usuarios"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nome: Mapped[str] = mapped_column(String(50), unique=True)  # sempre em minúsculas
+    senha_hash: Mapped[str] = mapped_column(String(256))
+    ativo: Mapped[bool] = mapped_column(default=True)
+    # proteção contra tentativa e erro: após várias senhas erradas, bloqueia por um tempo
+    falhas: Mapped[int] = mapped_column(default=0)
+    bloqueado_ate: Mapped[datetime | None] = mapped_column(DateTime)
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

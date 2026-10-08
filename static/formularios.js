@@ -121,7 +121,9 @@ if (busca) {
     espera = setTimeout(async () => {          // espera parar de digitar (300 ms)
       const q = busca.value.trim();
       if (q.length < 2) { lista.hidden = true; return; }
-      const pessoas = await (await fetch(`/api/pessoas?q=${encodeURIComponent(q)}`)).json();
+      const resposta = await fetch(`/api/pessoas?q=${encodeURIComponent(q)}`);
+      if (resposta.status === 401) { location.reload(); return; }   // login expirou
+      const pessoas = await resposta.json();
       lista.replaceChildren();
       if (!pessoas.length) {
         const li = document.createElement("li");

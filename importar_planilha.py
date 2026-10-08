@@ -57,7 +57,7 @@ def palavras(t):
 
 
 def nome_proprio(t):
-    """'adriano_ramos_de_souza' -> 'Adriano Ramos de Souza'"""
+    """'fulano_de_tal' -> 'Fulano de Tal'"""
     return " ".join(p if (i and p in PARTICULAS) else p[:1].upper() + p[1:]
                     for i, p in enumerate(palavras(t)))
 

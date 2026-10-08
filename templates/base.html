@@ -14,6 +14,10 @@
     header .marca { font-weight: 700; color: var(--vermelho); text-decoration: none; margin-right: auto; }
     header a { color: var(--texto); text-decoration: none; font-size: .95rem; }
     header a:hover, header a.atual { color: var(--vermelho); }
+    header .usuario { display: flex; gap: 10px; align-items: center; padding-left: 14px; border-left: 1px solid var(--borda); }
+    header .usuario form { margin: 0; }
+    header .usuario button { font: inherit; font-size: .95rem; background: none; border: 0; padding: 0; color: var(--suave); cursor: pointer; }
+    header .usuario button:hover { color: var(--vermelho); }
     main { max-width: 900px; margin: 24px auto; padding: 0 16px; }
     main.largo { max-width: 1320px; }
     h1 { font-size: 1.4rem; margin-bottom: 4px; }
@@ -84,10 +88,16 @@
   <header>
     <nav>
       <a class="marca" href="{{ url_for('home') }}">Casa de Acolhida Restauração</a>
+      {% if usuario_atual %}
       <a href="{{ url_for('lista_triagens') }}" {% if request.path.startswith('/triagens') %}class="atual"{% endif %}>Triagens</a>
       <a href="{{ url_for('lista_internos') }}" {% if request.path.startswith('/internos') %}class="atual"{% endif %}>Internos</a>
       <a href="{{ url_for('nova_triagem') }}">+ Triagem</a>
       <a href="{{ url_for('formulario') }}">+ Prontuário</a>
+      <span class="usuario">
+        <a href="{{ url_for('alterar_senha') }}" title="Alterar minha senha">{{ usuario_atual.nome }}</a>
+        <form method="post" action="{{ url_for('sair') }}"><button>Sair</button></form>
+      </span>
+      {% endif %}
     </nav>
   </header>
   {% block conteudo %}{% endblock %}

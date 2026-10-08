@@ -37,7 +37,9 @@ class TabelaDinamica {
   }
 
   async carregar() {
-    this.itens = await (await fetch(this.url)).json();
+    const resposta = await fetch(this.url);
+    if (resposta.status === 401) { location.reload(); return; }   // login expirou: o servidor leva à tela de entrar
+    this.itens = await resposta.json();
     this.aoCarregar(this.itens);
     this.desenhar();
     document.getElementById("atualizado").textContent =

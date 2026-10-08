@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block titulo %}Entrar — Casa de Acolhida Restauração{% endblock %}
+
+{% block estilo %}
+  .entrar { max-width: 380px; margin: 56px auto; background: #fff; border: 1px solid var(--borda); border-radius: 12px; padding: 24px 24px 26px; }
+  .entrar h1 { margin-top: 0; }
+  .entrar form { display: grid; gap: 14px; margin-top: 18px; }
+  .entrar .botao { width: 100%; padding: 10px; }
+{% endblock %}
+
+{% block conteudo %}
+<main class="entrar">
+  <h1>Entrar</h1>
+  <p class="ajuda">Sistema de Prontuários — acesso restrito. Os dados dos internos são confidenciais.</p>
+  {% if erro %}<p class="caixa-erros erro" role="alert">{{ erro }}</p>{% endif %}
+  <form method="post" action="{{ url_for('login') }}">
+    <input type="hidden" name="next" value="{{ proximo }}">
+    <label>Usuário
+      <input name="usuario" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus></label>
+    <label>Senha
+      <input name="senha" type="password" autocomplete="current-password" required></label>
+    <button class="botao">Entrar</button>
+  </form>
+</main>
+{% endblock %}
