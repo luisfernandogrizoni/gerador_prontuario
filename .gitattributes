@@ -1,0 +1,2 @@
+# o hook roda no shell do Git: precisa terminar linhas com LF, mesmo no Windows
+hooks/* text eol=lf

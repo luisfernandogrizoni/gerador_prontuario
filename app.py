@@ -2,7 +2,8 @@
 Sistema de Prontuários — Casa de Acolhida Restauração
 
 Telas:
-    /                               home: atalhos + quadro de avisos
+    /login, /sair, /senha           entrar, sair e alterar a própria senha (todo o resto exige login)
+    /                               home: atalhos + vagas por categoria + quadro de avisos
     /triagens                       lista de triagens (muda a situação pelo navegador)
     /triagens/nova                  formulário de triagem (?pessoa=<id> = paciente já cadastrado)
     /internos                       lista de internos (ativos / inativos)
@@ -17,30 +18,56 @@ Organização:
     modelos.py     tabelas (pessoas, internacoes, parcelas)
     servicos.py    regras de negócio: validar, gravar, mudar status, parcelas
     avisos.py      quadro de avisos
+    vagas.py       ocupação das vagas por categoria
+    autenticacao.py  login: usuários, senhas, sessão e proteção das rotas
+    banco.py       onde fica o banco (SQLite local ou Postgres da hospedagem)
+    copiar_banco.py  leva os dados do SQLite local para o banco da hospedagem
+    verificar_vazamento.py  confere se algum dado de interno foi parar no git
     app.py         este arquivo: só liga as rotas às partes acima
 
-ATENÇÃO: o banco (instance/internos.db) guarda dados pessoais sensíveis.
-Rodar só na máquina local; para publicar na internet, antes é preciso login.
+ATENÇÃO: o banco guarda dados pessoais sensíveis e NUNCA vai para o git (instance/ está
+no .gitignore; na hospedagem o banco é externo, via DATABASE_URL — veja banco.py).
+Toda tela e todo dado exigem login (veja autenticacao.py para criar usuários e para
+as variáveis de ambiente da hospedagem). Em produção use HTTPS e um servidor de
+verdade (gunicorn app:app) — `python app.py` é só para uso local.
 """
 
-from flask import (Flask, abort, flash, jsonify, redirect, render_template, request, send_file,
-                   url_for)
+from flask import (Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file,
+                   session, url_for)
 
+import autenticacao
+import banco
 import servicos
 from avisos import gerar_avisos
 from modelos import STATUS_INTERNACAO, STATUS_TRIAGEM, AvisoDispensado, Internacao, Parcela, Pessoa, db
 from migracoes import migrar
 from prontuario import fmt_data, fmt_reais, gerar_docx
 from validacao import fmt_cep, fmt_cpf, fmt_hora, fmt_rg
+from vagas import gerar_vagas
 
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///internos.db"  # relativo à pasta instance/
-app.config["SECRET_KEY"] = "troque-esta-chave"  # necessário para as mensagens flash
+# o banco fica fora do git: SQLite local por padrão, ou o que estiver em DATABASE_URL (banco.py)
+app.config["SQLALCHEMY_DATABASE_URI"] = banco.url_do_banco()
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = banco.opcoes_do_motor(app.config["SQLALCHEMY_DATABASE_URI"])
+app.config["SECRET_KEY"] = autenticacao.chave_secreta(app.instance_path)  # assina a sessão do login
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,       # o JavaScript da página não lê o cookie
+    SESSION_COOKIE_SAMESITE="Lax",      # o navegador não manda o cookie em POST vindo de outro site
+    SESSION_COOKIE_SECURE=not app.debug,   # só trafega por HTTPS (exceto em desenvolvimento)
+    SESSION_REFRESH_EACH_REQUEST=False,    # o login não se renova sozinho: vale 10 h e acabou
+    PERMANENT_SESSION_LIFETIME=autenticacao.DURACAO_LOGIN,
+)
 db.init_app(app)
 
 with app.app_context():
     db.create_all()   # cria as tabelas que ainda não existem
     migrar(db)        # acrescenta colunas novas em bancos antigos
+    autenticacao.criar_usuario_inicial()
+
+app.before_request(autenticacao.exigir_login)
+app.after_request(autenticacao.cabecalhos_de_seguranca)
+autenticacao.registrar_comandos(app)
+app.context_processor(lambda: {"usuario_atual": g.get("usuario")})
 
 # filtros usados nos templates: {{ p.cpf | cpf }}, {{ i.inicio | data }} ...
 app.jinja_env.filters.update(cpf=fmt_cpf, rg=fmt_rg, cep=fmt_cep, data=fmt_data, hora=fmt_hora,
@@ -61,10 +88,44 @@ def _dados_para_novo(pessoa_id):
     return dados, pessoa
 
 
+# ==================================================================== login
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if g.usuario:
+        return redirect(url_for("home"))
+    proximo = request.values.get("next", "")
+    if request.method == "POST":
+        usuario, erro = autenticacao.entrar(request.form.get("usuario"), request.form.get("senha"))
+        if usuario:
+            autenticacao.abrir_sessao(usuario)
+            return redirect(autenticacao.destino_seguro(proximo, url_for("home")))
+        return render_template("login.html", erro=erro, proximo=proximo), 401
+    return render_template("login.html", erro=None, proximo=proximo)
+
+
+@app.post("/sair")
+def sair():
+    session.clear()
+    return redirect(url_for("login"))
+
+
+@app.route("/senha", methods=["GET", "POST"])
+def alterar_senha():
+    erro = None
+    if request.method == "POST":
+        erro = autenticacao.trocar_senha(g.usuario, request.form.get("atual"),
+                                         request.form.get("nova"), request.form.get("confirmacao"))
+        if not erro:
+            autenticacao.abrir_sessao(g.usuario)   # a sessão de agora continua valendo
+            flash("Senha alterada.")
+            return redirect(url_for("home"))
+    return render_template("senha.html", erro=erro, minimo=autenticacao.SENHA_MINIMA)
+
+
 # ===================================================================== home
 @app.get("/")
 def home():
-    return render_template("home.html", avisos=gerar_avisos())
+    return render_template("home.html", avisos=gerar_avisos(), vagas=gerar_vagas())
 
 
 @app.post("/avisos/ciente")
@@ -99,7 +160,7 @@ def lista_triagens():
 def api_triagens():
     itens = db.session.execute(
         db.select(Internacao).filter(Internacao.status.in_(STATUS_TRIAGEM))
-        .order_by(Internacao.primeiro_contato.desc(), Internacao.id.desc())).scalars()
+        .order_by(Internacao.primeiro_contato.desc().nulls_last(), Internacao.id.desc())).scalars()
     return jsonify([i.para_triagem() for i in itens])
 
 
@@ -141,7 +202,7 @@ def lista_internos():
 def api_internos():
     itens = db.session.execute(
         db.select(Internacao).filter(Internacao.status.in_(STATUS_INTERNACAO))
-        .order_by(Internacao.inicio.desc(), Internacao.id.desc())).scalars()
+        .order_by(Internacao.inicio.desc().nulls_last(), Internacao.id.desc())).scalars()
     return jsonify([i.para_lista() for i in itens])
 
 
@@ -205,4 +266,5 @@ def excluir_parcela(id):
 
 
 if __name__ == "__main__":
+    app.config["SESSION_COOKIE_SECURE"] = False   # uso local: http://localhost, sem HTTPS
     app.run(debug=True)

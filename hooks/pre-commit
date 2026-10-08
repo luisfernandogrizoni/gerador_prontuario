@@ -1,0 +1,4 @@
+#!/bin/sh
+# Antes de cada commit, confere se dados dos internos estao indo para o git.
+# Ativar neste clone:  git config core.hooksPath hooks
+python verificar_vazamento.py || exit 1

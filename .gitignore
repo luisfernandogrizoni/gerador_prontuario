@@ -1,3 +1,22 @@
 # banco com dados pessoais: nunca versionar
 instance/
 __pycache__/
+
+# qualquer cópia de dados dos internos (bancos, planilhas, exportações, backups)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.csv
+*.xls
+*.xlsx
+*.sql
+*.dump
+*.bak
+backups/
+
+# segredos (chaves, senhas, URL do banco): vão no painel da hospedagem, nunca no git
+.env
+.env.*
+*.key
+*.pem
