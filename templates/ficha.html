@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% set p = i.pessoa %}
+
+{% block titulo %}{{ p.nome }}{% endblock %}
+
+{% block estilo %}
+  .cabecalho { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .cabecalho h1 { margin: 0; margin-right: auto; }
+  .acoes { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0 18px; }
+  .cartao { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 4px 18px 14px; margin-bottom: 16px; }
+  dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px 18px; margin: 0; }
+  dt { font-size: .78rem; color: var(--suave); }
+  dd { margin: 2px 0 0; font-size: .95rem; }
+  dd:empty::after { content: "—"; color: #bbb; }
+  table.simples { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  .simples th, .simples td { padding: 6px 8px; border-bottom: 1px solid #eee; text-align: left; }
+  .simples td.num { text-align: right; }
+  .simples form { margin: 0; }
+  form.nova-parcela { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-top: 12px; }
+  form.nova-parcela label { width: 150px; }
+{% endblock %}
+
+{% block conteudo %}
+<main>
+  {% with msgs = get_flashed_messages() %}
+    {% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
+  {% endwith %}
+
+  <div class="cabecalho">
+    <h1>{{ p.nome }}</h1>
+    <span class="selo {{ i.status }}">{{ i.status_txt }}</span>
+  </div>
+  <p class="ajuda">Cadastro nº {{ p.id }} · registro nº {{ i.id }} · {{ i.convenio_txt }}</p>
+
+  <div class="acoes">
+    <a class="botao" href="{{ url_for('editar_internacao', id=i.id) }}">Editar</a>
+    {% if not i.e_triagem %}
+      <a class="botao secundario" href="{{ url_for('baixar_prontuario', id=i.id) }}">Baixar prontuário</a>
+    {% endif %}
+    <a class="botao secundario" href="{{ url_for('formulario', pessoa=p.id) }}">Nova internação desta pessoa</a>
+    <a class="botao secundario" href="{{ url_for('nova_triagem', pessoa=p.id) }}">Nova triagem desta pessoa</a>
+  </div>
+
+  <section class="cartao">
+    <h2>Dados pessoais</h2>
+    <dl>
+      <div><dt>CPF</dt><dd>{{ p.cpf | cpf }}</dd></div>
+      <div><dt>RG</dt><dd>{{ p.rg | rg }}</dd></div>
+      <div><dt>Nascimento</dt><dd>{{ p.nascimento | data }}</dd></div>
+      <div><dt>Cartão SUS</dt><dd>{{ p.cartao_sus }}</dd></div>
+      <div><dt>Estado civil</dt><dd>{{ p.estado_civil }}{{ ' — ' ~ p.estado_civil_outro if p.estado_civil_outro }}</dd></div>
+      <div><dt>Cônjuge</dt><dd>{{ p.conjuge }}</dd></div>
+      <div><dt>Mãe</dt><dd>{{ p.mae }}</dd></div>
+      <div><dt>Escolaridade</dt><dd>{{ p.escolaridade }}</dd></div>
+      <div><dt>Profissão</dt><dd>{{ p.profissao }}</dd></div>
+      <div><dt>Religião</dt><dd>{{ p.religiao }}</dd></div>
+      <div><dt>Endereço</dt><dd>{{ [p.endereco, p.numero] | select | join(', ') }}{{ ' — ' ~ p.bairro if p.bairro }}</dd></div>
+      <div><dt>Cidade / UF</dt><dd>{{ [p.cidade, p.estado] | select | join('/') }}</dd></div>
+      <div><dt>CEP</dt><dd>{{ p.cep | cep }}</dd></div>
+      <div><dt>Contatos</dt><dd>{{ [p.contato1, p.contato2, p.contato3] | select | join(' · ') }}</dd></div>
+    </dl>
+  </section>
+
+  <section class="cartao">
+    <h2>{{ 'Triagem' if i.e_triagem else 'Internação' }}</h2>
+    <dl>
+      <div><dt>1º contato</dt><dd>{{ i.primeiro_contato | data }} {{ i.hora_primeiro_contato | hora }}</dd></div>
+      <div><dt>Triagem</dt><dd>{{ i.data_triagem | data }} {{ i.hora_triagem | hora }}{{ ' · ' ~ i.modalidade if i.modalidade }}</dd></div>
+      <div><dt>Internação agendada</dt><dd>{{ i.internacao_agendada | data }} {{ i.hora_agendada | hora }}</dd></div>
+      <div><dt>Internado em (efetiva)</dt><dd>{{ i.inicio | data }} {{ i.hora_internacao | hora }}</dd></div>
+      <div><dt>Saída</dt><dd>{{ i.termino | data }}{{ ' · ' ~ i.motivo if i.motivo }}</dd></div>
+      <div><dt>Responsável</dt><dd>{{ i.resp_nome }}{{ ' (' ~ i.parentesco ~ ')' if i.parentesco }}</dd></div>
+      <div><dt>CPF / RG do responsável</dt><dd>{{ [i.resp_cpf | cpf, i.resp_rg | rg] | select | join(' · ') }}</dd></div>
+      <div><dt>Convênio</dt><dd>{{ i.convenio_txt }}</dd></div>
+      <div><dt>Contribuição</dt><dd>{{ i.contribuicao_valor | reais }}{{ ' — ' ~ i.contribuicao_condicoes if i.contribuicao_condicoes }}</dd></div>
+    </dl>
+  </section>
+
+  <section class="cartao" id="parcelas">
+    <h2>Parcelas</h2>
+    {% if i.parcelas %}
+      <table class="simples">
+        <thead><tr><th>Nº</th><th>Data</th><th>Valor</th><th></th></tr></thead>
+        <tbody>
+          {% for parc in i.parcelas %}
+          <tr>
+            <td>{{ parc.numero }}ª</td>
+            <td>{{ parc.data | data }}</td>
+            <td class="num">{{ parc.valor | reais if parc.valor is not none else '—' }}</td>
+            <td><form method="post" action="{{ url_for('excluir_parcela', id=parc.id) }}"
+                      onsubmit="return confirm('Excluir a {{ parc.numero }}ª parcela?')">
+                  <button class="botao pequeno secundario">Excluir</button></form></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="ajuda">Nenhuma parcela lançada.</p>
+    {% endif %}
+    <form class="nova-parcela" method="post" action="{{ url_for('lancar_parcela', id=i.id) }}">
+      <label>Nº<input type="number" name="numero" min="1"
+             value="{{ (i.parcelas | map(attribute='numero') | max) + 1 if i.parcelas else 1 }}"></label>
+      <label>Data *<input type="date" name="data" required></label>
+      <label>Valor (R$)<input type="number" step="0.01" min="0" name="valor"
+             value="{{ '%.2f' % i.contribuicao_valor if i.contribuicao_valor else '' }}"></label>
+      <button class="botao">Lançar parcela</button>
+    </form>
+  </section>
+
+  {% set outras = p.internacoes | rejectattr('id', 'equalto', i.id) | list %}
+  {% if outras %}
+  <section class="cartao">
+    <h2>Outros registros desta pessoa</h2>
+    <table class="simples">
+      <thead><tr><th>Registro</th><th>Situação</th><th>1º contato</th><th>Agendada</th><th>Internado em</th><th>Saída</th><th>Responsável</th></tr></thead>
+      <tbody>
+        {% for o in outras %}
+        <tr>
+          <td><a href="{{ url_for('ficha', id=o.id) }}">nº {{ o.id }}</a></td>
+          <td><span class="selo {{ o.status }}">{{ o.status_txt }}</span></td>
+          <td>{{ o.primeiro_contato | data }}</td>
+          <td>{{ o.internacao_agendada | data }}</td>
+          <td>{{ o.inicio | data }}</td>
+          <td>{{ o.termino | data }}</td>
+          <td>{{ o.resp_nome }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+</main>
+{% endblock %}

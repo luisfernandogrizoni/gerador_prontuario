@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}Casa de Acolhida Restauração{% endblock %}</title>
+  <style>
+    :root { --vermelho: #b3261e; --fundo: #f4f4f6; --borda: #ddd; --texto: #222; --suave: #666;
+            --verde: #1e6b31; --verde-claro: #eaf6ec; --amarelo: #fff6d6; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; background: var(--fundo); margin: 0; color: var(--texto); }
+    header { background: #fff; border-bottom: 1px solid var(--borda); }
+    header nav { max-width: 1320px; margin: 0 auto; padding: 10px 16px; display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+    header .marca { font-weight: 700; color: var(--vermelho); text-decoration: none; margin-right: auto; }
+    header a { color: var(--texto); text-decoration: none; font-size: .95rem; }
+    header a:hover, header a.atual { color: var(--vermelho); }
+    main { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+    main.largo { max-width: 1320px; }
+    h1 { font-size: 1.4rem; margin-bottom: 4px; }
+    h2 { font-size: 1.1rem; }
+    p.ajuda { margin-top: 0; color: var(--suave); font-size: .9rem; }
+    a { color: var(--vermelho); }
+    .botao { display: inline-block; font: inherit; font-weight: 600; padding: 9px 18px; border: 1px solid var(--vermelho); border-radius: 6px;
+             background: var(--vermelho); color: #fff; cursor: pointer; text-decoration: none; font-size: .92rem; width: auto; }
+    .botao.secundario { background: #fff; color: var(--vermelho); }
+    .botao.pequeno { padding: 4px 10px; font-size: .82rem; }
+    .mensagens { list-style: none; padding: 0; margin: 0 0 14px; }
+    .mensagens li { background: var(--verde-claro); border: 1px solid #a8d5b1; border-radius: 8px; padding: 10px 14px; margin-bottom: 6px; }
+    .selo { font-size: .78rem; padding: 2px 8px; border-radius: 999px; background: #eee; color: #555; white-space: nowrap; }
+    .selo.ativo { background: var(--verde-claro); color: var(--verde); }
+    .selo.em_admissao { background: #e7f0ff; color: #1d4f9c; }
+    .selo.lista_espera { background: var(--amarelo); color: #7a5a00; }
+
+    /* ---- formulários (triagem e prontuário) ---- */
+    fieldset { background: #fff; border: 1px solid var(--borda); border-radius: 8px; margin-bottom: 16px; padding: 12px 16px 16px; }
+    legend { font-weight: 600; padding: 0 6px; }
+    .grade { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px 12px; }
+    .c1 { grid-column: span 1; } .c2 { grid-column: span 2; } .c3 { grid-column: span 3; }
+    .c4 { grid-column: span 4; } .c5 { grid-column: span 5; } .c6 { grid-column: span 6; }
+    label { display: flex; flex-direction: column; font-size: .85rem; gap: 3px; }
+    input, select, textarea { font: inherit; padding: 6px 8px; border: 1px solid #bbb; border-radius: 5px; width: 100%; }
+    input[readonly] { background: #f3f3f3; }
+    small { color: #777; }
+    small.erro, .erro { color: var(--vermelho); }
+    label.com-erro input, label.com-erro select { border-color: var(--vermelho); background: #fff5f5; }
+    .caixa-erros { background: #fff5f5; border: 1px solid #f0b4b0; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; }
+    @media (max-width: 640px) { .grade > * { grid-column: span 6; } }
+    .paciente-escolhido { background: var(--verde-claro); border: 1px solid #a8d5b1; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: .92rem; }
+    .resultado-pessoas { list-style: none; margin: 6px 0 0; padding: 0; border: 1px solid var(--borda); border-radius: 6px; max-height: 260px; overflow: auto; background: #fff; }
+    .resultado-pessoas li { padding: 8px 10px; border-bottom: 1px solid #eee; cursor: pointer; font-size: .9rem; }
+    .resultado-pessoas li:hover, .resultado-pessoas li:focus { background: var(--amarelo); outline: none; }
+    .resultado-pessoas li small { display: block; }
+
+    /* ---- listas (internos e triagens) ---- */
+    .topo-lista { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; margin-bottom: 14px; }
+    .topo-lista h1 { margin: 0; }
+    .contadores { display: flex; gap: 8px; margin-right: auto; flex-wrap: wrap; }
+    .contador { background: #fff; border: 1px solid var(--borda); border-radius: 8px; padding: 6px 12px; font-size: .85rem; color: var(--suave); }
+    .contador b { color: var(--texto); font-size: 1.05rem; margin-right: 4px; }
+    .topo-lista input[type=search], .topo-lista select { width: auto; min-width: 180px; padding: 8px 10px; }
+    #busca { width: min(300px, 100%); }
+    .aviso { background: var(--verde-claro); border: 1px solid #a8d5b1; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: .92rem; }
+    .aviso.erro { background: #fff5f5; border-color: #f0b4b0; color: var(--texto); }
+    .moldura { background: #fff; border: 1px solid var(--borda); border-radius: 8px; overflow-x: auto; }
+    table.lista { border-collapse: collapse; width: 100%; font-size: .88rem; }
+    .lista th, .lista td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #eee; vertical-align: top; }
+    .lista th, .lista td.fixo, .lista td.num { white-space: nowrap; }
+    .lista th { background: #fafafa; font-weight: 600; cursor: pointer; user-select: none; }
+    .lista th:hover { color: var(--vermelho); }
+    .lista th.sem-ordem { cursor: default; } .lista th.sem-ordem:hover { color: inherit; }
+    .lista th[aria-sort="ascending"]::after { content: " ▲"; font-size: .7em; }
+    .lista th[aria-sort="descending"]::after { content: " ▼"; font-size: .7em; }
+    .lista td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .lista tbody tr:hover { background: #fafafa; }
+    .lista tr.novo { background: var(--amarelo) !important; }
+    .lista td a { font-weight: 600; text-decoration: none; }
+    .lista td select { width: auto; padding: 3px 6px; font-size: .85rem; }
+    .vazio { padding: 32px; text-align: center; color: var(--suave); }
+    .rodape { color: var(--suave); font-size: .8rem; margin-top: 8px; }
+    {% block estilo %}{% endblock %}
+  </style>
+</head>
+<body>
+  <header>
+    <nav>
+      <a class="marca" href="{{ url_for('home') }}">Casa de Acolhida Restauração</a>
+      <a href="{{ url_for('lista_triagens') }}" {% if request.path.startswith('/triagens') %}class="atual"{% endif %}>Triagens</a>
+      <a href="{{ url_for('lista_internos') }}" {% if request.path.startswith('/internos') %}class="atual"{% endif %}>Internos</a>
+      <a href="{{ url_for('nova_triagem') }}">+ Triagem</a>
+      <a href="{{ url_for('formulario') }}">+ Prontuário</a>
+    </nav>
+  </header>
+  {% block conteudo %}{% endblock %}
+</body>
+</html>

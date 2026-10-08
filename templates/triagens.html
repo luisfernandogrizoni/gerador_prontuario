@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block titulo %}Triagens{% endblock %}
+
+{% block estilo %}
+  dialog { border: 1px solid var(--borda); border-radius: 12px; padding: 18px 20px; width: min(460px, 92vw); }
+  dialog::backdrop { background: rgba(0,0,0,.35); }
+  dialog h2 { margin-top: 0; }
+  dialog .grade { margin-bottom: 14px; }
+  dialog .botoes { display: flex; gap: 8px; justify-content: flex-end; }
+{% endblock %}
+
+{% block conteudo %}
+<main class="largo">
+  <div class="topo-lista">
+    <h1>Triagens</h1>
+    <div class="contadores">
+      <span class="contador"><b id="n-em_admissao">–</b>em admissão</span>
+      <span class="contador"><b id="n-lista_espera">–</b>lista de espera</span>
+      <span class="contador"><b id="n-desistiu">–</b>desistências</span>
+    </div>
+    <select id="filtro" aria-label="Situação">
+      <option value="andamento">Em andamento (admissão + espera)</option>
+      {% for valor, rotulo in status_triagem %}<option value="{{ valor }}">{{ rotulo }}</option>{% endfor %}
+      <option value="">Todas</option>
+    </select>
+    <input id="busca" type="search" placeholder="Buscar por nome, CPF, responsável, cidade…">
+    <a class="botao" href="{{ url_for('nova_triagem') }}">+ Triagem</a>
+  </div>
+
+  <div id="aviso" class="aviso" hidden></div>
+
+  <div class="moldura">
+    <table class="lista">
+      <thead>
+        <tr>
+          <th data-chave="nome">Nome</th>
+          <th data-chave="primeiro_contato">1º contato</th>
+          <th data-chave="triagem">Triagem</th>
+          <th data-chave="agendada">Internação agendada</th>
+          <th data-chave="convenio">Convênio</th>
+          <th data-chave="responsavel">Responsável</th>
+          <th data-chave="contato">Contato</th>
+          <th data-chave="status">Situação</th>
+          <th class="sem-ordem"></th>
+        </tr>
+      </thead>
+      <tbody id="linhas"></tbody>
+    </table>
+    <div id="vazio" class="vazio" hidden></div>
+  </div>
+  <p class="rodape" id="atualizado"></p>
+</main>
+
+<!-- janela que aparece ao escolher "Admitido" -->
+<dialog id="admitir">
+  <form method="dialog" id="form-admitir">
+    <h2>Admitir <span id="admitir-nome"></span></h2>
+    <p class="ajuda">Informe o dia em que ele <strong>de fato entrou</strong> na casa. Ao confirmar,
+      ele sai das triagens e entra na lista de internos ativos.</p>
+    <p class="ajuda" id="admitir-agendada"></p>
+    <div class="grade">
+      <label class="c3">Internado em *<input type="date" name="inicio" required></label>
+      <label class="c3">Horário<input type="time" name="hora_internacao"></label>
+      <label class="c3" id="campo-convenio">Convênio *
+        <select name="convenio">
+          <option value="">—</option>
+          {% for c in convenios %}<option>{{ c }}</option>{% endfor %}
+        </select></label>
+      <label class="c3">Valor (R$)<input type="number" step="0.01" min="0" name="contribuicao_valor"></label>
+    </div>
+    <p class="erro" id="admitir-erro"></p>
+    <div class="botoes">
+      <button class="botao secundario" value="cancelar" formnovalidate>Cancelar</button>
+      <button class="botao" value="confirmar">Admitir</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="{{ url_for('static', filename='tabela.js') }}"></script>
+<script>
+  const NOVO = {{ novo | tojson }};
+  const OPCOES = [...{{ status_triagem | tojson }}, ["ativo", "Admitido → internos"]];
+  const filtro = document.getElementById("filtro");
+  const aviso = document.getElementById("aviso");
+
+  function mostrarAviso(partes, erro = false) {
+    aviso.className = "aviso" + (erro ? " erro" : "");
+    aviso.replaceChildren(...partes);
+    aviso.hidden = false;
+  }
+
+  async function enviarStatus(item, dados) {
+    const r = await fetch(`/triagens/${item.id}/status`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(dados),
+    });
+    return [r.ok, await r.json()];
+  }
+
+  // pergunta data de internação (e convênio, se ainda "A definir") antes de admitir
+  function perguntarAdmissao(item) {
+    const dialogo = document.getElementById("admitir");
+    const form = document.getElementById("form-admitir");
+    form.reset();
+    document.getElementById("admitir-nome").textContent = item.nome;
+    document.getElementById("admitir-erro").textContent = "";
+    // sugestão: a data agendada (se houver); quem confirma é a pessoa
+    form.inicio.value = item.agendada || new Date().toISOString().slice(0, 10);
+    form.hora_internacao.value = item.hora_agendada || "";
+    document.getElementById("admitir-agendada").textContent =
+      item.agendada_fmt ? `Estava agendada para ${item.agendada_fmt}.` : "Não havia data agendada.";
+    document.getElementById("campo-convenio").hidden = item.convenio_definido;
+    form.convenio.required = !item.convenio_definido;
+    dialogo.showModal();
+    return new Promise(resolve => {
+      dialogo.addEventListener("close", () => {
+        resolve(dialogo.returnValue === "confirmar" ? Object.fromEntries(new FormData(form)) : null);
+      }, { once: true });
+    });
+  }
+
+  function seletorStatus(item) {
+    const sel = document.createElement("select");
+    for (const [valor, rotulo] of OPCOES) sel.add(new Option(rotulo, valor, false, valor === item.status));
+    sel.addEventListener("change", async () => {
+      let dados = { status: sel.value };
+      if (sel.value === "ativo") {
+        const extra = await perguntarAdmissao(item);
+        if (!extra) { sel.value = item.status; return; }       // cancelou
+        dados = { ...dados, ...extra };
+      }
+      const [ok, resp] = await enviarStatus(item, dados);
+      if (!ok) {
+        sel.value = item.status;
+        mostrarAviso([`Não foi possível mudar a situação de ${item.nome}: ${Object.values(resp.erros).join(" ")}`], true);
+        return;
+      }
+      if (resp.status === "ativo") {
+        mostrarAviso([`${item.nome} foi admitido e já está na lista de internos. `,
+                      link("Completar o prontuário", resp.editar), " · ", link("ver ficha", resp.ficha)]);
+      } else {
+        mostrarAviso([`Situação de ${item.nome} alterada para "${sel.selectedOptions[0].text}".`]);
+      }
+      tabela.carregar();
+    });
+    return sel;
+  }
+
+  const tabela = new TabelaDinamica({
+    url: "{{ url_for('api_triagens') }}",
+    destacar: NOVO,
+    camposBusca: i => [i.nome, i.cpf, i.cpf.replace(/\D/g, ""), i.responsavel, i.convenio, i.status_txt],
+    filtro: i => filtro.value === "andamento" ? i.status !== "desistiu" : (!filtro.value || i.status === filtro.value),
+    aoCarregar: itens => {
+      for (const s of ["em_admissao", "lista_espera", "desistiu"])
+        document.getElementById("n-" + s).textContent = itens.filter(i => i.status === s).length;
+    },
+    colunas: [
+      { celula: i => link(i.nome, `/internacoes/${i.id}`) },
+      { celula: i => i.primeiro_contato_fmt, classe: "fixo" },
+      { celula: i => i.triagem_fmt, classe: "fixo" },
+      { celula: i => i.agendada_fmt, classe: "fixo" },
+      { celula: i => i.convenio },
+      { celula: i => i.parentesco ? `${i.responsavel} (${i.parentesco})` : i.responsavel },
+      { celula: i => i.contato, classe: "fixo" },
+      { celula: i => seletorStatus(i), classe: "fixo" },
+      { celula: i => link("Editar", `/internacoes/${i.id}/editar`), classe: "fixo" },
+    ],
+  });
+  filtro.addEventListener("change", () => tabela.desenhar());
+
+  (async () => {
+    await tabela.carregar();
+    if (NOVO) {
+      const item = tabela.itens.find(i => i.id === NOVO);
+      if (item) {
+        if (!tabela.filtro(item)) { filtro.value = ""; tabela.desenhar(); }
+        mostrarAviso([`Triagem de ${item.nome} registrada.`]);
+        document.getElementById("linha-" + NOVO)?.scrollIntoView({ block: "center" });
+      }
+      history.replaceState(null, "", location.pathname);
+    }
+  })();
+</script>
+{% endblock %}

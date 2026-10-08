@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% import "_campos.html" as f with context %}
+
+{% block titulo %}{{ 'Editar triagem' if editando else 'Nova triagem' }}{% endblock %}
+
+{% block conteudo %}
+<main>
+  <h1>{{ 'Editar triagem' if editando else 'Nova triagem' }}</h1>
+  <p class="ajuda">Registro do candidato desde o primeiro contato. Para admitir, use a lista de
+     triagens (situação "Admitido") — aí ele passa para a lista de internos.</p>
+
+  <form method="post" action="{{ url_for('salvar_triagem') }}">
+    {{ f.topo(url_for('nova_triagem'), 'triagem') }}
+    {{ f.triagem() }}
+
+    <fieldset>
+      <legend>Situação</legend>
+      <div class="grade">
+        {{ f.escolha('status', 'Situação da triagem', status_triagem, 'c3', obrig=true, vazio=none) }}
+      </div>
+    </fieldset>
+
+    {{ f.identificacao(completo=false) }}
+    {{ f.endereco() }}
+    {{ f.responsavel() }}
+    {{ f.convenio(com_a_definir=true) }}
+
+    <button class="botao" type="submit">{{ 'Salvar alterações' if editando else 'Registrar triagem' }}</button>
+  </form>
+</main>
+<script src="{{ url_for('static', filename='formularios.js') }}"></script>
+{% endblock %}

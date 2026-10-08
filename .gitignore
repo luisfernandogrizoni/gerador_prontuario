@@ -1,0 +1,3 @@
+# banco com dados pessoais: nunca versionar
+instance/
+__pycache__/

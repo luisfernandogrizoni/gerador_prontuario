@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block estilo %}
+  .cartoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin: 20px 0 28px; }
+  .cartao { display: block; background: #fff; border: 1px solid var(--borda); border-radius: 12px; padding: 22px 18px;
+            text-decoration: none; color: var(--texto); transition: border-color .15s, transform .15s; }
+  .cartao:hover { border-color: var(--vermelho); transform: translateY(-2px); }
+  .cartao strong { display: block; font-size: 1.08rem; color: var(--vermelho); margin-bottom: 6px; }
+  .cartao span { color: var(--suave); font-size: .88rem; }
+  .quadro { background: #fff; border: 1px solid var(--borda); border-radius: 12px; padding: 6px 18px 14px; }
+  .quadro h2 { display: flex; align-items: center; gap: 10px; }
+  .contagem { background: var(--vermelho); color: #fff; border-radius: 999px; font-size: .8rem; padding: 1px 9px; }
+  details { border-top: 1px solid #eee; padding: 8px 0; }
+  summary { cursor: pointer; font-weight: 600; font-size: .95rem; }
+  summary .contagem { background: #888; margin-left: 6px; }
+  ul.avisos { list-style: none; padding: 0; margin: 8px 0 0; }
+  ul.avisos li { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 6px 0; font-size: .9rem; border-bottom: 1px dashed #eee; }
+  ul.avisos li:last-child { border-bottom: 0; }
+  ul.avisos li span { flex: 1 1 320px; }
+  ul.avisos form { margin: 0; }
+  .vazio { color: var(--suave); padding: 10px 0; }
+{% endblock %}
+
+{% block conteudo %}
+<main>
+  <h1>Sistema de Prontuários</h1>
+  <p class="ajuda">Comunidade Terapêutica — Casa de Acolhida Restauração</p>
+
+  {% with msgs = get_flashed_messages() %}
+    {% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
+  {% endwith %}
+
+  <div class="cartoes">
+    <a class="cartao" href="{{ url_for('nova_triagem') }}">
+      <strong>Nova triagem</strong><span>Registrar primeiro contato e triagem de um candidato.</span></a>
+    <a class="cartao" href="{{ url_for('lista_triagens') }}">
+      <strong>Triagens</strong><span>Em admissão, lista de espera e desistências. Mude a situação e admita.</span></a>
+    <a class="cartao" href="{{ url_for('formulario') }}">
+      <strong>Novo prontuário</strong><span>Internação direta: gera o prontuário em Word e registra o interno.</span></a>
+    <a class="cartao" href="{{ url_for('lista_internos') }}">
+      <strong>Lista de internos</strong><span>Ativos e inativos, parcelas e prontuário de cada um.</span></a>
+  </div>
+
+  <section class="quadro" id="avisos">
+    {% set total = avisos.values() | map('length') | sum %}
+    <h2>Quadro de avisos {% if total %}<span class="contagem">{{ total }}</span>{% endif %}</h2>
+    {% if not total %}
+      <p class="vazio">Nenhum aviso. Tudo em ordem.</p>
+    {% endif %}
+    {% for categoria, lista in avisos.items() %}
+      <details open>
+        <summary>{{ categoria }} <span class="contagem">{{ lista | length }}</span></summary>
+        <ul class="avisos">
+          {% for a in lista %}
+          <li>
+            <span>{{ a.texto }}</span>
+            <a class="botao pequeno secundario" href="{{ a.url }}">Abrir ficha</a>
+            {% if a.acao %}
+              <form method="post" action="{{ a.acao.url }}"
+                    onsubmit="return confirm('Unificar os dois cadastros? As internações passam para um só cadastro.')">
+                <button class="botao pequeno secundario">{{ a.acao.rotulo }}</button></form>
+            {% endif %}
+            <form method="post" action="{{ url_for('aviso_ciente') }}">
+              <input type="hidden" name="chave" value="{{ a.chave }}">
+              <button class="botao pequeno secundario" title="Tirar do quadro sem corrigir">Ciente</button></form>
+          </li>
+          {% endfor %}
+        </ul>
+      </details>
+    {% endfor %}
+  </section>
+</main>
+{% endblock %}

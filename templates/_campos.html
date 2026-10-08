@@ -1,0 +1,153 @@
+{#
+  Peças reutilizadas pelos formulários de triagem e de prontuário.
+  Importar com:  {% import "_campos.html" as f with context %}
+  ("with context" deixa as macros enxergarem `d` = dados e `erros`).
+#}
+
+{# ---------------------------------------------------------------- campos #}
+{% macro entrada(nome, rotulo, classe='c2', tipo='text', ajuda='', obrig=false, attrs={}) -%}
+<label class="{{ classe }}{{ ' com-erro' if erros.get(nome) }}">{{ rotulo }}{{ ' *' if obrig }}
+  <input type="{{ tipo }}" name="{{ nome }}" id="f-{{ nome }}" value="{{ d.get(nome, '') }}"{{ ' required' if obrig }}{{ attrs | xmlattr }}>
+  {% if erros.get(nome) %}<small class="erro">{{ erros[nome] }}</small>{% elif ajuda %}<small>{{ ajuda }}</small>{% endif %}
+</label>
+{%- endmacro %}
+
+{% macro escolha(nome, rotulo, opcoes, classe='c2', obrig=false, vazio='—', ajuda='', attrs={}) -%}
+<label class="{{ classe }}{{ ' com-erro' if erros.get(nome) }}">{{ rotulo }}{{ ' *' if obrig }}
+  <select name="{{ nome }}" id="f-{{ nome }}"{{ ' required' if obrig }}{{ attrs | xmlattr }}>
+    {% if vazio is not none %}<option value="">{{ vazio }}</option>{% endif %}
+    {% for o in opcoes %}
+      {% set v, r = (o, o) if o is string else o %}
+      <option value="{{ v }}"{{ ' selected' if d.get(nome, '') == v }}>{{ r }}</option>
+    {% endfor %}
+  </select>
+  {% if erros.get(nome) %}<small class="erro">{{ erros[nome] }}</small>{% elif ajuda %}<small>{{ ajuda }}</small>{% endif %}
+</label>
+{%- endmacro %}
+
+{# ------------------------------------------------- cabeçalho do formulário #}
+{% macro topo(destino_novo, tipo='internação') -%}
+  <input type="hidden" name="internacao_id" value="{{ d.get('internacao_id', '') }}">
+  <input type="hidden" name="pessoa_id" value="{{ d.get('pessoa_id', '') }}">
+  {% if erros %}
+    <div class="caixa-erros"><strong>Confira os campos marcados em vermelho.</strong></div>
+  {% endif %}
+  {% if editando %}
+    <p class="ajuda">Editando o registro nº {{ editando.id }} de <strong>{{ pessoa.nome }}</strong>.
+       <a href="{{ url_for('ficha', id=editando.id) }}">Voltar para a ficha</a></p>
+  {% elif pessoa %}
+    <div class="paciente-escolhido">
+      Paciente já cadastrado: <strong>{{ pessoa.nome }}</strong> (cadastro nº {{ pessoa.id }}).
+      Os dados pessoais foram carregados; confira e atualize se precisar.
+      <a href="{{ destino_novo }}">Trocar / paciente novo</a>
+    </div>
+  {% else %}
+    <fieldset class="busca-paciente">
+      <legend>Paciente já cadastrado?</legend>
+      <p class="ajuda">Se a pessoa já passou pela casa, busque pelo nome ou CPF para vincular esta
+        {{ tipo }} ao mesmo cadastro.
+        Se for paciente novo, é só preencher abaixo.</p>
+      <input type="search" id="busca-pessoa" placeholder="Digite nome ou CPF…" autocomplete="off"
+             data-destino="{{ destino_novo }}">
+      <ul id="resultado-pessoas" class="resultado-pessoas" hidden></ul>
+    </fieldset>
+  {% endif %}
+{%- endmacro %}
+
+{# --------------------------------------------------------------- blocos #}
+{% macro identificacao(completo=true) -%}
+<fieldset>
+  <legend>Acolhido</legend>
+  <div class="grade">
+    {{ entrada('nome', 'Nome completo', 'c6', obrig=true) }}
+    {{ entrada('nascimento', 'Data de nascimento', 'c2', 'date', 'A idade é calculada sozinha.') }}
+    {{ entrada('cpf', 'CPF', 'c2', attrs={'data-mascara': 'cpf', 'inputmode': 'numeric', 'placeholder': '000.000.000-00'}) }}
+    {{ entrada('rg', 'RG', 'c2', attrs={'data-mascara': 'rg', 'placeholder': '00.000.000-0'}) }}
+    {{ entrada('cartao_sus', 'Cartão SUS', 'c3', attrs={'data-mascara': 'sus', 'inputmode': 'numeric', 'placeholder': '000 0000 0000 0000'}) }}
+    {% if completo %}
+      {{ escolha('estado_civil', 'Estado civil', ['Casado', 'Solteiro', 'Divorciado', 'Outros'], 'c1') }}
+      {{ entrada('estado_civil_outro', 'Se "Outros", qual?', 'c2') }}
+      {{ entrada('conjuge', 'Cônjuge', 'c6') }}
+      {{ entrada('escolaridade', 'Escolaridade', 'c3') }}
+      {{ entrada('religiao', 'Religião', 'c3') }}
+      {{ entrada('profissao', 'Profissão', 'c3') }}
+      {{ entrada('mae', 'Mãe', 'c3') }}
+    {% else %}
+      {{ entrada('mae', 'Mãe', 'c3') }}
+    {% endif %}
+  </div>
+</fieldset>
+{%- endmacro %}
+
+{% macro endereco() -%}
+<fieldset>
+  <legend>Endereço e contatos</legend>
+  <div class="grade">
+    {{ entrada('cep', 'CEP', 'c2', ajuda='Preenche rua, bairro, cidade e UF.', attrs={'data-mascara': 'cep', 'inputmode': 'numeric', 'placeholder': '00000-000'}) }}
+    {{ entrada('endereco', 'Rua', 'c3') }}
+    {{ entrada('numero', 'Nº', 'c1') }}
+    {{ entrada('bairro', 'Bairro', 'c2') }}
+    {{ entrada('cidade', 'Cidade', 'c3') }}
+    {{ entrada('estado', 'UF', 'c1', attrs={'maxlength': '2', 'style': 'text-transform: uppercase'}) }}
+    {{ entrada('contato1', 'Contato 1 (família)', 'c2', attrs={'data-mascara': 'telefone', 'inputmode': 'tel', 'placeholder': '(18) 99999-9999'}) }}
+    {{ entrada('contato2', 'Contato 2', 'c2', attrs={'data-mascara': 'telefone', 'inputmode': 'tel'}) }}
+    {{ entrada('contato3', 'Contato do acolhido', 'c2', attrs={'data-mascara': 'telefone', 'inputmode': 'tel'}) }}
+  </div>
+</fieldset>
+{%- endmacro %}
+
+{% macro responsavel(anterior=none) -%}
+<fieldset>
+  <legend>Responsável pela internação</legend>
+  {% if anterior and anterior.resp_nome %}
+    <p class="ajuda">Responsável na internação anterior: <strong>{{ anterior.resp_nome }}</strong>
+      {% if anterior.parentesco %}({{ anterior.parentesco }}){% endif %}.
+      <button type="button" class="botao pequeno secundario" id="usar-responsavel"
+              data-resp_nome="{{ anterior.resp_nome }}" data-parentesco="{{ anterior.parentesco }}"
+              data-resp_rg="{{ anterior.resp_rg }}" data-resp_cpf="{{ anterior.resp_cpf }}">Usar o mesmo</button></p>
+  {% endif %}
+  <div class="grade">
+    {{ entrada('resp_nome', 'Nome', 'c4') }}
+    {{ entrada('parentesco', 'Parentesco', 'c2') }}
+    {{ entrada('resp_rg', 'RG', 'c3', attrs={'data-mascara': 'rg'}) }}
+    {{ entrada('resp_cpf', 'CPF', 'c3', attrs={'data-mascara': 'cpf', 'inputmode': 'numeric'}) }}
+  </div>
+</fieldset>
+{%- endmacro %}
+
+{% macro triagem() -%}
+<fieldset>
+  <legend>Contato e triagem</legend>
+  <div class="grade">
+    {{ entrada('primeiro_contato', '1º contato', 'c2', 'date') }}
+    {{ entrada('hora_primeiro_contato', 'Horário', 'c1', 'time') }}
+    {{ entrada('data_triagem', 'Triagem', 'c2', 'date') }}
+    {{ entrada('hora_triagem', 'Horário', 'c1', 'time') }}
+    {{ escolha('modalidade', 'Modalidade da triagem', modalidades, 'c2') }}
+    {{ entrada('internacao_agendada', 'Internação agendada para', 'c2', 'date',
+               'Dia marcado. A internação efetiva é registrada ao admitir.') }}
+    {{ entrada('hora_agendada', 'Horário', 'c1', 'time') }}
+  </div>
+</fieldset>
+{%- endmacro %}
+
+{% macro convenio(com_a_definir=false) -%}
+<fieldset>
+  <legend>Convênio e contribuição voluntária</legend>
+  <div class="grade">
+    {{ escolha('convenio', 'Convênio', convenios + ([a_definir] if com_a_definir else []), 'c2', obrig=true) }}
+    <label class="c2{{ ' com-erro' if erros.get('contribuicao_valor') }}">Valor (R$)
+      <input type="number" step="0.01" min="0" name="contribuicao_valor" id="f-contribuicao_valor"
+             value="{{ d.get('contribuicao_valor', '') }}">
+      <small id="categoria">&nbsp;</small></label>
+    {{ entrada('contribuicao_condicoes', 'Condições', 'c2', attrs={'placeholder': 'ex.: mensal, 9 parcelas'}) }}
+  </div>
+</fieldset>
+<script>
+  // regra de convênio/categoria vinda do prontuario.py — uma única fonte da regra
+  window.REGRAS_CONVENIO = {
+    gratuitos: {{ gratuitos | tojson }}, faixas: {{ faixas | tojson }},
+    categoriaZero: {{ categoria_zero | tojson }}, aDefinir: {{ a_definir | tojson }}
+  };
+</script>
+{%- endmacro %}

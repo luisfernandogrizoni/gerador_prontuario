@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block titulo %}Lista de internos{% endblock %}
+
+{% block conteudo %}
+<main class="largo">
+  <div class="topo-lista">
+    <h1>Lista de internos</h1>
+    <div class="contadores">
+      <span class="contador"><b id="n-ativos">–</b>ativos</span>
+      <span class="contador"><b id="n-inativos">–</b>inativos</span>
+    </div>
+    <select id="filtro" aria-label="Situação">
+      <option value="ativo">Só ativos</option>
+      <option value="inativo">Só inativos</option>
+      <option value="">Todos</option>
+    </select>
+    <input id="busca" type="search" placeholder="Buscar por nome, CPF, responsável, convênio…">
+    <a class="botao" href="{{ url_for('formulario') }}">+ Prontuário</a>
+  </div>
+
+  <div id="aviso" class="aviso" hidden></div>
+
+  <div class="moldura">
+    <table class="lista">
+      <thead>
+        <tr>
+          <!-- data-chave = campo do JSON usado para ordenar; data-tipo diz como comparar -->
+          <th data-chave="nome">Nome</th>
+          <th data-chave="cpf">CPF</th>
+          <th data-chave="idade" data-tipo="numero">Idade</th>
+          <th data-chave="convenio">Convênio / categoria</th>
+          <th data-chave="valor" data-tipo="numero">Contribuição</th>
+          <th data-chave="parcelas" data-tipo="numero">Parcelas</th>
+          <th data-chave="inicio">Início</th>
+          <th data-chave="previsao">Prev. término</th>
+          <th data-chave="termino">Saída</th>
+          <th data-chave="responsavel">Responsável</th>
+          <th data-chave="contato">Contato</th>
+          <th data-chave="status_txt">Situação</th>
+          <th class="sem-ordem">Prontuário</th>
+        </tr>
+      </thead>
+      <tbody id="linhas"></tbody>
+    </table>
+    <div id="vazio" class="vazio" hidden></div>
+  </div>
+  <p class="rodape" id="atualizado"></p>
+</main>
+
+<script src="{{ url_for('static', filename='tabela.js') }}"></script>
+<script>
+  const NOVO = {{ novo | tojson }};            // id da internação recém-gravada (ou null)
+  const filtro = document.getElementById("filtro");
+
+  const tabela = new TabelaDinamica({
+    url: "{{ url_for('api_internos') }}",
+    destacar: NOVO,
+    camposBusca: i => [i.nome, i.cpf, i.cpf.replace(/\D/g, ""), i.responsavel, i.convenio, i.status_txt],
+    filtro: i => !filtro.value || i.status === filtro.value,
+    aoCarregar: itens => {
+      document.getElementById("n-ativos").textContent = itens.filter(i => i.status === "ativo").length;
+      document.getElementById("n-inativos").textContent = itens.filter(i => i.status === "inativo").length;
+    },
+    colunas: [
+      { celula: i => link(i.nome, `/internacoes/${i.id}`) },
+      { celula: i => i.cpf, classe: "fixo" },
+      { celula: i => i.idade, classe: "num" },
+      { celula: i => i.convenio },
+      { celula: i => i.valor_fmt, classe: "num" },
+      { celula: i => i.parcelas || "", classe: "num" },
+      { celula: i => i.inicio_fmt || "sem data", classe: "fixo" },
+      { celula: i => i.previsao_fmt, classe: "fixo" },
+      { celula: i => i.termino_fmt, classe: "fixo" },
+      { celula: i => i.parentesco ? `${i.responsavel} (${i.parentesco})` : i.responsavel },
+      { celula: i => i.contato, classe: "fixo" },
+      { celula: i => selo(i.status_txt, i.status), classe: "fixo" },
+      { celula: i => link("Baixar", `/internacoes/${i.id}/prontuario`), classe: "fixo" },
+    ],
+  });
+  filtro.addEventListener("change", () => tabela.desenhar());
+
+  // chegou aqui logo depois de salvar um prontuário: avisa, baixa o .docx e destaca a linha
+  (async () => {
+    await tabela.carregar();
+    if (!NOVO) return;
+    const item = tabela.itens.find(i => i.id === NOVO);
+    if (item && filtro.value && item.status !== filtro.value) { filtro.value = ""; tabela.desenhar(); }
+    const url = `/internacoes/${NOVO}/prontuario`;
+    const aviso = document.getElementById("aviso");
+    aviso.hidden = false;
+    aviso.append(`Prontuário de ${item ? item.nome : "novo interno"} salvo na lista. O download começou — se não começar, `,
+                 link("clique aqui", url), ".");
+    window.location.href = url;                       // dispara o download sem sair da página
+    history.replaceState(null, "", location.pathname); // F5 não baixa de novo
+    document.getElementById("linha-" + NOVO)?.scrollIntoView({ block: "center" });
+  })();
+</script>
+{% endblock %}
