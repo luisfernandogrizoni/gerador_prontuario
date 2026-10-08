@@ -204,6 +204,7 @@ def destino_seguro(destino, padrao):
 # ------------------------------------------------------------------ ganchos do Flask
 def exigir_login():
     """before_request: barra qualquer rota (inclusive as de dados) sem usuário logado."""
+    request.host   # com TRUSTED_HOSTS (modo local), um Host estranho levanta 400 aqui, antes de tudo
     if request.endpoint == "static":
         return None
     g.usuario = usuario_da_sessao()

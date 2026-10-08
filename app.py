@@ -3,6 +3,7 @@ Sistema de Prontuários — Casa de Acolhida Restauração
 
 Telas:
     /login, /sair, /senha           entrar, sair e alterar a própria senha (todo o resto exige login)
+    /primeiro-acesso                criar o 1º usuário — só no programa local (iniciar.py), só sem usuários
     /                               home: atalhos + vagas por categoria + quadro de avisos
     /triagens                       lista de triagens (muda a situação pelo navegador)
     /triagens/nova                  formulário de triagem (?pessoa=<id> = paciente já cadastrado)
@@ -23,6 +24,7 @@ Organização:
     banco.py       onde fica o banco (SQLite local ou Postgres da hospedagem)
     copiar_banco.py  leva os dados do SQLite local para o banco da hospedagem
     verificar_vazamento.py  confere se algum dado de interno foi parar no git
+    iniciar.py     abre o sistema no computador com um clique (vira o .exe: construir_exe.bat)
     app.py         este arquivo: só liga as rotas às partes acima
 
 ATENÇÃO: o banco guarda dados pessoais sensíveis e NUNCA vai para o git (instance/ está
@@ -31,6 +33,8 @@ Toda tela e todo dado exigem login (veja autenticacao.py para criar usuários e 
 as variáveis de ambiente da hospedagem). Em produção use HTTPS e um servidor de
 verdade (gunicorn app:app) — `python app.py` é só para uso local.
 """
+
+import os
 
 from flask import (Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file,
                    session, url_for)

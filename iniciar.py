@@ -76,6 +76,9 @@ def escolher_porta():
 
 
 def main():
+    for saida in (sys.stdout, sys.stderr):    # acentos certos e texto na tela na hora, mesmo se redirecionado
+        if saida:
+            saida.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
     pasta = pasta_de_dados()
     pasta.mkdir(parents=True, exist_ok=True)
     os.environ["DADOS_DIR"] = str(pasta)   # o sistema (app.py) lê estas duas variáveis
