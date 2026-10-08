@@ -26,6 +26,7 @@ import logging
 import math
 import os
 import secrets
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -43,6 +44,7 @@ MAX_FALHAS = 5
 BLOQUEIO = timedelta(minutes=10)
 DURACAO_LOGIN = timedelta(hours=10)
 ROTAS_LIVRES = {"login", "static"}
+COMANDOS_DE_USUARIO = {"criar-usuario", "redefinir-senha"}
 # hash de uma senha qualquer: testar um usuário que não existe gasta o mesmo tempo
 # que testar um que existe (sem isso, o tempo de resposta revelaria quem existe)
 _HASH_FALSO = generate_password_hash(secrets.token_hex(8))
@@ -117,6 +119,8 @@ def criar_usuario_inicial():
         return
     nome, senha = os.environ.get("ADMIN_USUARIO"), os.environ.get("ADMIN_SENHA")
     if not (nome and senha):
+        if COMANDOS_DE_USUARIO & set(sys.argv):
+            return    # quem está criando o usuário agora não precisa do aviso "crie um usuário"
         log.warning("Nenhum usuário cadastrado: ninguém consegue entrar. "
                     "Crie um com: flask --app app criar-usuario NOME")
         return
@@ -212,12 +216,25 @@ def cabecalhos_de_seguranca(resposta):
 
 
 # ------------------------------------------------------------------ comandos do terminal
+def _pedir_senha(rotulo, visivel):
+    """Pede a senha duas vezes. Escondida por padrão: nada aparece enquanto se digita."""
+    if visivel:
+        click.echo(f"Digite a senha (mínimo {SENHA_MINIMA} caracteres) e tecle Enter. "
+                   "Ela APARECE na tela. Depois repita para confirmar.")
+    else:
+        click.echo(f"Digite a senha (mínimo {SENHA_MINIMA} caracteres) e tecle Enter. Ela NÃO "
+                   "aparece na tela enquanto você digita (é normal). Depois repita para confirmar.\n"
+                   "Se o terminal não aceitar a digitação escondida, rode de novo com --visivel.")
+    return click.prompt(rotulo, hide_input=not visivel, confirmation_prompt=True)
+
+
 def registrar_comandos(app):
     @app.cli.command("criar-usuario")
     @click.argument("nome")
-    def criar_usuario_cmd(nome):
-        """Cria um usuário (a senha é pedida na hora, sem aparecer na tela)."""
-        senha = click.prompt("Senha", hide_input=True, confirmation_prompt=True)
+    @click.option("--visivel", is_flag=True, help="mostra a senha enquanto você digita")
+    def criar_usuario_cmd(nome, visivel):
+        """Cria um usuário (a senha é pedida na hora)."""
+        senha = _pedir_senha("Senha", visivel)
         usuario, erro = criar_usuario(nome, senha)
         if erro:
             raise click.ClickException(erro)
@@ -225,12 +242,13 @@ def registrar_comandos(app):
 
     @app.cli.command("redefinir-senha")
     @click.argument("nome")
-    def redefinir_senha_cmd(nome):
+    @click.option("--visivel", is_flag=True, help="mostra a senha enquanto você digita")
+    def redefinir_senha_cmd(nome, visivel):
         """Define uma senha nova para um usuário (e tira o bloqueio, se houver)."""
         usuario = _buscar(nome)
         if not usuario:
             raise click.ClickException(f"O usuário {nome} não existe.")
-        senha = click.prompt("Senha nova", hide_input=True, confirmation_prompt=True)
+        senha = _pedir_senha("Senha nova", visivel)
         if erro := definir_senha(usuario, senha):
             raise click.ClickException(erro)
         click.echo(f"Senha de {usuario.nome} alterada.")
