@@ -30,7 +30,7 @@
     <h1>{{ p.nome }}</h1>
     <span class="selo {{ i.status }}">{{ i.status_txt }}</span>
   </div>
-  <p class="ajuda">Cadastro nº {{ p.id }} · registro nº {{ i.id }} · {{ i.convenio_txt }}</p>
+  <p class="ajuda">Cadastro nº {{ p.id }} · registro nº {{ i.id }} · {{ i.categoria }}</p>
 
   <div class="acoes">
     <a class="botao" href="{{ url_for('editar_internacao', id=i.id) }}">Editar</a>
@@ -71,7 +71,7 @@
       <div><dt>Saída</dt><dd>{{ i.termino | data }}{{ ' · ' ~ i.motivo if i.motivo }}</dd></div>
       <div><dt>Responsável</dt><dd>{{ i.resp_nome }}{{ ' (' ~ i.parentesco ~ ')' if i.parentesco }}</dd></div>
       <div><dt>CPF / RG do responsável</dt><dd>{{ [i.resp_cpf | cpf, i.resp_rg | rg] | select | join(' · ') }}</dd></div>
-      <div><dt>Convênio</dt><dd>{{ i.convenio_txt }}</dd></div>
+      <div><dt>Categoria</dt><dd>{{ i.categoria }}</dd></div>
       <div><dt>Contribuição</dt><dd>{{ i.contribuicao_valor | reais }}{{ ' — ' ~ i.contribuicao_condicoes if i.contribuicao_condicoes }}</dd></div>
     </dl>
   </section>

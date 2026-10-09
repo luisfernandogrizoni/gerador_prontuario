@@ -236,9 +236,11 @@ def opcoes_formulario():
     """Listas usadas pelos selects dos formulários."""
     from modelos import MODALIDADES
     from prontuario import (CATEGORIA_VALOR_ZERO, CONVENIOS_GRATUITOS, DOCUMENTOS,
-                            FAIXAS_PARTICULAR)
-    return dict(convenios=CONVENIOS, gratuitos=CONVENIOS_GRATUITOS, faixas=FAIXAS_PARTICULAR,
-                categoria_zero=CATEGORIA_VALOR_ZERO, documentos=DOCUMENTOS, motivos=MOTIVOS,
+                            FAIXAS_PARTICULAR, NOME_CURTO)
+    # o texto "Categoria: ..." que aparece enquanto se digita o valor usa os nomes curtos das telas
+    faixas = [(limite, NOME_CURTO.get(nome, nome)) for limite, nome in FAIXAS_PARTICULAR]
+    return dict(convenios=CONVENIOS, gratuitos=CONVENIOS_GRATUITOS, faixas=faixas,
+                categoria_zero=NOME_CURTO[CATEGORIA_VALOR_ZERO], documentos=DOCUMENTOS, motivos=MOTIVOS,
                 modalidades=MODALIDADES, a_definir=CONVENIO_A_DEFINIR,
                 status_triagem=[(s, STATUS[s]) for s in STATUS_TRIAGEM], hoje=date.today().isoformat(),
                 fmt_cpf=fmt_cpf)

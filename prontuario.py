@@ -49,6 +49,9 @@ FAIXAS_PARTICULAR = [
     (0.00, "Social Total"),
 ]
 CATEGORIA_VALOR_ZERO = "Social"  # particular com valor = 0,00
+# Nome curto das categorias nas telas (o Word usa o nome completo): Social Total e valor 0,00 são "Social"
+NOME_CURTO = {"Social Total": "Social", CATEGORIA_VALOR_ZERO: "Social",
+              "Social Parcial I": "Social I", "Social Parcial II": "Social II"}
 
 
 # ---------------------------------------------------------------- utilidades
@@ -136,15 +139,24 @@ def categoria_particular(valor):
     return CATEGORIA_VALOR_ZERO
 
 
-def categoria_vaga(convenio, valor):
-    """Categoria em que a pessoa ocupa vaga: o convênio gratuito ou a faixa do particular
-    (particular com valor 0,00 conta como Social Total). Sem convênio definido -> None."""
+def categoria_efetiva(convenio, valor):
+    """A categoria que a pessoa realmente é para a casa, como aparece nas telas:
+         CAPS AD, Prefeitura Tarumã, Social, Social I, Social II ou Particular
+    (quem paga valor é "Particular" só na faixa mais alta; as faixas menores são Social).
+    Sem convênio definido: "A definir". O documento Word segue com o texto completo
+    de classificar() ("Particular — Social Parcial II")."""
     if convenio in CONVENIOS_GRATUITOS:
         return convenio
     if convenio not in CONVENIOS:
-        return None
+        return CONVENIO_A_DEFINIR
     categoria = categoria_particular(valor)
-    return "Social Total" if categoria == CATEGORIA_VALOR_ZERO else categoria
+    return NOME_CURTO.get(categoria, categoria)
+
+
+def categoria_vaga(convenio, valor):
+    """Categoria em que a pessoa ocupa vaga (a mesma categoria efetiva). Sem convênio
+    definido não ocupa vaga de nenhuma categoria -> None."""
+    return categoria_efetiva(convenio, valor) if convenio in CONVENIOS else None
 
 
 def marca(escolhido, opcao):

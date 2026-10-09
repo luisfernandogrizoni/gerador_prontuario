@@ -30,7 +30,7 @@
           <th data-chave="primeiro_contato">1º contato</th>
           <th data-chave="triagem">Triagem</th>
           <th data-chave="agendada">Internação agendada</th>
-          <th data-chave="convenio">Convênio</th>
+          <th data-chave="categoria">Categoria</th>
           <th data-chave="responsavel">Responsável</th>
           <th data-chave="contato">Contato</th>
           <th data-chave="status">Situação</th>
@@ -142,7 +142,7 @@
     url: "{{ url_for('api_triagens') }}",
     destacar: NOVO,
     campos: { situacao: filtro },       // a situação escolhida fica na URL: o "voltar" a mantém
-    camposBusca: i => [i.nome, i.cpf, i.cpf.replace(/\D/g, ""), i.responsavel, i.convenio, i.status_txt],
+    camposBusca: i => [i.nome, i.cpf, i.cpf.replace(/\D/g, ""), i.responsavel, i.categoria, i.status_txt],
     filtro: i => filtro.value === "andamento" ? i.status !== "desistiu" : (!filtro.value || i.status === filtro.value),
     aoCarregar: itens => {
       for (const s of ["em_admissao", "lista_espera", "desistiu"])
@@ -153,7 +153,7 @@
       { celula: i => i.primeiro_contato_fmt, classe: "fixo" },
       { celula: i => i.triagem_fmt, classe: "fixo" },
       { celula: i => i.agendada_fmt, classe: "fixo" },
-      { celula: i => i.convenio },
+      { celula: i => i.categoria },
       { celula: i => i.parentesco ? `${i.responsavel} (${i.parentesco})` : i.responsavel },
       { celula: i => i.contato, classe: "fixo" },
       { celula: i => seletorStatus(i), classe: "fixo" },

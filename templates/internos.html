@@ -35,6 +35,7 @@
   .chip.caps { background: #e7f0ff; color: #1d4f9c; }
   .chip.prefeitura { background: #efe9fd; color: #5b30b8; }
   .chip.particular { background: #e0f5f7; color: #0b6471; }
+  .chip.social { background: #fff1de; color: #9a4d00; }
   .chip.outro { background: #f2f4f7; color: #475467; }
   .mudo { color: var(--mais-suave); font-style: italic; }
   .lista td.acao { text-align: right; }
@@ -60,7 +61,7 @@
     </div>
     <label class="busca">
       <svg class="icone"><use href="#i-busca"/></svg>
-      <input id="busca" type="search" placeholder="Buscar por nome, CPF, responsável ou convênio…" aria-label="Buscar">
+      <input id="busca" type="search" placeholder="Buscar por nome, CPF, responsável ou categoria…" aria-label="Buscar">
     </label>
   </div>
 
@@ -72,7 +73,7 @@
         <tr>
           <!-- data-chave = campo do JSON usado para ordenar; data-tipo diz como comparar -->
           <th data-chave="nome">Interno</th>
-          <th data-chave="convenio">Convênio</th>
+          <th data-chave="categoria">Categoria</th>
           <th data-chave="valor" data-tipo="numero">Contribuição</th>
           <th data-chave="inicio">Início</th>
           <th data-chave="previsao">Prev. término</th>
@@ -124,15 +125,12 @@
     aviso.hidden = false;
   }
 
-  // "Particular — Social Parcial II" -> etiqueta "Particular" + "Social Parcial II" embaixo
-  function celulaConvenio(convenio) {
-    const [principal, categoria] = String(convenio || "").split(" — ");
-    const tipo = /^CAPS/i.test(principal) ? "caps" : /^Prefeitura/i.test(principal) ? "prefeitura"
-               : /^Particular/i.test(principal) ? "particular" : "outro";
-    const caixa = document.createElement("div");
-    caixa.append(texto("span", principal || "—", "chip " + tipo));
-    if (categoria) caixa.append(texto("span", categoria, "sub"));
-    return caixa;
+  // Só a categoria efetiva (CAPS AD, Prefeitura Tarumã, Social, Social I, Social II, Particular),
+  // numa etiqueta colorida. Nada de "Particular" com adendo embaixo.
+  const TIPOS_DE_CATEGORIA = [[/^CAPS/i, "caps"], [/^Prefeitura/i, "prefeitura"], [/^Social/i, "social"], [/^Particular/i, "particular"]];
+  function celulaCategoria(categoria) {
+    const tipo = (TIPOS_DE_CATEGORIA.find(([padrao]) => padrao.test(categoria)) || [null, "outro"])[1];
+    return texto("span", categoria || "—", "chip " + tipo);
   }
 
   function celulaPessoa(i) {
@@ -175,7 +173,7 @@
     url: "{{ url_for('api_internos') }}",
     destacar: NOVO,
     campos: { situacao: filtro },       // a situação escolhida fica na URL: o "voltar" a mantém
-    camposBusca: i => [i.nome, i.cpf, i.cpf.replace(/\D/g, ""), i.responsavel, i.convenio, i.status_txt],
+    camposBusca: i => [i.nome, i.cpf, i.cpf.replace(/\D/g, ""), i.responsavel, i.categoria, i.status_txt],
     filtro: i => !filtro.value || i.status === filtro.value,
     aoCarregar: itens => {
       document.getElementById("n-ativos").textContent = itens.filter(i => i.status === "ativo").length;
@@ -184,7 +182,7 @@
     },
     colunas: [
       { celula: celulaPessoa },
-      { celula: i => celulaConvenio(i.convenio) },
+      { celula: i => celulaCategoria(i.categoria), classe: "fixo" },
       { celula: celulaContribuicao, classe: "num" },
       { celula: i => data(i.inicio_fmt, "sem data"), classe: "fixo" },
       { celula: i => data(i.previsao_fmt), classe: "fixo" },

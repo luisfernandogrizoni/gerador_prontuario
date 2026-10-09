@@ -56,7 +56,7 @@ def _eventos(internacao, hoje, fim):
         ("Triagem", internacao.data_triagem, internacao.hora_triagem,
          internacao.modalidade or "modalidade a definir"),
         ("Internação", internacao.internacao_agendada, internacao.hora_agendada,
-         internacao.convenio_txt if convenio_definido else "convênio a definir"),
+         internacao.categoria if convenio_definido else "convênio a definir"),
     ):
         if dia and hoje <= dia <= fim:
             yield {
@@ -104,7 +104,7 @@ def tratamentos_a_finalizar(dias=DIAS_FIM_DO_TRATAMENTO, hoje=None, maximo=LINHA
         percentual = 100 if duracao <= 0 else max(0, min(100, round((hoje - i.inicio).days * 100 / duracao)))
         itens.append({
             "nome": i.pessoa.nome, "url": url_for("ficha", id=i.id),
-            "detalhe": f"{i.convenio_txt} · internado em {fmt_data(i.inicio)}",
+            "detalhe": f"{i.categoria} · internado em {fmt_data(i.inicio)}",
             "previsao": prevista, "previsao_fmt": fmt_data(prevista), "restam": restam,
             "rotulo": _rotulo_do_prazo(restam), "percentual": percentual,
             "situacao": "vencido" if restam < 0 else "urgente" if restam <= URGENTE_ATE else "proximo",

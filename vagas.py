@@ -21,9 +21,9 @@ from prontuario import categoria_vaga
 LIMITES = {
     "CAPS AD": 9,
     "Prefeitura Tarumã": 10,
-    "Social Total": 5,
-    "Social Parcial I": 2,
-    "Social Parcial II": 3,
+    "Social": 5,
+    "Social I": 2,
+    "Social II": 3,
     "Particular": 1,
 }
 
