@@ -14,12 +14,12 @@ Situação de cada categoria:
 from collections import Counter
 
 from modelos import Internacao, db
-from prontuario import categoria_vaga
+from prontuario import categoria_vaga, tipo_da_categoria
 
 # Limite de vagas de cada categoria, na ordem em que aparecem na home (30 vagas no total).
 # None = limite ainda não definido. Para mudar um limite, é só trocar o número.
 LIMITES = {
-    "CAPS AD": 9,
+    "Caps AD": 9,
     "Prefeitura Tarumã": 10,
     "Social": 5,
     "Social I": 2,
@@ -47,7 +47,8 @@ def _vaga(categoria, ocupadas, limite):
     if limite == 0 and ocupadas:
         percentual = 100
     return {"categoria": categoria, "ocupadas": ocupadas, "limite": limite,
-            "situacao": situacao, "texto": texto, "percentual": percentual}
+            "situacao": situacao, "texto": texto, "percentual": percentual,
+            "tipo": tipo_da_categoria(categoria)}
 
 
 def gerar_vagas():
@@ -61,7 +62,7 @@ def gerar_vagas():
 
 def totais(vagas):
     """Soma de todas as categorias: ocupadas, limite e vagas livres.
-    As vagas livres somam só o que sobra em cada categoria (uma vaga livre de CAPS AD não serve
+    As vagas livres somam só o que sobra em cada categoria (uma vaga livre de Caps AD não serve
     para um particular), por isso uma categoria excedida não "tira" vaga das outras.
     Sem todos os limites definidos, `limite` e `livres` ficam None."""
     ocupadas = sum(v["ocupadas"] for v in vagas)

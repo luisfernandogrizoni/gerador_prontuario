@@ -237,6 +237,10 @@ function botao(rotulo, aoClicar, classe = "botao pequeno secundario", nomeIcone 
   b.addEventListener("click", aoClicar);
   return b;
 }
+// etiqueta colorida da categoria (a cor vem do servidor: categoria_tipo = caps, taruma, social, ...)
+function chipCategoria(categoria, tipo) {
+  return texto("span", categoria || "—", "chip " + (tipo || "outro"));
+}
 // bolinha com as iniciais; a cor é sempre a mesma para a mesma pessoa
 function avatar(nome) {
   const particulas = ["de", "da", "do", "das", "dos", "e"];
@@ -245,4 +249,27 @@ function avatar(nome) {
   let soma = 0;
   for (const c of normalizar(nome)) soma += c.charCodeAt(0);
   return texto("span", iniciais, "avatar av" + (soma % 8));
+}
+
+// ------------------------------------------------------------------ células usadas pelas listas de pessoas
+// avatar + nome (link para a ficha) e, embaixo, "CPF · 34 anos"
+function celulaPessoa(i) {
+  const dados = [i.cpf || "sem CPF", i.idade != null ? `${i.idade} anos` : ""].filter(Boolean).join(" · ");
+  const nome = document.createElement("div");
+  nome.append(link(i.nome, `/internacoes/${i.id}`), texto("small", dados));
+  const caixa = document.createElement("div");
+  caixa.className = "pessoa";
+  caixa.append(avatar(i.nome), nome);
+  return caixa;
+}
+// nome do responsável (parentesco) e, embaixo, o contato
+function celulaResponsavel(i) {
+  const caixa = document.createElement("div");
+  caixa.append(i.parentesco ? `${i.responsavel} (${i.parentesco})` : (i.responsavel || "—"));
+  if (i.contato) caixa.append(texto("span", i.contato, "sub"));
+  return caixa;
+}
+// data formatada; sem data, mostra `vazio` em cinza (ou nada)
+function dataOuMudo(fmt, vazio = "") {
+  return fmt ? fmt : (vazio ? texto("span", vazio, "mudo") : "");
 }

@@ -23,7 +23,7 @@ from sqlalchemy import Date, DateTime, Float, ForeignKey, String, Time
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from prontuario import (calcular_idade, categoria_efetiva, classificar, fmt_data, fmt_reais, ler_data,
-                        ler_valor, previsao_termino)
+                        ler_valor, previsao_termino, tipo_da_categoria)
 from validacao import fmt_cpf, fmt_hora, fmt_telefone, ler_hora, limpar_rg, so_digitos
 
 db = SQLAlchemy()
@@ -234,6 +234,11 @@ class Internacao(CamposDeFormulario, db.Model):
         Social I, Social II, Particular (ou "A definir")."""
         return categoria_efetiva(self.convenio, self.contribuicao_valor or 0.0)
 
+    @property
+    def categoria_tipo(self):
+        """Classe de cor da categoria (a mesma em todas as telas)."""
+        return tipo_da_categoria(self.categoria)
+
     def dados_completos(self):
         """Pessoa + internação no formato do formulário (para o .docx e para editar)."""
         return {**self.pessoa.como_formulario(), **self.como_formulario()}
@@ -249,6 +254,7 @@ class Internacao(CamposDeFormulario, db.Model):
             "idade": calcular_idade(p.nascimento, date.today()),
             "convenio": self.convenio_txt,      # texto completo (a busca ainda acha "particular")
             "categoria": self.categoria,        # o que as listas mostram
+            "categoria_tipo": self.categoria_tipo,
             "inicio": iso(self.inicio), "inicio_fmt": fmt_data(self.inicio),
             "responsavel": self.resp_nome,
             "parentesco": self.parentesco,

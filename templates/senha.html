@@ -9,7 +9,6 @@
 {% block conteudo %}
 <main class="senha">
   <h1>Alterar minha senha</h1>
-  <p class="ajuda">Usuário: <strong>{{ usuario_atual.nome }}</strong>. A senha nova precisa ter pelo menos {{ minimo }} caracteres.</p>
   {% if erro %}<p class="caixa-erros erro" role="alert">{{ erro }}</p>{% endif %}
   <form method="post" action="{{ url_for('alterar_senha') }}">
     <label>Senha atual

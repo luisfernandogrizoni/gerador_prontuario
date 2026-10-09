@@ -6,8 +6,6 @@
 {% block conteudo %}
 <main>
   <h1>{{ 'Editar triagem' if editando else 'Nova triagem' }}</h1>
-  <p class="ajuda">Registro do candidato desde o primeiro contato. Para admitir, use a lista de
-     triagens (situação "Admitido") — aí ele passa para a lista de internos.</p>
 
   <form method="post" action="{{ url_for('salvar_triagem') }}">
     {{ f.topo(url_for('nova_triagem'), 'triagem') }}

@@ -2,53 +2,11 @@
 
 {% block titulo %}Lista de internos{% endblock %}
 
-{% block estilo %}
-  /* ---- cabeçalho e ferramentas ---- */
-  .pagina-topo { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
-  .pagina-topo .titulo { margin-right: auto; }
-  .pagina-topo p { margin: 0; }
-  .ferramentas { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
-  .segmentado { display: inline-flex; gap: 2px; padding: 4px; background: #eceff3; border-radius: 12px; }
-  .segmentado button { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: .88rem; font-weight: 600; padding: 7px 14px;
-                       border: 0; border-radius: 9px; background: transparent; color: var(--suave); cursor: pointer; transition: background .12s, color .12s; }
-  .segmentado button:hover { color: var(--texto); }
-  .segmentado button.ativo { background: #fff; color: var(--texto); box-shadow: 0 1px 3px rgba(16,24,40,.14); }
-  .segmentado .n { font-size: .74rem; padding: 1px 8px; border-radius: 999px; background: rgba(16,24,40,.08); font-variant-numeric: tabular-nums; }
-  .segmentado button.ativo .n { background: var(--vermelho-claro); color: var(--vermelho); }
-  .busca { position: relative; flex: 1 1 300px; max-width: 440px; }
-  .busca .icone { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--mais-suave); pointer-events: none; }
-  .busca #busca { width: 100%; padding: 10px 14px 10px 40px; border-radius: 11px; background: #fff; box-shadow: var(--sombra); }
-
-  /* ---- tabela ---- */
-  .lista td { padding: 12px 12px; }
-  .lista td.livre { white-space: normal; min-width: 170px; }
-  .pessoa { display: flex; align-items: center; gap: 12px; min-width: 215px; }
-  .pessoa a { display: block; color: var(--texto); line-height: 1.25; }
-  .pessoa a:hover { color: var(--vermelho); }
-  .pessoa small, .sub { display: block; color: var(--suave); font-size: .76rem; font-weight: 400; margin-top: 1px; white-space: nowrap; }
-  .avatar { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; flex: none; font-size: .78rem; font-weight: 700; letter-spacing: .02em; }
-  .av0 { background: #e7f0ff; color: #1d4f9c; } .av1 { background: #fde8f1; color: #a3185f; }
-  .av2 { background: #eaf6ec; color: #1e6b31; } .av3 { background: #fff1de; color: #9a4d00; }
-  .av4 { background: #efe9fd; color: #5b30b8; } .av5 { background: #e0f5f7; color: #0b6471; }
-  .av6 { background: #fdeceb; color: #b3261e; } .av7 { background: #eef0f3; color: #475467; }
-  .chip { display: inline-block; padding: 2px 10px; border-radius: 8px; font-size: .78rem; font-weight: 600; white-space: nowrap; }
-  .chip.caps { background: #e7f0ff; color: #1d4f9c; }
-  .chip.prefeitura { background: #efe9fd; color: #5b30b8; }
-  .chip.particular { background: #e0f5f7; color: #0b6471; }
-  .chip.social { background: #fff1de; color: #9a4d00; }
-  .chip.outro { background: #f2f4f7; color: #475467; }
-  .mudo { color: var(--mais-suave); font-style: italic; }
-  .lista td.acao { text-align: right; }
-  .lista td.num .sub { text-align: right; }
-  .rodape .ponto { margin: 0 6px; }
-{% endblock %}
-
 {% block conteudo %}
 <main class="largo">
   <div class="pagina-topo">
     <div class="titulo">
       <h1>Internos</h1>
-      <p class="ajuda">Quem está na casa e quem já passou por ela. Clique no nome para abrir a ficha.</p>
     </div>
     <a class="botao" href="{{ url_for('formulario') }}"><svg class="icone"><use href="#i-mais"/></svg>Novo prontuário</a>
   </div>
@@ -94,8 +52,6 @@
 <dialog id="baixa">
   <form id="form-baixa">
     <h2>Dar baixa em <span id="baixa-nome"></span></h2>
-    <p class="ajuda">Informe quando e por que ele saiu. Ele passa para <strong>inativo</strong>.
-      Se foi engano, dá para corrigir editando o prontuário (apagando a data e o motivo da saída).</p>
     <div class="grade">
       <label class="c3">Data da saída *<input type="date" name="termino" required></label>
       <label class="c3">Motivo *
@@ -125,23 +81,6 @@
     aviso.hidden = false;
   }
 
-  // Só a categoria efetiva (CAPS AD, Prefeitura Tarumã, Social, Social I, Social II, Particular),
-  // numa etiqueta colorida. Nada de "Particular" com adendo embaixo.
-  const TIPOS_DE_CATEGORIA = [[/^CAPS/i, "caps"], [/^Prefeitura/i, "prefeitura"], [/^Social/i, "social"], [/^Particular/i, "particular"]];
-  function celulaCategoria(categoria) {
-    const tipo = (TIPOS_DE_CATEGORIA.find(([padrao]) => padrao.test(categoria)) || [null, "outro"])[1];
-    return texto("span", categoria || "—", "chip " + tipo);
-  }
-
-  function celulaPessoa(i) {
-    const dados = [i.cpf || "sem CPF", i.idade != null ? `${i.idade} anos` : ""].filter(Boolean).join(" · ");
-    const nome = document.createElement("div");
-    nome.append(link(i.nome, `/internacoes/${i.id}`), texto("small", dados));
-    const caixa = document.createElement("div");
-    caixa.className = "pessoa";
-    caixa.append(avatar(i.nome), nome);
-    return caixa;
-  }
 
   // R$ 900,00 e, embaixo, quantas parcelas já foram pagas (a tabela precisa caber na tela)
   function celulaContribuicao(i) {
@@ -160,15 +99,6 @@
     return caixa;
   }
 
-  function celulaResponsavel(i) {
-    const caixa = document.createElement("div");
-    caixa.append(i.parentesco ? `${i.responsavel} (${i.parentesco})` : (i.responsavel || "—"));
-    if (i.contato) caixa.append(texto("span", i.contato, "sub"));
-    return caixa;
-  }
-
-  const data = (fmt, vazio = "") => fmt ? fmt : (vazio ? texto("span", vazio, "mudo") : "");
-
   const tabela = new TabelaDinamica({
     url: "{{ url_for('api_internos') }}",
     destacar: NOVO,
@@ -182,11 +112,11 @@
     },
     colunas: [
       { celula: celulaPessoa },
-      { celula: i => celulaCategoria(i.categoria), classe: "fixo" },
+      { celula: i => chipCategoria(i.categoria, i.categoria_tipo), classe: "fixo" },
       { celula: celulaContribuicao, classe: "num" },
-      { celula: i => data(i.inicio_fmt, "sem data"), classe: "fixo" },
-      { celula: i => data(i.previsao_fmt), classe: "fixo" },
-      { celula: i => data(i.termino_fmt), classe: "fixo" },
+      { celula: i => dataOuMudo(i.inicio_fmt, "sem data"), classe: "fixo" },
+      { celula: i => dataOuMudo(i.previsao_fmt), classe: "fixo" },
+      { celula: i => dataOuMudo(i.termino_fmt), classe: "fixo" },
       { celula: celulaResponsavel, classe: "livre" },
       { celula: celulaSituacao, classe: "fixo" },
       // só quem está ativo pode receber baixa
@@ -249,10 +179,10 @@
     const url = `/internacoes/${NOVO}/prontuario`;
     const nome = item ? item.nome : "novo interno";
     if (BAIXAR) {
-      mostrarAviso([`Prontuário de ${nome} salvo. O download começou — se não começar, `, link("clique aqui", url), "."]);
+      mostrarAviso([`Prontuário de ${nome} salvo. O download começou. `, link("Baixar de novo", url)]);
       window.location.href = url;               // dispara o download sem sair da página
     } else {
-      mostrarAviso([`Prontuário de ${nome} salvo. `, link("Baixar o prontuário", url), "."]);
+      mostrarAviso([`Prontuário de ${nome} salvo. `, link("Baixar o prontuário", url)]);
     }
     tabela.limparParametros("novo", "baixar");  // F5 não baixa nem avisa de novo; o resto da URL fica
     document.getElementById("linha-" + NOVO)?.scrollIntoView({ block: "center" });

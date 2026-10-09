@@ -47,13 +47,13 @@
   .vagas-resumo-de { color: var(--suave); font-size: .9rem; margin-left: 6px; }
   .vagas-resumo .barra { flex: 1 1 220px; margin: 0; height: 10px; }
   .vagas-resumo .barra span { background: #475467; }
-  .vagas-resumo-txt { flex-basis: 100%; font-size: .8rem; color: var(--suave); margin-top: -2px; }
 
   /* ---- vagas por categoria ---- */
   .vagas { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
   .vaga { padding: 14px 16px 15px; border: 1px solid var(--borda); border-radius: 11px; background: #fff; }
   .vaga-topo { display: flex; align-items: baseline; gap: 10px; }
-  .vaga-nome { font-weight: 600; font-size: .92rem; margin-right: auto; }
+  .vaga-nome { font-weight: 600; font-size: .92rem; margin-right: auto; display: inline-flex; align-items: center; gap: 8px; }
+  .ponto { width: 10px; height: 10px; border-radius: 50%; background: var(--cor); flex: none; box-shadow: inset 0 0 0 1px rgba(16,24,40,.12); }
   .vaga-numero { font-size: 1.35rem; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
   .vaga-numero small { font-size: .85rem; font-weight: 500; color: inherit; opacity: .65; }
   .barra { height: 8px; border-radius: 999px; background: rgba(16,24,40,.09); margin: 10px 0 8px; overflow: hidden; }
@@ -143,8 +143,7 @@
   .atalhos a:hover { background: #f6f7f9; }
   .atalhos .ico { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: #f2f4f7; color: var(--suave); flex: none; }
   .atalhos a:hover .ico { background: var(--vermelho-claro); color: var(--vermelho); }
-  .atalhos strong { display: block; font-size: .9rem; }
-  .atalhos small { display: block; color: var(--suave); font-size: .77rem; }
+  .atalhos strong { display: block; font-size: .92rem; }
   .atalhos .seta { margin-left: auto; color: var(--mais-suave); }
 {% endblock %}
 
@@ -200,7 +199,6 @@
       <section class="bloco" id="vagas" aria-labelledby="t-vagas">
         <div class="bloco-topo">
           <h2 id="t-vagas"><svg class="icone"><use href="#i-usuarios"/></svg>Vagas por categoria</h2>
-          <span class="bloco-nota">só internos ativos ocupam vaga</span>
         </div>
         <div class="bloco-corpo">
           {% if vagas_total.limite %}
@@ -208,14 +206,13 @@
             <div class="vagas-resumo">
               <div><span class="vagas-resumo-num">{{ vagas_total.ocupadas }}</span><span class="vagas-resumo-de">de {{ vagas_total.limite }} vagas ocupadas</span></div>
               <div class="barra" role="img" aria-label="{{ pct }}% das vagas ocupadas"><span style="width: {{ pct }}%"></span></div>
-              <span class="vagas-resumo-txt">{{ vagas_total.livres }} vaga{{ '' if vagas_total.livres == 1 else 's' }} livre{{ '' if vagas_total.livres == 1 else 's' }} no total (somando o que sobra em cada categoria)</span>
             </div>
           {% endif %}
           <div class="vagas">
             {% for v in vagas %}
             <div class="vaga {{ v.situacao }}">
               <div class="vaga-topo">
-                <span class="vaga-nome">{{ v.categoria }}</span>
+                <span class="vaga-nome"><i class="ponto tipo-{{ v.tipo }}"></i>{{ v.categoria }}</span>
                 <span class="vaga-numero">{{ v.ocupadas }}{% if v.limite is not none %} <small>/ {{ v.limite }}</small>{% endif %}</span>
               </div>
               <div class="barra"><span style="width: {{ v.percentual }}%"></span></div>
@@ -261,7 +258,6 @@
           {% if fim_do_tratamento.sem_data %}
             <a href="#avisos">{{ fim_do_tratamento.sem_data }} ativo{{ '' if fim_do_tratamento.sem_data == 1 else 's' }} sem data de internação não {{ 'entra' if fim_do_tratamento.sem_data == 1 else 'entram' }} aqui</a>
           {% endif %}
-          <span>Previsão = "Tratamento mantido até" do prontuário ou, sem ela, 9 meses após a internação.</span>
         </div>
       </section>
 
@@ -334,13 +330,13 @@
         <div class="bloco-topo"><h2 id="t-atalhos">Atalhos</h2></div>
         <ul class="atalhos">
           <li><a href="{{ url_for('nova_triagem') }}"><span class="ico"><svg class="icone"><use href="#i-mais"/></svg></span>
-            <span><strong>Nova triagem</strong><small>Primeiro contato de um candidato</small></span><svg class="icone seta"><use href="#i-seta"/></svg></a></li>
+            <span><strong>Nova triagem</strong></span><svg class="icone seta"><use href="#i-seta"/></svg></a></li>
           <li><a href="{{ url_for('formulario') }}"><span class="ico"><svg class="icone"><use href="#i-prancheta"/></svg></span>
-            <span><strong>Novo prontuário</strong><small>Internação direta, com o .docx</small></span><svg class="icone seta"><use href="#i-seta"/></svg></a></li>
+            <span><strong>Novo prontuário</strong></span><svg class="icone seta"><use href="#i-seta"/></svg></a></li>
           <li><a href="{{ url_for('lista_triagens') }}"><span class="ico"><svg class="icone"><use href="#i-relogio"/></svg></span>
-            <span><strong>Triagens</strong><small>Admissão, espera e desistências</small></span><svg class="icone seta"><use href="#i-seta"/></svg></a></li>
+            <span><strong>Triagens</strong></span><svg class="icone seta"><use href="#i-seta"/></svg></a></li>
           <li><a href="{{ url_for('lista_internos') }}"><span class="ico"><svg class="icone"><use href="#i-usuarios"/></svg></span>
-            <span><strong>Lista de internos</strong><small>Ativos, inativos e dar baixa</small></span><svg class="icone seta"><use href="#i-seta"/></svg></a></li>
+            <span><strong>Lista de internos</strong></span><svg class="icone seta"><use href="#i-seta"/></svg></a></li>
         </ul>
       </section>
     </aside>

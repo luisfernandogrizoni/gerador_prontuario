@@ -98,14 +98,52 @@
     .resultado-pessoas li:hover, .resultado-pessoas li:focus { background: var(--amarelo); outline: none; }
     .resultado-pessoas li small { display: block; }
 
+
+    /* ---- cores das categorias (a mesma em todas as telas) ----
+       Social: azul acinzentado que CLAREIA conforme a contribuição aumenta (Social < Social I < Social II);
+       Particular: azul bebê; Caps AD: vermelho; Prefeitura Tarumã: laranja. */
+    .chip { display: inline-block; padding: 2px 10px; border-radius: 8px; font-size: .78rem; font-weight: 600; white-space: nowrap; }
+    .chip.caps, .tipo-caps { background: #fbdcd9; color: #a8211a; --cor: #d93a30; }
+    .chip.taruma, .tipo-taruma { background: #ffe5cc; color: #983f00; --cor: #f08a24; }
+    .chip.social, .tipo-social { background: #5f7389; color: #fff; --cor: #5f7389; }
+    .chip.social-1, .tipo-social-1 { background: #a9b9cc; color: #1f2d3d; --cor: #a9b9cc; }
+    .chip.social-2, .tipo-social-2 { background: #d3dce7; color: #2b3a4b; --cor: #d3dce7; }
+    .chip.particular, .tipo-particular { background: #cfe8fb; color: #14659f; --cor: #7cc0ef; }
+    .chip.outro, .tipo-outro { background: #f2f4f7; color: #475467; --cor: #cfd4dc; }
+
     /* ---- listas (internos e triagens) ---- */
-    .topo-lista { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; margin-bottom: 16px; }
-    .topo-lista h1 { margin: 0; }
-    .contadores { display: flex; gap: 8px; margin-right: auto; flex-wrap: wrap; }
-    .contador { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 6px 12px; font-size: .85rem; color: var(--suave); box-shadow: var(--sombra); }
-    .contador b { color: var(--texto); font-size: 1.05rem; margin-right: 4px; }
-    .topo-lista input[type=search], .topo-lista select { width: auto; min-width: 180px; padding: 8px 10px; }
-    #busca { width: min(300px, 100%); }
+    /* ---- cabeçalho e ferramentas das listas (internos, triagens) ---- */
+    .pagina-topo { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+    .pagina-topo .titulo { margin-right: auto; }
+    .pagina-topo p { margin: 0; }
+    .ferramentas { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
+    .segmentado { display: inline-flex; gap: 2px; padding: 4px; background: #eceff3; border-radius: 12px; }
+    .segmentado button { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: .88rem; font-weight: 600; padding: 7px 14px;
+                         border: 0; border-radius: 9px; background: transparent; color: var(--suave); cursor: pointer; transition: background .12s, color .12s; }
+    .segmentado button:hover { color: var(--texto); }
+    .segmentado button.ativo { background: #fff; color: var(--texto); box-shadow: 0 1px 3px rgba(16,24,40,.14); }
+    .segmentado .n { font-size: .74rem; padding: 1px 8px; border-radius: 999px; background: rgba(16,24,40,.08); font-variant-numeric: tabular-nums; }
+    .segmentado button.ativo .n { background: var(--vermelho-claro); color: var(--vermelho); }
+    .busca { position: relative; flex: 1 1 300px; max-width: 440px; }
+    .busca .icone { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--mais-suave); pointer-events: none; }
+    .busca #busca { width: 100%; padding: 10px 14px 10px 40px; border-radius: 11px; background: #fff; box-shadow: var(--sombra); }
+
+    /* ---- tabela ---- */
+    .lista td { padding: 12px 12px; }
+    .lista td.livre { white-space: normal; min-width: 170px; }
+    .pessoa { display: flex; align-items: center; gap: 12px; min-width: 215px; }
+    .pessoa a { display: block; color: var(--texto); line-height: 1.25; }
+    .pessoa a:hover { color: var(--vermelho); }
+    .pessoa small, .sub { display: block; color: var(--suave); font-size: .76rem; font-weight: 400; margin-top: 1px; white-space: nowrap; }
+    .avatar { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; flex: none; font-size: .78rem; font-weight: 700; letter-spacing: .02em; }
+    .av0 { background: #e7f0ff; color: #1d4f9c; } .av1 { background: #fde8f1; color: #a3185f; }
+    .av2 { background: #eaf6ec; color: #1e6b31; } .av3 { background: #fff1de; color: #9a4d00; }
+    .av4 { background: #efe9fd; color: #5b30b8; } .av5 { background: #e0f5f7; color: #0b6471; }
+    .av6 { background: #fdeceb; color: #b3261e; } .av7 { background: #eef0f3; color: #475467; }
+    .mudo { color: var(--mais-suave); font-style: italic; }
+    .lista td.acao { text-align: right; }
+    .lista td.num .sub { text-align: right; }
+    .rodape .ponto { margin: 0 6px; }
     .aviso { background: var(--verde-claro); border: 1px solid var(--verde-borda); border-radius: 10px; padding: 11px 15px; margin-bottom: 14px; font-size: .92rem; color: #17501f; }
     .aviso.erro { background: #fff5f5; border-color: #f0b4b0; color: var(--texto); }
     .moldura { background: #fff; border: 1px solid var(--borda); border-radius: var(--raio); box-shadow: var(--sombra); overflow-x: auto; }
@@ -126,6 +164,11 @@
     @keyframes destaque { from { background: var(--amarelo); } to { background: transparent; } }
     .lista td a { font-weight: 600; text-decoration: none; }
     .lista td select { width: auto; padding: 4px 8px; font-size: .85rem; }
+    .seletor { appearance: none; -webkit-appearance: none; width: auto; min-width: 13rem; font: inherit; font-size: .8rem; font-weight: 600; padding: 5px 34px 5px 12px;
+               border: 0; border-radius: 999px; cursor: pointer; background: #f2f4f7 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center; color: #475467; }
+    .seletor.em_admissao { background-color: var(--azul-claro); color: var(--azul); }
+    .seletor.lista_espera { background-color: var(--amarelo); color: var(--ambar); }
+    .seletor.desistiu { background-color: var(--vermelho-claro); color: var(--vermelho); }
     .vazio { padding: 40px 20px; text-align: center; color: var(--suave); }
     .rodape { color: var(--suave); font-size: .8rem; margin-top: 10px; }
 

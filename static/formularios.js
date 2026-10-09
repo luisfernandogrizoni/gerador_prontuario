@@ -92,7 +92,9 @@ if (campoCep) {
     const cep = soDigitos(campoCep.value);
     if (cep.length !== 8 || cep === ultimoCep) return;
     ultimoCep = cep;
-    const ajuda = campoCep.closest("label").querySelector("small:not(.erro-js)");
+    const rotulo = campoCep.closest("label");
+    let ajuda = rotulo.querySelector("small:not(.erro-js)");     // linha de status embaixo do campo
+    if (!ajuda) { ajuda = document.createElement("small"); rotulo.appendChild(ajuda); }
     try {
       ajuda.textContent = "Buscando endereço…";
       const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
@@ -103,10 +105,10 @@ if (campoCep) {
       preencher("f-bairro", dados.bairro);
       preencher("f-cidade", dados.localidade);
       preencher("f-estado", dados.uf);
-      ajuda.textContent = "Endereço preenchido pelo CEP. Confira e informe o número.";
+      ajuda.textContent = "";                                    // deu certo: nada a explicar
       document.getElementById("f-numero").focus();
     } catch (e) {
-      ajuda.textContent = "CEP não encontrado (ou sem internet). Preencha o endereço à mão.";
+      ajuda.textContent = "CEP não encontrado (ou sem internet).";
     }
   });
 }
@@ -127,7 +129,7 @@ if (busca) {
       lista.replaceChildren();
       if (!pessoas.length) {
         const li = document.createElement("li");
-        li.textContent = "Ninguém encontrado — preencha como paciente novo.";
+        li.textContent = "Ninguém encontrado.";
         lista.appendChild(li);
       }
       for (const p of pessoas) {

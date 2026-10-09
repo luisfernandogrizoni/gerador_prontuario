@@ -6,9 +6,6 @@
 {% block conteudo %}
 <main>
   <h1>{{ 'Editar prontuário' if editando else 'Novo prontuário' }}</h1>
-  <p class="ajuda">Preencha uma vez; o programa replica os dados em todas as páginas do prontuário.
-     Ao salvar, o interno entra (ou é atualizado) na lista de internos. Use "Salvar e baixar prontuário"
-     para também baixar o .docx.</p>
 
   <form method="post" action="{{ url_for('gerar') }}">
     {{ f.topo(url_for('formulario')) }}
@@ -19,11 +16,11 @@
     <fieldset>
       <legend>Internação</legend>
       <div class="grade">
-        {{ f.entrada('inicio', 'Internado em (data efetiva)', 'c2', 'date', 'Dia em que de fato entrou na casa.', obrig=true) }}
+        {{ f.entrada('inicio', 'Internado em (data efetiva)', 'c2', 'date', obrig=true) }}
         {{ f.entrada('hora_internacao', 'Horário', 'c1', 'time') }}
-        {{ f.entrada('tratamento_ate', 'Tratamento mantido até', 'c3', 'date', 'Em branco = início + 9 meses.') }}
-        {{ f.entrada('data_documento', 'Data dos documentos (Assis, …)', 'c2', 'date', 'Em branco = data de internação.') }}
-        {{ f.entrada('termino', 'Término', 'c2', 'date', 'Só no desligamento.') }}
+        {{ f.entrada('tratamento_ate', 'Tratamento mantido até', 'c3', 'date') }}
+        {{ f.entrada('data_documento', 'Data dos documentos (Assis, …)', 'c2', 'date') }}
+        {{ f.entrada('termino', 'Término', 'c2', 'date') }}
         {{ f.escolha('motivo', 'Motivo do término', motivos, 'c2') }}
       </div>
     </fieldset>

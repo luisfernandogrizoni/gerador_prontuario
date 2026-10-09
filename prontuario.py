@@ -52,6 +52,12 @@ CATEGORIA_VALOR_ZERO = "Social"  # particular com valor = 0,00
 # Nome curto das categorias nas telas (o Word usa o nome completo): Social Total e valor 0,00 são "Social"
 NOME_CURTO = {"Social Total": "Social", CATEGORIA_VALOR_ZERO: "Social",
               "Social Parcial I": "Social I", "Social Parcial II": "Social II"}
+# Como o convênio aparece nas telas (o valor guardado no banco e o Word continuam "CAPS AD")
+NOME_NA_TELA = {"CAPS AD": "Caps AD"}
+# Cor de cada categoria nas telas (classe CSS): Social vai do azul acinzentado mais escuro (contribui menos)
+# ao mais claro (contribui mais); Particular é azul bebê.
+TIPO_DA_CATEGORIA = {"Caps AD": "caps", "Prefeitura Tarumã": "taruma", "Social": "social",
+                     "Social I": "social-1", "Social II": "social-2", "Particular": "particular"}
 
 
 # ---------------------------------------------------------------- utilidades
@@ -141,16 +147,21 @@ def categoria_particular(valor):
 
 def categoria_efetiva(convenio, valor):
     """A categoria que a pessoa realmente é para a casa, como aparece nas telas:
-         CAPS AD, Prefeitura Tarumã, Social, Social I, Social II ou Particular
+         Caps AD, Prefeitura Tarumã, Social, Social I, Social II ou Particular
     (quem paga valor é "Particular" só na faixa mais alta; as faixas menores são Social).
     Sem convênio definido: "A definir". O documento Word segue com o texto completo
     de classificar() ("Particular — Social Parcial II")."""
     if convenio in CONVENIOS_GRATUITOS:
-        return convenio
+        return NOME_NA_TELA.get(convenio, convenio)
     if convenio not in CONVENIOS:
         return CONVENIO_A_DEFINIR
     categoria = categoria_particular(valor)
     return NOME_CURTO.get(categoria, categoria)
+
+
+def tipo_da_categoria(categoria):
+    """Classe de cor da categoria (caps, taruma, social, social-1, social-2, particular) ou "outro"."""
+    return TIPO_DA_CATEGORIA.get(categoria, "outro")
 
 
 def categoria_vaga(convenio, valor):

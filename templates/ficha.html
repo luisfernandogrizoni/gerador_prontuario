@@ -12,8 +12,12 @@
   dt { font-size: .78rem; color: var(--suave); }
   dd { margin: 2px 0 0; font-size: .95rem; }
   dd:empty::after { content: "—"; color: #bbb; }
-  table.simples { border-collapse: collapse; width: 100%; font-size: .9rem; }
-  .simples th, .simples td { padding: 6px 8px; border-bottom: 1px solid #eee; text-align: left; }
+  table.simples { border-collapse: collapse; width: 100%; font-size: .88rem; }
+  .simples th { padding: 10px 12px; text-align: left; background: #f9fafb; color: var(--suave); font-size: .7rem; font-weight: 700;
+                text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--borda); white-space: nowrap; }
+  .simples td { padding: 11px 12px; text-align: left; border-bottom: 1px solid #f0f2f5; vertical-align: middle; }
+  .simples tbody tr:last-child td { border-bottom: 0; }
+  .simples tbody tr:hover { background: #fafbfc; }
   .simples td.num { text-align: right; }
   .simples form { margin: 0; }
   form.nova-parcela { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-top: 12px; }
