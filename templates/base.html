@@ -5,96 +5,175 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block titulo %}Casa de Acolhida Restauração{% endblock %}</title>
   <style>
-    :root { --vermelho: #b3261e; --fundo: #f4f4f6; --borda: #ddd; --texto: #222; --suave: #666;
-            --verde: #1e6b31; --verde-claro: #eaf6ec; --amarelo: #fff6d6; }
+    /* ============================ identidade visual ============================
+       Nada vem de fora (sem fontes nem bibliotecas de terceiros): o sistema guarda dados
+       sensíveis e não faz nenhuma requisição a outros sites para se desenhar. */
+    :root { --vermelho: #b3261e; --vermelho-escuro: #8f1d17; --vermelho-claro: #fdeceb;
+            --fundo: #f5f6f8; --superficie: #fff; --borda: #e4e7ec; --borda-forte: #cfd4dc;
+            --texto: #1d2939; --suave: #667085; --mais-suave: #98a2b3;
+            --verde: #1e6b31; --verde-claro: #eaf6ec; --verde-borda: #a8d5b1;
+            --azul: #1d4f9c; --azul-claro: #e7f0ff;
+            --amarelo: #fff6d6; --ambar: #7a5a00;
+            --raio: 12px; --sombra: 0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.06);
+            --sombra-alta: 0 12px 32px rgba(16,24,40,.16); --altura-topo: 60px; }
     * { box-sizing: border-box; }
-    body { font-family: system-ui, sans-serif; background: var(--fundo); margin: 0; color: var(--texto); }
-    header { background: #fff; border-bottom: 1px solid var(--borda); }
-    header nav { max-width: 1320px; margin: 0 auto; padding: 10px 16px; display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
-    header .marca { font-weight: 700; color: var(--vermelho); text-decoration: none; margin-right: auto; }
-    header a { color: var(--texto); text-decoration: none; font-size: .95rem; }
-    header a:hover, header a.atual { color: var(--vermelho); }
-    header .usuario { display: flex; gap: 10px; align-items: center; padding-left: 14px; border-left: 1px solid var(--borda); }
-    header .usuario form { margin: 0; }
-    header .usuario button { font: inherit; font-size: .95rem; background: none; border: 0; padding: 0; color: var(--suave); cursor: pointer; }
-    header .usuario button:hover { color: var(--vermelho); }
-    main { max-width: 900px; margin: 24px auto; padding: 0 16px; }
-    main.largo { max-width: 1320px; }
-    h1 { font-size: 1.4rem; margin-bottom: 4px; }
-    h2 { font-size: 1.1rem; }
+    body { font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", sans-serif;
+           font-size: 15px; line-height: 1.45; background: var(--fundo); margin: 0; color: var(--texto);
+           -webkit-font-smoothing: antialiased; }
+    h1 { font-size: 1.55rem; line-height: 1.2; letter-spacing: -.015em; margin: 0 0 4px; }
+    h2 { font-size: 1.05rem; letter-spacing: -.005em; }
     p.ajuda { margin-top: 0; color: var(--suave); font-size: .9rem; }
     a { color: var(--vermelho); }
-    .botao { display: inline-block; font: inherit; font-weight: 600; padding: 9px 18px; border: 1px solid var(--vermelho); border-radius: 6px;
-             background: var(--vermelho); color: #fff; cursor: pointer; text-decoration: none; font-size: .92rem; width: auto; }
-    .botao.secundario { background: #fff; color: var(--vermelho); }
-    .botao.pequeno { padding: 4px 10px; font-size: .82rem; }
-    .mensagens { list-style: none; padding: 0; margin: 0 0 14px; }
-    .mensagens li { background: var(--verde-claro); border: 1px solid #a8d5b1; border-radius: 8px; padding: 10px 14px; margin-bottom: 6px; }
-    .selo { font-size: .78rem; padding: 2px 8px; border-radius: 999px; background: #eee; color: #555; white-space: nowrap; }
+    main { max-width: 900px; margin: 28px auto; padding: 0 20px; }
+    main.largo { max-width: 1320px; }
+    .icone { width: 1.15em; height: 1.15em; flex: none; vertical-align: -.2em; }
+
+    /* ---- barra do topo ---- */
+    .topo { position: sticky; top: 0; z-index: 30; background: rgba(255,255,255,.94); backdrop-filter: saturate(1.4) blur(10px);
+            border-bottom: 1px solid var(--borda); }
+    .topo nav { max-width: 1320px; margin: 0 auto; padding: 0 20px; min-height: var(--altura-topo); display: flex;
+                align-items: center; gap: 4px; flex-wrap: wrap; }
+    .marca { display: flex; align-items: center; gap: 11px; text-decoration: none; color: var(--texto); margin-right: auto; padding: 8px 0; }
+    .marca-logo { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: #fff;
+                  background: linear-gradient(145deg, #cf3a2f, #8f1d17); box-shadow: 0 2px 6px rgba(179,38,30,.35); }
+    .marca-logo .icone { width: 20px; height: 20px; }
+    .marca strong { display: block; font-size: .98rem; line-height: 1.15; letter-spacing: -.01em; }
+    .marca small { display: block; color: var(--suave); font-size: .72rem; letter-spacing: .03em; }
+    .topo .item { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 9px; font-size: .92rem;
+                  font-weight: 600; color: var(--suave); text-decoration: none; transition: background .12s, color .12s; }
+    .topo .item:hover { background: #f2f4f7; color: var(--texto); }
+    .topo .item.atual { background: var(--vermelho-claro); color: var(--vermelho); }
+    .topo .item.novo { color: var(--texto); border: 1px solid var(--borda-forte); background: #fff; padding: 6px 11px; margin-left: 4px; }
+    .topo .item.novo:hover { border-color: var(--vermelho); color: var(--vermelho); }
+    .topo .usuario { display: flex; align-items: center; gap: 10px; margin-left: 12px; padding-left: 14px; border-left: 1px solid var(--borda); }
+    .topo .usuario form { margin: 0; }
+    .topo .usuario .eu { display: flex; align-items: center; gap: 9px; text-decoration: none; color: var(--texto); font-size: .9rem; font-weight: 600; }
+    .topo .usuario .inicial { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: .8rem;
+                              background: #eef1f6; color: #475467; text-transform: uppercase; }
+    .topo .usuario button { font: inherit; font-size: .88rem; font-weight: 600; background: none; border: 0; padding: 6px 8px;
+                            border-radius: 8px; color: var(--suave); cursor: pointer; }
+    .topo .usuario button:hover { background: #f2f4f7; color: var(--vermelho); }
+    @media (max-width: 1000px) { .topo .item.novo { display: none; } }
+    @media (max-width: 760px) { .marca small { display: none; } }
+
+    /* ---- botões e etiquetas ---- */
+    .botao { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font: inherit; font-weight: 600; padding: 9px 16px;
+             border: 1px solid var(--vermelho); border-radius: 10px; background: var(--vermelho); color: #fff; cursor: pointer;
+             text-decoration: none; font-size: .92rem; width: auto; box-shadow: var(--sombra); transition: background .12s, border-color .12s, box-shadow .12s; }
+    .botao:hover { background: var(--vermelho-escuro); border-color: var(--vermelho-escuro); }
+    .botao:focus-visible, .topo .item:focus-visible { outline: 3px solid rgba(179,38,30,.3); outline-offset: 2px; }
+    .botao.secundario { background: #fff; color: var(--vermelho); border-color: var(--borda-forte); box-shadow: none; }
+    .botao.secundario:hover { background: var(--vermelho-claro); border-color: var(--vermelho); }
+    .botao.pequeno { padding: 5px 11px; font-size: .82rem; border-radius: 8px; gap: 6px; }
+    .botao[disabled] { opacity: .6; cursor: default; }
+    .mensagens { list-style: none; padding: 0; margin: 0 0 16px; }
+    .mensagens li { background: var(--verde-claro); border: 1px solid var(--verde-borda); border-radius: 10px; padding: 11px 15px; margin-bottom: 6px; color: #17501f; }
+    .selo { display: inline-flex; align-items: center; gap: 6px; font-size: .76rem; font-weight: 600; padding: 3px 10px; border-radius: 999px;
+            background: #f2f4f7; color: #475467; white-space: nowrap; }
+    .selo::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
     .selo.ativo { background: var(--verde-claro); color: var(--verde); }
-    .selo.em_admissao { background: #e7f0ff; color: #1d4f9c; }
-    .selo.lista_espera { background: var(--amarelo); color: #7a5a00; }
+    .selo.inativo { background: #f2f4f7; color: #667085; }
+    .selo.em_admissao { background: var(--azul-claro); color: var(--azul); }
+    .selo.lista_espera { background: var(--amarelo); color: var(--ambar); }
+    .selo.desistiu { background: var(--vermelho-claro); color: var(--vermelho); }
 
     /* ---- formulários (triagem e prontuário) ---- */
-    fieldset { background: #fff; border: 1px solid var(--borda); border-radius: 8px; margin-bottom: 16px; padding: 12px 16px 16px; }
+    fieldset { background: #fff; border: 1px solid var(--borda); border-radius: var(--raio); margin-bottom: 16px; padding: 12px 18px 18px; box-shadow: var(--sombra); }
     legend { font-weight: 600; padding: 0 6px; }
     .grade { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px 12px; }
     .c1 { grid-column: span 1; } .c2 { grid-column: span 2; } .c3 { grid-column: span 3; }
     .c4 { grid-column: span 4; } .c5 { grid-column: span 5; } .c6 { grid-column: span 6; }
     label { display: flex; flex-direction: column; font-size: .85rem; gap: 3px; }
-    input, select, textarea { font: inherit; padding: 6px 8px; border: 1px solid #bbb; border-radius: 5px; width: 100%; }
-    input[readonly] { background: #f3f3f3; }
+    input, select, textarea { font: inherit; padding: 7px 9px; border: 1px solid var(--borda-forte); border-radius: 8px; width: 100%; background: #fff; color: var(--texto); }
+    input:focus, select:focus, textarea:focus { outline: 3px solid rgba(179,38,30,.18); border-color: var(--vermelho); }
+    input[readonly] { background: #f3f4f6; }
     small { color: #777; }
     small.erro, .erro { color: var(--vermelho); }
     label.com-erro input, label.com-erro select { border-color: var(--vermelho); background: #fff5f5; }
-    .caixa-erros { background: #fff5f5; border: 1px solid #f0b4b0; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; }
+    .caixa-erros { background: #fff5f5; border: 1px solid #f0b4b0; border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
     @media (max-width: 640px) { .grade > * { grid-column: span 6; } }
-    .paciente-escolhido { background: var(--verde-claro); border: 1px solid #a8d5b1; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: .92rem; }
-    .resultado-pessoas { list-style: none; margin: 6px 0 0; padding: 0; border: 1px solid var(--borda); border-radius: 6px; max-height: 260px; overflow: auto; background: #fff; }
+    .paciente-escolhido { background: var(--verde-claro); border: 1px solid var(--verde-borda); border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; font-size: .92rem; }
+    .resultado-pessoas { list-style: none; margin: 6px 0 0; padding: 0; border: 1px solid var(--borda); border-radius: 8px; max-height: 260px; overflow: auto; background: #fff; }
     .resultado-pessoas li { padding: 8px 10px; border-bottom: 1px solid #eee; cursor: pointer; font-size: .9rem; }
     .resultado-pessoas li:hover, .resultado-pessoas li:focus { background: var(--amarelo); outline: none; }
     .resultado-pessoas li small { display: block; }
 
     /* ---- listas (internos e triagens) ---- */
-    .topo-lista { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; margin-bottom: 14px; }
+    .topo-lista { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; margin-bottom: 16px; }
     .topo-lista h1 { margin: 0; }
     .contadores { display: flex; gap: 8px; margin-right: auto; flex-wrap: wrap; }
-    .contador { background: #fff; border: 1px solid var(--borda); border-radius: 8px; padding: 6px 12px; font-size: .85rem; color: var(--suave); }
+    .contador { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 6px 12px; font-size: .85rem; color: var(--suave); box-shadow: var(--sombra); }
     .contador b { color: var(--texto); font-size: 1.05rem; margin-right: 4px; }
     .topo-lista input[type=search], .topo-lista select { width: auto; min-width: 180px; padding: 8px 10px; }
     #busca { width: min(300px, 100%); }
-    .aviso { background: var(--verde-claro); border: 1px solid #a8d5b1; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: .92rem; }
+    .aviso { background: var(--verde-claro); border: 1px solid var(--verde-borda); border-radius: 10px; padding: 11px 15px; margin-bottom: 14px; font-size: .92rem; color: #17501f; }
     .aviso.erro { background: #fff5f5; border-color: #f0b4b0; color: var(--texto); }
-    .moldura { background: #fff; border: 1px solid var(--borda); border-radius: 8px; overflow-x: auto; }
-    table.lista { border-collapse: collapse; width: 100%; font-size: .88rem; }
-    .lista th, .lista td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #eee; vertical-align: top; }
+    .moldura { background: #fff; border: 1px solid var(--borda); border-radius: var(--raio); box-shadow: var(--sombra); overflow-x: auto; }
+    table.lista { border-collapse: separate; border-spacing: 0; width: 100%; font-size: .88rem; }
+    .lista th, .lista td { padding: 11px 12px; text-align: left; border-bottom: 1px solid #f0f2f5; vertical-align: middle; }
     .lista th, .lista td.fixo, .lista td.num { white-space: nowrap; }
-    .lista th { background: #fafafa; font-weight: 600; cursor: pointer; user-select: none; }
+    .lista th { background: #f9fafb; color: var(--suave); font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+                cursor: pointer; user-select: none; border-bottom: 1px solid var(--borda); }
     .lista th:hover { color: var(--vermelho); }
-    .lista th.sem-ordem { cursor: default; } .lista th.sem-ordem:hover { color: inherit; }
-    .lista th[aria-sort="ascending"]::after { content: " ▲"; font-size: .7em; }
-    .lista th[aria-sort="descending"]::after { content: " ▼"; font-size: .7em; }
+    .lista th.sem-ordem { cursor: default; } .lista th.sem-ordem:hover { color: var(--suave); }
+    .lista th[aria-sort="ascending"], .lista th[aria-sort="descending"] { color: var(--vermelho); }
+    .lista th[aria-sort="ascending"]::after { content: " ▲"; font-size: .8em; }
+    .lista th[aria-sort="descending"]::after { content: " ▼"; font-size: .8em; }
     .lista td.num { text-align: right; font-variant-numeric: tabular-nums; }
-    .lista tbody tr:hover { background: #fafafa; }
-    .lista tr.novo { background: var(--amarelo) !important; }
+    .lista tbody tr:last-child td { border-bottom: 0; }
+    .lista tbody tr:hover { background: #fafbfc; }
+    .lista tr.novo td { animation: destaque 4s ease-out 1; }
+    @keyframes destaque { from { background: var(--amarelo); } to { background: transparent; } }
     .lista td a { font-weight: 600; text-decoration: none; }
-    .lista td select { width: auto; padding: 3px 6px; font-size: .85rem; }
-    .vazio { padding: 32px; text-align: center; color: var(--suave); }
-    .rodape { color: var(--suave); font-size: .8rem; margin-top: 8px; }
+    .lista td select { width: auto; padding: 4px 8px; font-size: .85rem; }
+    .vazio { padding: 40px 20px; text-align: center; color: var(--suave); }
+    .rodape { color: var(--suave); font-size: .8rem; margin-top: 10px; }
+
+    /* ---- janelas de confirmação das listas (admitir, dar baixa) ---- */
+    dialog { border: 0; border-radius: 16px; padding: 22px 24px; width: min(480px, 92vw); box-shadow: var(--sombra-alta); color: var(--texto); }
+    dialog::backdrop { background: rgba(16,24,40,.45); backdrop-filter: blur(2px); }
+    dialog h2 { margin-top: 0; }
+    dialog .grade { margin-bottom: 14px; }
+    dialog .botoes { display: flex; gap: 8px; justify-content: flex-end; }
+    .botoes-form { display: flex; gap: 10px; flex-wrap: wrap; }
     {% block estilo %}{% endblock %}
   </style>
 </head>
 <body>
-  <header>
+  <!-- ícones (desenhados aqui mesmo; usados com <svg class="icone"><use href="#i-nome"/></svg>) -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="i-casa" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></symbol>
+      <symbol id="i-mais" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-busca" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
+      <symbol id="i-calendario" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+      <symbol id="i-usuarios" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+      <symbol id="i-relogio" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+      <symbol id="i-alerta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></symbol>
+      <symbol id="i-prancheta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4M12 16h4M8 11h.01M8 16h.01"/></symbol>
+      <symbol id="i-seta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></symbol>
+      <symbol id="i-saida" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></symbol>
+      <symbol id="i-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+      <symbol id="i-bandeira" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></symbol>
+      <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
+    </defs>
+  </svg>
+
+  <header class="topo">
     <nav>
-      <a class="marca" href="{{ url_for('home') }}">Casa de Acolhida Restauração</a>
+      <a class="marca" href="{{ url_for('home') }}">
+        <span class="marca-logo"><svg class="icone"><use href="#i-casa"/></svg></span>
+        <span><strong>Casa de Acolhida Restauração</strong><small>SISTEMA DE PRONTUÁRIOS</small></span>
+      </a>
       {% if usuario_atual %}
-      <a href="{{ url_for('lista_triagens') }}" {% if request.path.startswith('/triagens') %}class="atual"{% endif %}>Triagens</a>
-      <a href="{{ url_for('lista_internos') }}" {% if request.path.startswith('/internos') %}class="atual"{% endif %}>Internos</a>
-      <a href="{{ url_for('nova_triagem') }}">+ Triagem</a>
-      <a href="{{ url_for('formulario') }}">+ Prontuário</a>
+      <a class="item {{ 'atual' if request.path == '/' }}" href="{{ url_for('home') }}">Início</a>
+      <a class="item {{ 'atual' if request.path.startswith('/triagens') }}" href="{{ url_for('lista_triagens') }}">Triagens</a>
+      <a class="item {{ 'atual' if request.path.startswith('/internos') }}" href="{{ url_for('lista_internos') }}">Internos</a>
+      <a class="item novo" href="{{ url_for('nova_triagem') }}"><svg class="icone"><use href="#i-mais"/></svg>Triagem</a>
+      <a class="item novo" href="{{ url_for('formulario') }}"><svg class="icone"><use href="#i-mais"/></svg>Prontuário</a>
       <span class="usuario">
-        <a href="{{ url_for('alterar_senha') }}" title="Alterar minha senha">{{ usuario_atual.nome }}</a>
+        <a class="eu" href="{{ url_for('alterar_senha') }}" title="Alterar minha senha">
+          <span class="inicial">{{ usuario_atual.nome[:1] }}</span>{{ usuario_atual.nome }}</a>
         <form method="post" action="{{ url_for('sair') }}"><button>Sair</button></form>
       </span>
       {% endif %}

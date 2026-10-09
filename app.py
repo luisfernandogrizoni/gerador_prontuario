@@ -3,10 +3,10 @@ Sistema de Prontuários — Casa de Acolhida Restauração
 
 Telas:
     /login, /sair, /senha           entrar, sair e alterar a própria senha (todo o resto exige login)
-    /                               home: atalhos + vagas por categoria + quadro de avisos
+    /                               home: indicadores, vagas por categoria, avisos e agenda dos próximos dias
     /triagens                       lista de triagens (muda a situação pelo navegador)
     /triagens/nova                  formulário de triagem (?pessoa=<id> = paciente já cadastrado)
-    /internos                       lista de internos (ativos / inativos)
+    /internos                       lista de internos (ativos / inativos); "Dar baixa" muda para inativo
     /prontuario/novo                formulário do prontuário (?pessoa=<id> = paciente já cadastrado)
     /internacoes/<id>               ficha: dados, parcelas, outras internações, ações
     /internacoes/<id>/editar        abre o formulário certo (triagem ou prontuário) já preenchido
@@ -19,6 +19,7 @@ Organização:
     servicos.py    regras de negócio: validar, gravar, mudar status, parcelas
     avisos.py      quadro de avisos
     vagas.py       ocupação das vagas por categoria
+    painel.py      números e agenda dos próximos dias da página inicial
     autenticacao.py  login: usuários, senhas, sessão e proteção das rotas
     banco.py       onde fica o banco (SQLite local ou Postgres da hospedagem)
     copiar_banco.py  leva os dados do SQLite local para o banco da hospedagem
@@ -32,18 +33,21 @@ as variáveis de ambiente da hospedagem). Em produção use HTTPS e um servidor 
 verdade (gunicorn app:app) — `python app.py` é só para uso local.
 """
 
+from datetime import date
+
 from flask import (Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file,
                    session, url_for)
 
 import autenticacao
 import banco
+import painel
 import servicos
 from avisos import gerar_avisos
 from modelos import STATUS_INTERNACAO, STATUS_TRIAGEM, AvisoDispensado, Internacao, Parcela, Pessoa, db
 from migracoes import migrar
 from prontuario import fmt_data, fmt_reais, gerar_docx
 from validacao import fmt_cep, fmt_cpf, fmt_hora, fmt_rg
-from vagas import gerar_vagas
+from vagas import gerar_vagas, totais
 
 app = Flask(__name__)
 # o banco fica fora do git: SQLite local por padrão, ou o que estiver em DATABASE_URL (banco.py)
@@ -125,7 +129,12 @@ def alterar_senha():
 # ===================================================================== home
 @app.get("/")
 def home():
-    return render_template("home.html", avisos=gerar_avisos(), vagas=gerar_vagas())
+    hoje = date.today()
+    lista_de_vagas = gerar_vagas()
+    return render_template("home.html", avisos=gerar_avisos(), vagas=lista_de_vagas, vagas_total=totais(lista_de_vagas),
+                           resumo=painel.resumo(), agenda=painel.agenda(hoje=hoje),
+                           dias_da_agenda=painel.DIAS_DA_AGENDA, fim_do_tratamento=painel.tratamentos_a_finalizar(hoje=hoje),
+                           hoje_por_extenso=painel.data_por_extenso(hoje))
 
 
 @app.post("/avisos/ciente")
@@ -195,7 +204,9 @@ def mudar_status(id):
 # ================================================================== internos
 @app.get("/internos")
 def lista_internos():
-    return render_template("internos.html", novo=request.args.get("novo", type=int))
+    # novo = registro recém-gravado (a linha é destacada); baixar = 1 baixa o .docx dele
+    return render_template("internos.html", novo=request.args.get("novo", type=int),
+                           baixar=request.args.get("baixar", type=int), motivos=servicos.MOTIVOS)
 
 
 @app.get("/api/internos")
@@ -204,6 +215,16 @@ def api_internos():
         db.select(Internacao).filter(Internacao.status.in_(STATUS_INTERNACAO))
         .order_by(Internacao.inicio.desc().nulls_last(), Internacao.id.desc())).scalars()
     return jsonify([i.para_lista() for i in itens])
+
+
+@app.post("/internacoes/<int:id>/baixa")
+def baixa_interno(id):
+    internacao = _buscar(Internacao, id)
+    erros = servicos.dar_baixa(internacao, request.get_json(force=True))
+    if erros:
+        return jsonify(ok=False, erros=erros), 400
+    return jsonify(ok=True, status=internacao.status_txt, saida=fmt_data(internacao.termino),
+                   ficha=url_for("ficha", id=id))
 
 
 @app.get("/prontuario/novo")
@@ -221,8 +242,9 @@ def gerar():
         pessoa = db.session.get(Pessoa, request.form.get("pessoa_id", type=int) or 0)
         return render_template("formulario.html", d=request.form, erros=erros, pessoa=pessoa,
                                anterior=None, **servicos.opcoes_formulario()), 400
-    # Post/Redirect/Get: a lista baixa o .docx e destaca a linha
-    return redirect(url_for("lista_internos", novo=internacao.id))
+    # Post/Redirect/Get: a lista destaca a linha e, se foi "Salvar e baixar", baixa o .docx
+    baixar = 1 if request.form.get("acao") == "baixar" else None
+    return redirect(url_for("lista_internos", novo=internacao.id, baixar=baixar))
 
 
 # ===================================================================== ficha

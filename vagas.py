@@ -16,15 +16,15 @@ from collections import Counter
 from modelos import Internacao, db
 from prontuario import categoria_vaga
 
-# Limite de vagas de cada categoria, na ordem em que aparecem na home.
+# Limite de vagas de cada categoria, na ordem em que aparecem na home (30 vagas no total).
 # None = limite ainda não definido. Para mudar um limite, é só trocar o número.
 LIMITES = {
-    "CAPS AD": None,
-    "Prefeitura Tarumã": None,
-    "Particular": None,
-    "Social Parcial II": None,
-    "Social Parcial I": None,
-    "Social Total": None,
+    "CAPS AD": 9,
+    "Prefeitura Tarumã": 10,
+    "Social Total": 5,
+    "Social Parcial I": 2,
+    "Social Parcial II": 3,
+    "Particular": 1,
 }
 
 
@@ -42,8 +42,12 @@ def _vaga(categoria, ocupadas, limite):
     else:
         livres = limite - ocupadas
         situacao, texto = "disponivel", _plural(livres, "vaga livre", "vagas livres")
+    # quanto da barra de progresso fica preenchida (a barra nunca passa de 100%)
+    percentual = 0 if not limite else min(100, round(ocupadas * 100 / limite))
+    if limite == 0 and ocupadas:
+        percentual = 100
     return {"categoria": categoria, "ocupadas": ocupadas, "limite": limite,
-            "situacao": situacao, "texto": texto}
+            "situacao": situacao, "texto": texto, "percentual": percentual}
 
 
 def gerar_vagas():
@@ -53,3 +57,15 @@ def gerar_vagas():
             db.select(Internacao.convenio, Internacao.contribuicao_valor)
             .filter(Internacao.status == "ativo")))
     return [_vaga(categoria, ocupadas[categoria], limite) for categoria, limite in LIMITES.items()]
+
+
+def totais(vagas):
+    """Soma de todas as categorias: ocupadas, limite e vagas livres.
+    As vagas livres somam só o que sobra em cada categoria (uma vaga livre de CAPS AD não serve
+    para um particular), por isso uma categoria excedida não "tira" vaga das outras.
+    Sem todos os limites definidos, `limite` e `livres` ficam None."""
+    ocupadas = sum(v["ocupadas"] for v in vagas)
+    if any(v["limite"] is None for v in vagas):
+        return {"ocupadas": ocupadas, "limite": None, "livres": None}
+    return {"ocupadas": ocupadas, "limite": sum(v["limite"] for v in vagas),
+            "livres": sum(max(v["limite"] - v["ocupadas"], 0) for v in vagas)}

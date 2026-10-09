@@ -2,14 +2,6 @@
 
 {% block titulo %}Triagens{% endblock %}
 
-{% block estilo %}
-  dialog { border: 1px solid var(--borda); border-radius: 12px; padding: 18px 20px; width: min(460px, 92vw); }
-  dialog::backdrop { background: rgba(0,0,0,.35); }
-  dialog h2 { margin-top: 0; }
-  dialog .grade { margin-bottom: 14px; }
-  dialog .botoes { display: flex; gap: 8px; justify-content: flex-end; }
-{% endblock %}
-
 {% block conteudo %}
 <main class="largo">
   <div class="topo-lista">
@@ -149,6 +141,7 @@
   const tabela = new TabelaDinamica({
     url: "{{ url_for('api_triagens') }}",
     destacar: NOVO,
+    campos: { situacao: filtro },       // a situação escolhida fica na URL: o "voltar" a mantém
     camposBusca: i => [i.nome, i.cpf, i.cpf.replace(/\D/g, ""), i.responsavel, i.convenio, i.status_txt],
     filtro: i => filtro.value === "andamento" ? i.status !== "desistiu" : (!filtro.value || i.status === filtro.value),
     aoCarregar: itens => {
@@ -167,7 +160,6 @@
       { celula: i => link("Editar", `/internacoes/${i.id}/editar`), classe: "fixo" },
     ],
   });
-  filtro.addEventListener("change", () => tabela.desenhar());
 
   (async () => {
     await tabela.carregar();
@@ -178,7 +170,7 @@
         mostrarAviso([`Triagem de ${item.nome} registrada.`]);
         document.getElementById("linha-" + NOVO)?.scrollIntoView({ block: "center" });
       }
-      history.replaceState(null, "", location.pathname);
+      tabela.limparParametros("novo");            // F5 não repete o aviso; o resto da URL fica
     }
   })();
 </script>
