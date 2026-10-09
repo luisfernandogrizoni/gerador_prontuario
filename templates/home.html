@@ -24,7 +24,25 @@
   .kpi-rotulo { display: block; margin-top: 5px; font-size: .88rem; font-weight: 600; }
   .kpi-sub { display: block; font-size: .77rem; color: var(--suave); }
   @media (max-width: 1060px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  @media (max-width: 520px) { .kpis { grid-template-columns: 1fr; } }
+  @media (max-width: 520px) {
+    .kpis { gap: 10px; }
+    .kpi { padding: 12px; gap: 10px; align-items: flex-start; }
+    .kpi-icone { width: 36px; height: 36px; border-radius: 10px; }
+    .kpi-icone .icone { width: 19px; height: 19px; }
+    .kpi-numero { font-size: 1.55rem; }
+    .kpi-rotulo { font-size: .8rem; }
+    .kpi-sub { font-size: .72rem; }
+    .painel-topo .acoes { width: 100%; }
+    .painel-topo .acoes .botao { flex: 1 1 0; padding-left: 8px; padding-right: 8px; white-space: nowrap; }
+    .bloco-topo { flex-wrap: wrap; }
+    .bloco-topo, .bloco-corpo, .fim-lista, .dia { padding-left: 14px; padding-right: 14px; }
+    .fim-rodape { padding-left: 14px; padding-right: 14px; }
+    .grupo-avisos summary, ul.avisos { padding-left: 14px; padding-right: 14px; }
+    .faixa-alerta { margin-left: 14px; margin-right: 14px; }
+    .agenda-rodape { padding-left: 14px; padding-right: 14px; }
+    .vagas { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 1060px) { .atalhos-bloco { display: none; } }
 
   /* ---- grade principal + lateral ---- */
   .painel-grade { display: grid; grid-template-columns: minmax(0, 1fr) 372px; gap: 20px; align-items: start; }
@@ -326,7 +344,7 @@
         <div class="agenda-rodape"><a class="botao pequeno secundario" href="{{ url_for('lista_triagens') }}">Ver todas as triagens<svg class="icone"><use href="#i-seta"/></svg></a></div>
       </section>
 
-      <section class="bloco" aria-labelledby="t-atalhos">
+      <section class="bloco atalhos-bloco" aria-labelledby="t-atalhos">
         <div class="bloco-topo"><h2 id="t-atalhos">Atalhos</h2></div>
         <ul class="atalhos">
           <li><a href="{{ url_for('nova_triagem') }}"><span class="ico"><svg class="icone"><use href="#i-mais"/></svg></span>

@@ -1,0 +1,8 @@
+{# Os três botões de um documento: ver no navegador, imprimir direto e baixar o .docx. #}
+{% macro acoes_documento(ver, docx, classe='') -%}
+<div class="acoes-doc {{ classe }}">
+  <a class="botao" href="{{ ver }}"><svg class="icone"><use href="#i-documento"/></svg>Visualizar</a>
+  <a class="botao secundario" href="{{ ver }}{{ '&' if '?' in ver else '?' }}imprimir=1" target="_blank" rel="noopener"><svg class="icone"><use href="#i-impressora"/></svg>Imprimir</a>
+  <a class="botao secundario" href="{{ docx }}"><svg class="icone"><use href="#i-baixar"/></svg>Baixar .docx</a>
+</div>
+{%- endmacro %}

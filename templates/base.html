@@ -53,8 +53,10 @@
     .topo .usuario button { font: inherit; font-size: .88rem; font-weight: 600; background: none; border: 0; padding: 6px 8px;
                             border-radius: 8px; color: var(--suave); cursor: pointer; }
     .topo .usuario button:hover { background: #f2f4f7; color: var(--vermelho); }
-    @media (max-width: 1000px) { .topo .item.novo { display: none; } }
+    @media (max-width: 1120px) { .topo .item.novo { display: none; } }          /* os mesmos botões existem nas páginas */
+    @media (max-width: 900px) { .topo .usuario .nome { display: none; } }
     @media (max-width: 760px) { .marca small { display: none; } }
+    @media (max-width: 400px) { .topo .item { padding: 7px 6px; font-size: .82rem; } .topo .usuario .inicial { display: none; } }
 
     /* ---- botões e etiquetas ---- */
     .botao { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font: inherit; font-weight: 600; padding: 9px 16px;
@@ -179,6 +181,104 @@
     dialog .grade { margin-bottom: 14px; }
     dialog .botoes { display: flex; gap: 8px; justify-content: flex-end; }
     .botoes-form { display: flex; gap: 10px; flex-wrap: wrap; }
+    .segmentado { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+    .segmentado::-webkit-scrollbar { display: none; }
+    .segmentado button { white-space: nowrap; flex: none; }
+    .cabecalho-impressao { display: none; }
+
+    /* ============================ celular e tablet pequeno ============================ */
+    @media (max-width: 760px) {
+      main { margin: 18px auto; padding: 0 14px; }
+      h1 { font-size: 1.35rem; }
+      .topo nav { padding: 0 10px 8px; }
+      .marca { flex: 1 1 100%; padding: 10px 4px 6px; }
+      .topo .item { padding: 7px 8px; font-size: .86rem; }
+      .topo .usuario { margin-left: auto; padding-left: 0; border-left: 0; gap: 4px; }
+      .topo .usuario button { padding: 6px 4px; }
+      .topo .usuario .nome { display: none; }
+      .ferramentas { gap: 10px; }
+      .busca { flex: 1 1 100%; max-width: none; }
+      fieldset { padding: 10px 14px 14px; }
+      input, select, textarea { font-size: 16px; }        /* evita o zoom automático ao tocar num campo, no iPhone */
+      .botao { min-height: 42px; }
+      .botao.pequeno { min-height: 34px; }
+      .botoes-form .botao { flex: 1 1 100%; }
+      .paciente-escolhido { font-size: .88rem; }
+    }
+    @media screen and (max-width: 760px) { .topo { position: static; } }
+    /* lista de pessoas: a tabela só cabe inteira a partir de ~1280px; abaixo disso cada linha vira um cartão (sem rolar de lado) */
+    @media screen and (max-width: 1279px) {
+      .moldura { overflow: visible; background: none; border: 0; box-shadow: none; }
+      table.lista, .lista tbody { display: block; }
+      .lista thead { display: none; }
+      .lista tbody tr { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px 14px; padding: 14px;
+                        background: #fff; border: 1px solid var(--borda); border-radius: var(--raio); box-shadow: var(--sombra); margin-bottom: 10px; }
+      .lista tbody tr:hover { background: #fff; }
+      .lista td, .lista td.livre, .lista td.fixo, .lista td.num { display: block; padding: 0; border: 0; white-space: normal; min-width: 0; text-align: left; }
+      .lista td:empty { display: none; }
+      .lista td:first-child { grid-column: 1 / -1; }
+      .lista td[data-rotulo]::before { content: attr(data-rotulo); display: block; margin-bottom: 3px; color: var(--suave); font-size: .66rem;
+                                        font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+      .lista td:first-child::before { display: none; }
+      .lista td.acao { grid-column: 1 / -1; padding-top: 12px; border-top: 1px solid #f0f2f5; }
+      .lista td.acao .botao { width: 100%; }
+      .lista td.num .sub { text-align: left; }
+      .pessoa { min-width: 0; }
+      .lista td:has(> select.seletor) { grid-column: 1 / -1; }
+      .lista td select.seletor { min-width: 0; width: 100%; max-width: 22rem; }
+      .vazio { background: #fff; border: 1px solid var(--borda); border-radius: var(--raio); }
+    }
+    @media (max-width: 420px) { .entrar { margin: 20px 14px !important; } }
+
+    /* ============================ impressão ============================
+       Tira o que só serve na tela (menu, botões, busca), tira a rolagem das tabelas, deixa o fundo branco e
+       evita cortar cartões e linhas no meio. As listas saem em paisagem (ver o bloco estilo de cada uma). */
+    @media print {
+      @page { size: A4; margin: 12mm 11mm; }
+      html, body { background: #fff !important; }
+      body { color: #000; font-size: 10pt; }
+      * { box-shadow: none !important; animation: none !important; transition: none !important;
+          -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .topo, .botao, dialog, .mensagens, .aviso, .busca, .busca-paciente, .botoes-form, .acoes, .acoes-aviso, .faixa-alerta,
+      .atalhos-bloco, .agenda-rodape, .seta, .grupo-avisos summary .icone { display: none !important; }
+      .cabecalho-impressao { display: flex; justify-content: space-between; gap: 12px; margin: 0 0 12px; padding-bottom: 5px;
+                             border-bottom: 1px solid #888; font-size: 8.5pt; color: #444; }
+      main, main.largo { max-width: none; margin: 0; padding: 0; }
+      h1 { font-size: 16pt; }
+      .pagina-topo, .painel-topo { margin-bottom: 10px; }
+      a { color: inherit !important; text-decoration: none !important; }
+      .ferramentas { margin-bottom: 8px; }
+      .segmentado { background: none; padding: 0; overflow: visible; }
+      .segmentado button:not(.ativo) { display: none; }
+      .segmentado button.ativo { padding: 0; background: none; box-shadow: none; color: #000; font-size: 10.5pt; }
+      .moldura { overflow: visible; border: 1px solid #aaa; border-radius: 4px; }
+      table.lista { font-size: 8.5pt; }
+      .lista thead { display: table-header-group; }
+      .lista th, .lista td { padding: 5px 7px; }
+      .lista th { cursor: default; background: #eee; color: #222; }
+      .lista th::after { content: none !important; }
+      .lista th:last-child, .lista td.acao { display: none; }
+      .lista td.livre { min-width: 0; }
+      .lista tr, .evento, .fim, .vaga, .kpi, ul.avisos li, fieldset, .cartao, .paciente-escolhido, dl > div { break-inside: avoid; }
+      .avatar { display: none; }
+      .pessoa { min-width: 0; }
+      .seletor { background-image: none; min-width: 0; padding: 3px 12px; }
+      .bloco, .cartao, fieldset, .vaga, .kpi, .evento { border-color: #aaa; border-radius: 6px; background: #fff; }
+      .bloco { overflow: visible; margin-bottom: 10px; }
+      .bloco-topo { break-after: avoid; }
+      .painel-grade { grid-template-columns: minmax(0, 1fr); }
+      .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+      .kpi { padding: 8px 10px; gap: 8px; }
+      .kpi-icone { display: none; }
+      .kpi-numero { font-size: 1.4rem; }
+      .vagas { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+      .simples th:empty, .simples td:has(> form) { display: none; }
+      input, select, textarea { border: 0; border-bottom: 1px solid #888; border-radius: 0; padding: 2px 0; background: none !important;
+                                appearance: none; -webkit-appearance: none; font-size: 10pt; color: #000; }
+      label { font-size: 8pt; color: #444; }
+      .grade { gap: 6px 10px; }
+      .rodape { color: #444; }
+    }
     {% block estilo %}{% endblock %}
   </style>
 </head>
@@ -198,6 +298,9 @@
       <symbol id="i-saida" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></symbol>
       <symbol id="i-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
       <symbol id="i-bandeira" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></symbol>
+      <symbol id="i-documento" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4M10 9H8M16 13H8M16 17H8"/></symbol>
+      <symbol id="i-impressora" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></symbol>
+      <symbol id="i-baixar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/></symbol>
       <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
     </defs>
   </svg>
@@ -212,16 +315,36 @@
       <a class="item {{ 'atual' if request.path == '/' }}" href="{{ url_for('home') }}">Início</a>
       <a class="item {{ 'atual' if request.path.startswith('/triagens') }}" href="{{ url_for('lista_triagens') }}">Triagens</a>
       <a class="item {{ 'atual' if request.path.startswith('/internos') }}" href="{{ url_for('lista_internos') }}">Internos</a>
+      <a class="item {{ 'atual' if request.path.startswith('/relatorios') }}" href="{{ url_for('pagina_relatorios') }}">Relatórios</a>
       <a class="item novo" href="{{ url_for('nova_triagem') }}"><svg class="icone"><use href="#i-mais"/></svg>Triagem</a>
       <a class="item novo" href="{{ url_for('formulario') }}"><svg class="icone"><use href="#i-mais"/></svg>Prontuário</a>
       <span class="usuario">
         <a class="eu" href="{{ url_for('alterar_senha') }}" title="Alterar minha senha">
-          <span class="inicial">{{ usuario_atual.nome[:1] }}</span>{{ usuario_atual.nome }}</a>
+          <span class="inicial">{{ usuario_atual.nome[:1] }}</span><span class="nome">{{ usuario_atual.nome }}</span></a>
         <form method="post" action="{{ url_for('sair') }}"><button>Sair</button></form>
       </span>
       {% endif %}
     </nav>
   </header>
+  {% if usuario_atual %}
+  <!-- só aparece ao imprimir -->
+  <div class="cabecalho-impressao">
+    <strong>Casa de Acolhida Restauração · Sistema de prontuários</strong>
+    <span>Documento confidencial · <span id="impresso-em" data-usuario="{{ usuario_atual.nome }}"></span></span>
+  </div>
+  {% endif %}
   {% block conteudo %}{% endblock %}
+  <script>
+    // na impressão: abre os grupos recolhidos (senão o conteúdo some do papel) e carimba quando e quem imprimiu
+    (function () {
+      var abertos = [];
+      window.addEventListener("beforeprint", function () {
+        var carimbo = document.getElementById("impresso-em");
+        if (carimbo) carimbo.textContent = "impresso em " + new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) + " por " + carimbo.dataset.usuario;
+        abertos = Array.prototype.filter.call(document.querySelectorAll("details:not([open])"), function (d) { d.open = true; return true; });
+      });
+      window.addEventListener("afterprint", function () { abertos.forEach(function (d) { d.open = false; }); });
+    })();
+  </script>
 </body>
 </html>

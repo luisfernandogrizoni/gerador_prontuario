@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% from "_acoes_documento.html" import acoes_documento %}
+
+{% block titulo %}Relatórios{% endblock %}
+
+{% block estilo %}
+  .relatorio { background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio); box-shadow: var(--sombra); margin-bottom: 20px; overflow: hidden; }
+  .relatorio-topo { display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; padding: 16px 20px; border-bottom: 1px solid #f0f2f5; }
+  .relatorio-topo h2 { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 1.05rem; }
+  .relatorio-topo .chip { font-size: .85rem; padding: 3px 12px; }
+  .relatorio-topo .conta { color: var(--suave); font-size: .88rem; }
+  .acoes-doc { display: flex; gap: 8px; flex-wrap: wrap; }
+  .relatorio-topo .acoes-doc { margin-left: auto; }
+  .rel-tabela { width: 100%; border-collapse: collapse; font-size: .88rem; }
+  .rel-tabela th { padding: 10px 20px; text-align: left; background: #f9fafb; color: var(--suave); font-size: .7rem; font-weight: 700;
+                   text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--borda); white-space: nowrap; }
+  .rel-tabela td { padding: 11px 20px; border-bottom: 1px solid #f0f2f5; vertical-align: top; }
+  .rel-tabela tbody tr:last-child td { border-bottom: 0; }
+  .rel-tabela td.iniciais { font-weight: 700; letter-spacing: .03em; white-space: nowrap; }
+  .rel-tabela td.fixo { white-space: nowrap; }
+  .rel-vazio { padding: 26px 20px; color: var(--suave); }
+  .numeros { display: grid; grid-template-columns: 1.4fr repeat(4, 1fr); gap: 1px; background: #f0f2f5; }
+  .numeros > div { background: #fff; padding: 16px 20px; }
+  .numeros strong { display: block; font-size: 1.7rem; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .numeros .total strong { font-size: 2.3rem; }
+  .numeros span { display: block; margin-top: 6px; color: var(--suave); font-size: .82rem; }
+  .relatorio .aviso { margin: 0; border-radius: 0; border-width: 1px 0 0; }
+  @media (max-width: 900px) { .numeros { grid-template-columns: repeat(2, 1fr); } .numeros .total { grid-column: 1 / -1; } }
+  @media screen and (max-width: 760px) {
+    .relatorio-topo { padding: 14px; }
+    .relatorio-topo .acoes-doc { margin-left: 0; width: 100%; }
+    .acoes-doc .botao { flex: 1 1 auto; }
+    .rel-tabela thead { display: none; }
+    .rel-tabela, .rel-tabela tbody { display: block; }
+    .rel-tabela tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; padding: 12px 14px; border-bottom: 1px solid #f0f2f5; }
+    .rel-tabela tbody tr:last-child { border-bottom: 0; }
+    .rel-tabela td { display: block; padding: 0; border: 0; white-space: normal; }
+    .rel-tabela td.iniciais { grid-column: 1 / -1; font-size: 1rem; }
+    .rel-tabela td[data-rotulo]::before { content: attr(data-rotulo); display: block; margin-bottom: 2px; color: var(--suave); font-size: .66rem;
+                                           font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+    .rel-tabela td.endereco { grid-column: 1 / -1; order: 3; }
+    .numeros > div { padding: 14px; }
+  }
+  @media print { .relatorio { break-inside: auto; } .rel-tabela th, .rel-tabela td { padding: 5px 8px; } .acoes-doc { display: none; } }
+{% endblock %}
+
+{% block conteudo %}
+<main class="largo">
+  <div class="pagina-topo">
+    <div class="titulo">
+      <h1>Relatórios</h1>
+      <p class="ajuda">Posição em {{ hoje | data }}</p>
+    </div>
+  </div>
+
+  <section class="relatorio" aria-labelledby="rel-anual">
+    <div class="relatorio-topo">
+      <h2 id="rel-anual"><svg class="icone"><use href="#i-documento"/></svg>Passaram pela casa em {{ anual.ano }}</h2>
+      <span class="conta">todos os convênios</span>
+      {{ acoes_documento(url_for('ver_relatorio_anual'), url_for('baixar_relatorio_anual')) }}
+    </div>
+    <div class="numeros">
+      <div class="total"><strong>{{ anual.total }}</strong><span>internos no total</span></div>
+      <div><strong>{{ anual.ingressaram }}</strong><span>ingressaram em {{ anual.ano }}</span></div>
+      <div><strong>{{ anual.ja_estavam }}</strong><span>já estavam internados antes de 01/01</span></div>
+      <div><strong>{{ anual.permanecem }}</strong><span>permanecem internados</span></div>
+      <div><strong>{{ anual.sairam }}</strong><span>saíram durante o ano</span></div>
+    </div>
+    {% if aviso_anual %}<div class="aviso erro">{{ aviso_anual }}</div>{% endif %}
+  </section>
+
+  {% for b in blocos %}
+  <section class="relatorio" aria-labelledby="rel-{{ b.slug }}">
+    <div class="relatorio-topo">
+      <h2 id="rel-{{ b.slug }}"><svg class="icone"><use href="#i-documento"/></svg><span class="chip {{ b.tipo }}">{{ b.nome }}</span></h2>
+      <span class="conta">{{ b.itens | length }} interno{{ '' if b.itens | length == 1 else 's' }} ativo{{ '' if b.itens | length == 1 else 's' }}</span>
+      {{ acoes_documento(url_for('ver_relatorio', slug=b.slug), url_for('baixar_relatorio', slug=b.slug)) }}
+    </div>
+    {% if b.itens %}
+    <table class="rel-tabela">
+      <thead><tr><th>Iniciais</th><th>CPF</th><th>Endereço</th><th>Data de internação</th></tr></thead>
+      <tbody>
+        {% for i in b.itens %}
+        <tr>
+          <td class="iniciais">{{ i.iniciais }}</td>
+          <td class="fixo" data-rotulo="CPF">{{ i.cpf }}</td>
+          <td class="endereco" data-rotulo="Endereço">{{ i.endereco }}</td>
+          <td class="fixo" data-rotulo="Internação">{{ i.internacao }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <div class="rel-vazio">Nenhum interno ativo neste convênio.</div>
+    {% endif %}
+  </section>
+  {% endfor %}
+</main>
+{% endblock %}

@@ -146,6 +146,8 @@ class TabelaDinamica {
 
   desenhar() {
     const lista = this.ordenar(this.visiveis());
+    // no celular a linha vira um cartão e cada valor ganha o nome da coluna (CSS: td[data-rotulo]::before)
+    const rotulos = [...document.querySelectorAll("thead th")].map(th => th.textContent.trim());
     this.corpo.replaceChildren();
     for (const item of lista) {
       const tr = document.createElement("tr");
@@ -158,6 +160,8 @@ class TabelaDinamica {
         if (conteudo instanceof Node) td.appendChild(conteudo);
         else td.textContent = conteudo ?? "";
         if (col.classe) td.className = col.classe;
+        const rotulo = rotulos[tr.children.length];
+        if (rotulo) td.dataset.rotulo = rotulo;
         tr.appendChild(td);
       }
       this.corpo.appendChild(tr);

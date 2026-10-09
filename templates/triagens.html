@@ -2,6 +2,10 @@
 
 {% block titulo %}Triagens{% endblock %}
 
+{% block estilo %}
+    @media print { @page { size: A4 landscape; margin: 10mm; } }
+{% endblock %}
+
 {% block conteudo %}
 <main class="largo">
   <div class="pagina-topo">
@@ -111,6 +115,7 @@
   // "09/10/2026 14:30 · Presencial" -> data e hora e, embaixo, a modalidade
   function celulaTriagem(i) {
     const [quando, modalidade] = String(i.triagem_fmt || "").split(" · ");
+    if (!quando && !modalidade) return "";           // sem triagem marcada: a célula fica vazia (some no cartão do celular)
     const caixa = document.createElement("div");
     caixa.append(quando || "");
     if (modalidade) caixa.append(texto("span", modalidade, "sub"));

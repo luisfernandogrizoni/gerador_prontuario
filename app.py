@@ -40,12 +40,15 @@ from flask import (Flask, abort, flash, g, jsonify, redirect, render_template, r
 
 import autenticacao
 import banco
+import declaracoes
+import documentos
 import painel
+import relatorios
 import servicos
 from avisos import gerar_avisos
 from modelos import STATUS_INTERNACAO, STATUS_TRIAGEM, AvisoDispensado, Internacao, Parcela, Pessoa, db
 from migracoes import migrar
-from prontuario import fmt_data, fmt_reais, gerar_docx
+from prontuario import fmt_data, fmt_reais, gerar_docx, montar_documento
 from validacao import fmt_cep, fmt_cpf, fmt_hora, fmt_rg
 from vagas import gerar_vagas, totais
 
@@ -285,6 +288,79 @@ def excluir_parcela(id):
     db.session.commit()
     flash("Parcela excluída.")
     return redirect(url_for("ficha", id=internacao_id) + "#parcelas")
+
+
+# ============================================================== documentos
+# Cada documento tem três saídas: ver no navegador (com botão de imprimir), imprimir direto (?imprimir=1)
+# e baixar o .docx. Todos nascem do mesmo motor (documentos.py), com o mesmo timbre.
+def _mostrar(doc, docx, voltar, avisos=()):
+    doc.voltar = voltar
+    return render_template("documento.html", doc=doc, docx=docx, avisos=avisos, cabecalho=documentos.CABECALHO,
+                           rodape=documentos.RODAPE)
+
+
+def _baixar(doc):
+    return send_file(documentos.para_docx(doc), as_attachment=True, download_name=doc.nome_arquivo + ".docx")
+
+
+def _declaracao(id):
+    internacao = _buscar(Internacao, id)
+    if declaracoes.tipo_da_declaracao(internacao) is None:      # triagem ainda não é interno: não há o que declarar
+        abort(404)
+    return declaracoes.documento(internacao, relatorios.hoje_no_brasil())
+
+
+@app.get("/internacoes/<int:id>/prontuario/visualizar")
+def ver_prontuario(id):
+    doc = montar_documento(_buscar(Internacao, id).dados_completos())
+    return _mostrar(doc, url_for("baixar_prontuario", id=id), url_for("ficha", id=id))
+
+
+@app.get("/internacoes/<int:id>/declaracao")
+def ver_declaracao(id):
+    return _mostrar(_declaracao(id), url_for("baixar_declaracao", id=id), url_for("ficha", id=id))
+
+
+@app.get("/internacoes/<int:id>/declaracao.docx")
+def baixar_declaracao(id):
+    return _baixar(_declaracao(id))
+
+
+# ================================================================ relatórios
+@app.get("/relatorios")
+def pagina_relatorios():
+    hoje = relatorios.hoje_no_brasil()
+    anual = relatorios.resumo_anual(hoje)
+    return render_template("relatorios.html", blocos=relatorios.painel(), hoje=hoje, anual=anual,
+                           aviso_anual=relatorios.aviso_do_resumo(anual))
+
+
+def _relatorio_do_convenio(slug):
+    if slug not in relatorios.CONVENIOS:
+        abort(404)
+    return relatorios.documento_convenio(slug, relatorios.hoje_no_brasil())
+
+
+@app.get("/relatorios/internos-ativos/<slug>")
+def ver_relatorio(slug):
+    return _mostrar(_relatorio_do_convenio(slug), url_for("baixar_relatorio", slug=slug), url_for("pagina_relatorios"))
+
+
+@app.get("/relatorios/internos-ativos/<slug>.docx")
+def baixar_relatorio(slug):
+    return _baixar(_relatorio_do_convenio(slug))
+
+
+@app.get("/relatorios/passaram-pela-casa")
+def ver_relatorio_anual():
+    hoje = relatorios.hoje_no_brasil()
+    return _mostrar(relatorios.documento_anual(hoje), url_for("baixar_relatorio_anual"), url_for("pagina_relatorios"),
+                    avisos=[t for t in (relatorios.aviso_do_resumo(relatorios.resumo_anual(hoje)),) if t])
+
+
+@app.get("/relatorios/passaram-pela-casa.docx")
+def baixar_relatorio_anual():
+    return _baixar(relatorios.documento_anual(relatorios.hoje_no_brasil()))
 
 
 if __name__ == "__main__":

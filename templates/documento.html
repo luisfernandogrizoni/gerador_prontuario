@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{#
+  Mostra um Documento (documentos.py) para ver e imprimir no navegador: cada página é uma folha A4 com o timbre.
+  Variáveis: doc (Documento), docx (endereço do download), avisos (alertas só da tela), cabecalho/rodape (timbre).
+#}
+
+{% block titulo %}{{ doc.titulo }}{% endblock %}
+
+{% block estilo %}
+  .barra-doc { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; margin-bottom: 18px; }
+  .barra-doc .voltar { display: inline-flex; align-items: center; gap: 6px; color: var(--suave); font-weight: 600; text-decoration: none; }
+  .barra-doc .voltar:hover { color: var(--vermelho); }
+  .barra-doc .voltar .icone { transform: rotate(180deg); }
+  .barra-doc h1 { font-size: 1.1rem; margin: 0 auto 0 4px; }
+  .barra-doc .botoes-doc { display: flex; gap: 8px; flex-wrap: wrap; }
+  .mesa { background: #e4e7ec; border-radius: var(--raio); padding: 24px clamp(8px, 3vw, 28px); overflow-x: auto; }
+  .papel { width: 210mm; max-width: 100%; margin: 0 auto; background: #fff; box-shadow: 0 2px 12px rgba(16, 24, 40, .18); color: #000; }
+  .papel + .papel { margin-top: 18px; }
+  .folha { width: 100%; height: 297mm; border-collapse: collapse; table-layout: fixed; }
+  .folha > thead > tr > td, .folha > tfoot > tr > td { padding: 10mm clamp(12px, 5vw, var(--margem)) 0; vertical-align: top; }
+  .folha > tfoot > tr > td { padding: 0 clamp(12px, 5vw, var(--margem)) 9mm; vertical-align: bottom; }
+  .folha > tbody > tr > td { padding: 3mm clamp(12px, 5vw, var(--margem)) 6mm; vertical-align: top; height: 100%; }
+
+  /* timbre: logo à esquerda, texto centralizado na página */
+  .timbre { display: grid; align-items: center; gap: 0 8px; text-align: center; line-height: 1.25; }
+  .timbre-topo { grid-template-columns: 23mm 1fr 23mm; font-family: Arial, Helvetica, sans-serif; font-size: 10pt; }
+  .timbre-rodape { grid-template-columns: 25mm 1fr 25mm; font-family: Arial, Helvetica, sans-serif; font-size: 9pt; }
+  .timbre img { display: block; width: 100%; height: auto; }
+  .timbre .b { font-weight: 700; }
+  .timbre .vermelho { color: #f00; }
+  .timbre .serifa { font-family: "Times New Roman", Times, serif; }
+  .timbre .link { color: #0563c1; text-decoration: underline; }
+
+  /* corpo */
+  .doc-corpo { font-family: {{ {'Verdana': 'Verdana, Geneva, "DejaVu Sans", sans-serif', 'Times New Roman': '"Times New Roman", Times, serif'}.get(doc.fonte, 'Arial, Helvetica, sans-serif') | safe }}; font-size: {{ doc.tamanho }}pt; }
+  .doc-corpo h2 { text-align: center; font-weight: 700; line-height: 1.2; }
+  .doc-corpo p { margin: 0; line-height: 1.15; }
+  .doc-corpo p, .doc-corpo td, .doc-corpo th { white-space: pre-wrap; }
+  .al-esquerda { text-align: left; } .al-centro { text-align: center; } .al-direita { text-align: right; } .al-justificado { text-align: justify; }
+  .doc-corpo .unido { break-after: avoid; }
+  .doc-corpo .num { display: inline-block; text-indent: 0; }
+  table.doc-tabela { border-collapse: collapse; table-layout: fixed; margin-left: auto; margin-right: auto; }
+  .doc-tabela th, .doc-tabela td { border: .5pt solid var(--borda-tab, #808080); padding: 2.5pt 4.5pt; overflow-wrap: anywhere; }
+  .doc-tabela.sem-bordas th, .doc-tabela.sem-bordas td { border: 0; }
+  .doc-tabela.sombreado th { background: #d9d9d9; }
+  .doc-tabela th { text-align: center; font-weight: 700; }
+  .doc-tabela tr { break-inside: avoid; }
+  .doc-tabela .negrito td { font-weight: 700; }
+  table.doc-form { border-collapse: collapse; table-layout: fixed; margin: 0 auto; }
+  .doc-form td { border: .5pt solid #000; padding: 0 5.4pt 3pt; vertical-align: top; overflow-wrap: anywhere; }
+  .doc-form .rotulo { font-weight: 700; }
+  .doc-form tr { break-inside: avoid; }
+  .pauta > div { border-bottom: .75pt solid #000; }
+  .assinaturas { display: grid; text-align: center; break-inside: avoid; }
+  .doc-assinatura { text-align: center; break-inside: avoid; line-height: 1.2; }
+  .doc-assinatura .traco { width: 8cm; max-width: 100%; margin: 0 auto 2pt; border-top: .75pt solid #000; }
+  .doc-assinatura .nome { font-weight: 700; }
+  .doc-assinatura .papel-de-quem { font-style: italic; }
+
+  @media (max-width: 760px) {
+    .barra-doc .botoes-doc { width: 100%; }
+    .barra-doc .botoes-doc .botao { flex: 1 1 0; }
+    .folha { height: auto; }
+    .timbre-topo, .timbre-rodape { grid-template-columns: 15mm 1fr 15mm; font-size: 8pt; }
+    .timbre-rodape { font-size: 7pt; }
+  }
+  @media print {
+    @page { size: A4; margin: 0; }
+    .cabecalho-impressao, .barra-doc, .aviso { display: none !important; }
+    main, main.largo { max-width: none; margin: 0; padding: 0; }
+    .mesa { background: none; padding: 0; border-radius: 0; overflow: visible; }
+    .papel { width: auto; box-shadow: none; break-after: page; }
+    .papel:last-of-type { break-after: auto; }
+    .papel + .papel { margin-top: 0; }
+    .folha { height: 296mm; }
+    .folha > thead { display: table-header-group; }
+    .folha > tfoot { display: table-footer-group; }
+    .timbre-topo { grid-template-columns: 23mm 1fr 23mm; font-size: 10pt; }
+    .timbre-rodape { grid-template-columns: 25mm 1fr 25mm; font-size: 9pt; }
+  }
+{% endblock %}
+
+{% macro timbre(linhas) -%}
+  {% for linha in linhas %}<div>{% for texto, estilo in linha %}<span class="{{ estilo }}">{{ texto }}</span>{% endfor %}</div>{% endfor %}
+{%- endmacro %}
+
+{% macro corpo(blocos, doc) -%}
+  {% for b in blocos %}
+    {% if b.tipo == 'titulo' %}
+      <h2 style="font-size: {{ b.tamanho }}pt; margin: {{ b.antes }}pt 0 {{ b.depois }}pt;">{{ b.texto }}</h2>
+    {% elif b.tipo == 'paragrafo' %}
+      <p class="al-{{ b.alinhamento }}{{ ' unido' if b.unido_ao_proximo }}"
+         style="margin: {{ b.antes }}pt 0 {{ b.depois }}pt;{% if b.recuo %} padding-left: {{ b.recuo / 20 }}pt;{% endif %}{% if b.suspenso %} text-indent: -{{ b.suspenso / 20 }}pt;{% elif b.primeira_linha %} text-indent: {{ b.primeira_linha / 20 }}pt;{% endif %} line-height: {{ (1.15 * b.entrelinha) | round(2) }};{% if b.tamanho %} font-size: {{ b.tamanho }}pt;{% endif %}{% if b.fonte %} font-family: '{{ b.fonte }}', Arial, sans-serif;{% endif %}">
+        {%- if b.numero %}<span class="num" style="width: {{ b.suspenso / 20 }}pt;">{{ b.numero }}</span>{% endif -%}
+        {%- for t in b.trechos() %}{% if t.negrito or t.italico or t.sublinhado %}<span style="{{ 'font-weight:700;' if t.negrito }}{{ 'font-style:italic;' if t.italico }}{{ 'text-decoration:underline;' if t.sublinhado }}">{{ t.texto }}</span>{% else %}{{ t.texto }}{% endif %}{% endfor -%}
+      </p>
+    {% elif b.tipo == 'tabela' %}
+      <table class="doc-tabela{{ ' sem-bordas' if b.sem_bordas }}{{ ' sombreado' if b.sombreado }}"
+             style="--borda-tab: #{{ b.cor_borda }}; width: {{ (b.largura_total() * 100 / doc.largura_util) | round(2) }}%; margin-top: {{ b.antes }}pt; font-size: {{ b.tamanho }}pt;">
+        <colgroup>{% for p in b.porcentagens() %}<col style="width: {{ p }}%">{% endfor %}</colgroup>
+        {% if b.cabecalho %}<thead><tr{% if b.altura_cabecalho %} style="height: {{ b.altura_cabecalho / 20 }}pt;"{% endif %}>{% for c in b.colunas %}<th>{{ c.titulo }}</th>{% endfor %}</tr></thead>{% endif %}
+        <tbody>
+          {% for linha in b.linhas %}
+          <tr class="{{ 'negrito' if loop.index0 in b.negrito_linhas }}">
+            {%- for valor in linha %}<td class="al-{{ b.colunas[loop.index0].alinhamento }}">{{ valor }}</td>{% endfor -%}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% elif b.tipo == 'formulario' %}
+      <table class="doc-form" style="width: {{ (b.largura_total() * 100 / doc.largura_util) | round(2) }}%; margin-top: {{ b.antes }}pt; font-size: {{ b.tamanho }}pt;">
+        <colgroup>{% for g in b.grade %}<col style="width: {{ (g * 100 / b.largura_total()) | round(3) }}%">{% endfor %}</colgroup>
+        <tbody>
+          {% for linha in b.linhas %}
+          <tr style="height: {{ b.alturas[loop.index0] / 20 }}pt;">
+            {%- for c in linha %}<td colspan="{{ c.span }}"{% if c.negrito %} class="rotulo"{% endif %}>{{ c.texto }}</td>{% endfor -%}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% elif b.tipo == 'pauta' %}
+      <div class="pauta" style="margin-top: {{ b.antes }}pt;">{% for i in range(b.linhas) %}<div style="height: {{ b.altura }}pt;"></div>{% endfor %}</div>
+    {% elif b.tipo == 'assinaturas' %}
+      <div class="assinaturas" style="grid-template-columns: repeat({{ b.rotulos | length }}, 1fr); margin-top: {{ b.antes }}pt;">
+        {% for r in b.rotulos %}<div><div>{{ '_' * b.comprimento }}</div><div style="font-size: {{ b.tamanho_rotulo }}pt;">{{ r }}</div></div>{% endfor %}
+      </div>
+    {% elif b.tipo == 'assinatura' %}
+      <div class="doc-assinatura" style="margin-top: {{ b.antes }}pt;">
+        <div class="traco"></div>
+        <div class="nome">{{ b.nome }}</div>
+        <div>{{ b.cargo }}</div>
+        <div class="papel-de-quem">{{ b.papel }}</div>
+      </div>
+    {% endif %}
+  {% endfor %}
+{%- endmacro %}
+
+{% block conteudo %}
+<main class="largo">
+  <div class="barra-doc">
+    <a class="voltar" href="{{ doc.voltar or 'javascript:history.back()' }}"><svg class="icone"><use href="#i-seta"/></svg>Voltar</a>
+    <h1>{{ doc.titulo }}</h1>
+    <div class="botoes-doc">
+      <button type="button" class="botao" onclick="window.print()"><svg class="icone"><use href="#i-impressora"/></svg>Imprimir</button>
+      <a class="botao secundario" href="{{ docx }}"><svg class="icone"><use href="#i-baixar"/></svg>Baixar .docx</a>
+    </div>
+  </div>
+  {% for texto in avisos %}<div class="aviso erro">{{ texto }}</div>{% endfor %}
+
+  <div class="mesa">
+    {% for pagina in doc.paginas() %}
+    <article class="papel" style="--margem: {{ (doc.margem_lateral / 56.7) | round(1) }}mm;">
+      <table class="folha">
+        <thead><tr><td>
+          <div class="timbre timbre-topo">
+            <img src="{{ url_for('static', filename='timbre/logo-topo.jpg') }}" alt="">
+            <div>{{ timbre(cabecalho) }}</div><span></span>
+          </div>
+        </td></tr></thead>
+        <tbody><tr><td class="doc-corpo">{{ corpo(pagina, doc) }}</td></tr></tbody>
+        <tfoot><tr><td>
+          <div class="timbre timbre-rodape">
+            <img src="{{ url_for('static', filename='timbre/logo-rodape.jpg') }}" alt="">
+            <div>{{ timbre(rodape) }}</div><span></span>
+          </div>
+        </td></tr></tfoot>
+      </table>
+    </article>
+    {% endfor %}
+  </div>
+</main>
+<script>
+  // "Imprimir" nas outras telas abre este documento já com a janela de impressão
+  if (new URLSearchParams(location.search).get("imprimir")) {
+    window.addEventListener("load", function () { setTimeout(function () { window.print(); }, 350); });
+  }
+</script>
+{% endblock %}

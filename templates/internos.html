@@ -2,6 +2,10 @@
 
 {% block titulo %}Lista de internos{% endblock %}
 
+{% block estilo %}
+    @media print { @page { size: A4 landscape; margin: 10mm; } }
+{% endblock %}
+
 {% block conteudo %}
 <main class="largo">
   <div class="pagina-topo">
