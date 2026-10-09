@@ -50,7 +50,7 @@ RODAPE = [
     [("Telefone: (18) 3323-4778 (18) 99618-1905 CEP 19814-371", "")],
     [("CNPJ 03.508.198/0001-07", "")],
     [("UTILIDADE PÚBLICA MUNICIPAL: Lei nº 3960/2000", "")],
-    [("UTILIDADE PÚBLICA ESTADUAL: Lei nº 17531/2022", "")],
+    [("UTILIDADE PÚBLICA ESTADUAL: Lei nº 17591/2022", "")],
     [("www.restauração.org.br", "link"), ("    ", ""), ("restauração@restauração.org.br", "link")],
 ]
 TAMANHO_CABECALHO, TAMANHO_RODAPE = 10, 9
