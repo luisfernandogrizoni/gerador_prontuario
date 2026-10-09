@@ -43,19 +43,8 @@ SENHA_MINIMA = 10
 MAX_FALHAS = 5
 BLOQUEIO = timedelta(minutes=10)
 DURACAO_LOGIN = timedelta(hours=10)
-ROTAS_LIVRES = {"login", "primeiro_acesso", "static"}
+ROTAS_LIVRES = {"login", "static"}
 COMANDOS_DE_USUARIO = {"criar-usuario", "redefinir-senha"}
-
-
-def modo_local():
-    """True quando o sistema roda como programa neste computador (iniciar.py), só acessível daqui."""
-    return os.environ.get("MODO_LOCAL") == "1"
-
-
-def primeiro_acesso_liberado():
-    """A tela 'criar o primeiro usuário' só existe no modo local e enquanto não há NENHUM usuário.
-    Na hospedagem ela nunca existe: ali o primeiro usuário vem de ADMIN_USUARIO/ADMIN_SENHA."""
-    return modo_local() and not db.session.execute(db.select(db.func.count(Usuario.id))).scalar()
 # hash de uma senha qualquer: testar um usuário que não existe gasta o mesmo tempo
 # que testar um que existe (sem isso, o tempo de resposta revelaria quem existe)
 _HASH_FALSO = generate_password_hash(secrets.token_hex(8))
@@ -130,8 +119,8 @@ def criar_usuario_inicial():
         return
     nome, senha = os.environ.get("ADMIN_USUARIO"), os.environ.get("ADMIN_SENHA")
     if not (nome and senha):
-        if modo_local() or COMANDOS_DE_USUARIO & set(sys.argv):
-            return    # no modo local há a tela de primeiro acesso; no comando, o aviso só atrapalha
+        if COMANDOS_DE_USUARIO & set(sys.argv):
+            return    # quem está criando o usuário agora não precisa do aviso "crie um usuário"
         log.warning("Nenhum usuário cadastrado: ninguém consegue entrar. "
                     "Crie um com: flask --app app criar-usuario NOME")
         return
@@ -204,7 +193,6 @@ def destino_seguro(destino, padrao):
 # ------------------------------------------------------------------ ganchos do Flask
 def exigir_login():
     """before_request: barra qualquer rota (inclusive as de dados) sem usuário logado."""
-    request.host   # com TRUSTED_HOSTS (modo local), um Host estranho levanta 400 aqui, antes de tudo
     if request.endpoint == "static":
         return None
     g.usuario = usuario_da_sessao()

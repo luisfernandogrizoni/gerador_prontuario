@@ -1,5 +1,2 @@
 # o hook roda no shell do Git: precisa terminar linhas com LF, mesmo no Windows
 hooks/* text eol=lf
-
-# o .bat precisa de CRLF para o cmd.exe do Windows
-*.bat text eol=crlf
