@@ -3,10 +3,10 @@ Sistema de Prontuários — Casa de Acolhida Restauração
 
 Telas:
     /login, /sair, /senha           entrar, sair e alterar a própria senha (todo o resto exige login)
-    /                               home: atalhos + vagas por categoria + quadro de avisos
+    /                               home: indicadores, vagas por categoria, avisos e agenda dos próximos dias
     /triagens                       lista de triagens (muda a situação pelo navegador)
     /triagens/nova                  formulário de triagem (?pessoa=<id> = paciente já cadastrado)
-    /internos                       lista de internos (ativos / inativos)
+    /internos                       lista de internos (ativos / inativos); "Dar baixa" muda para inativo
     /prontuario/novo                formulário do prontuário (?pessoa=<id> = paciente já cadastrado)
     /internacoes/<id>               ficha: dados, parcelas, outras internações, ações
     /internacoes/<id>/editar        abre o formulário certo (triagem ou prontuário) já preenchido
@@ -19,6 +19,7 @@ Organização:
     servicos.py    regras de negócio: validar, gravar, mudar status, parcelas
     avisos.py      quadro de avisos
     vagas.py       ocupação das vagas por categoria
+    painel.py      números e agenda dos próximos dias da página inicial
     autenticacao.py  login: usuários, senhas, sessão e proteção das rotas
     banco.py       onde fica o banco (SQLite local ou Postgres da hospedagem)
     copiar_banco.py  leva os dados do SQLite local para o banco da hospedagem
@@ -32,18 +33,24 @@ as variáveis de ambiente da hospedagem). Em produção use HTTPS e um servidor 
 verdade (gunicorn app:app) — `python app.py` é só para uso local.
 """
 
+from datetime import date
+
 from flask import (Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file,
                    session, url_for)
 
 import autenticacao
 import banco
+import declaracoes
+import documentos
+import painel
+import relatorios
 import servicos
 from avisos import gerar_avisos
 from modelos import STATUS_INTERNACAO, STATUS_TRIAGEM, AvisoDispensado, Internacao, Parcela, Pessoa, db
 from migracoes import migrar
-from prontuario import fmt_data, fmt_reais, gerar_docx
+from prontuario import fmt_data, fmt_reais, gerar_docx, montar_documento
 from validacao import fmt_cep, fmt_cpf, fmt_hora, fmt_rg
-from vagas import gerar_vagas
+from vagas import gerar_vagas, totais
 
 app = Flask(__name__)
 # o banco fica fora do git: SQLite local por padrão, ou o que estiver em DATABASE_URL (banco.py)
@@ -125,7 +132,12 @@ def alterar_senha():
 # ===================================================================== home
 @app.get("/")
 def home():
-    return render_template("home.html", avisos=gerar_avisos(), vagas=gerar_vagas())
+    hoje = date.today()
+    lista_de_vagas = gerar_vagas()
+    return render_template("home.html", avisos=gerar_avisos(), vagas=lista_de_vagas, vagas_total=totais(lista_de_vagas),
+                           resumo=painel.resumo(), agenda=painel.agenda(hoje=hoje),
+                           dias_da_agenda=painel.DIAS_DA_AGENDA, fim_do_tratamento=painel.tratamentos_a_finalizar(hoje=hoje),
+                           hoje_por_extenso=painel.data_por_extenso(hoje))
 
 
 @app.post("/avisos/ciente")
@@ -195,7 +207,9 @@ def mudar_status(id):
 # ================================================================== internos
 @app.get("/internos")
 def lista_internos():
-    return render_template("internos.html", novo=request.args.get("novo", type=int))
+    # novo = registro recém-gravado (a linha é destacada); baixar = 1 baixa o .docx dele
+    return render_template("internos.html", novo=request.args.get("novo", type=int),
+                           baixar=request.args.get("baixar", type=int), motivos=servicos.MOTIVOS)
 
 
 @app.get("/api/internos")
@@ -204,6 +218,16 @@ def api_internos():
         db.select(Internacao).filter(Internacao.status.in_(STATUS_INTERNACAO))
         .order_by(Internacao.inicio.desc().nulls_last(), Internacao.id.desc())).scalars()
     return jsonify([i.para_lista() for i in itens])
+
+
+@app.post("/internacoes/<int:id>/baixa")
+def baixa_interno(id):
+    internacao = _buscar(Internacao, id)
+    erros = servicos.dar_baixa(internacao, request.get_json(force=True))
+    if erros:
+        return jsonify(ok=False, erros=erros), 400
+    return jsonify(ok=True, status=internacao.status_txt, saida=fmt_data(internacao.termino),
+                   ficha=url_for("ficha", id=id))
 
 
 @app.get("/prontuario/novo")
@@ -221,8 +245,9 @@ def gerar():
         pessoa = db.session.get(Pessoa, request.form.get("pessoa_id", type=int) or 0)
         return render_template("formulario.html", d=request.form, erros=erros, pessoa=pessoa,
                                anterior=None, **servicos.opcoes_formulario()), 400
-    # Post/Redirect/Get: a lista baixa o .docx e destaca a linha
-    return redirect(url_for("lista_internos", novo=internacao.id))
+    # Post/Redirect/Get: a lista destaca a linha e, se foi "Salvar e baixar", baixa o .docx
+    baixar = 1 if request.form.get("acao") == "baixar" else None
+    return redirect(url_for("lista_internos", novo=internacao.id, baixar=baixar))
 
 
 # ===================================================================== ficha
@@ -263,6 +288,79 @@ def excluir_parcela(id):
     db.session.commit()
     flash("Parcela excluída.")
     return redirect(url_for("ficha", id=internacao_id) + "#parcelas")
+
+
+# ============================================================== documentos
+# Cada documento tem três saídas: ver no navegador (com botão de imprimir), imprimir direto (?imprimir=1)
+# e baixar o .docx. Todos nascem do mesmo motor (documentos.py), com o mesmo timbre.
+def _mostrar(doc, docx, voltar, avisos=()):
+    doc.voltar = voltar
+    return render_template("documento.html", doc=doc, docx=docx, avisos=avisos, cabecalho=documentos.CABECALHO,
+                           rodape=documentos.RODAPE)
+
+
+def _baixar(doc):
+    return send_file(documentos.para_docx(doc), as_attachment=True, download_name=doc.nome_arquivo + ".docx")
+
+
+def _declaracao(id):
+    internacao = _buscar(Internacao, id)
+    if declaracoes.tipo_da_declaracao(internacao) is None:      # triagem ainda não é interno: não há o que declarar
+        abort(404)
+    return declaracoes.documento(internacao, relatorios.hoje_no_brasil())
+
+
+@app.get("/internacoes/<int:id>/prontuario/visualizar")
+def ver_prontuario(id):
+    doc = montar_documento(_buscar(Internacao, id).dados_completos())
+    return _mostrar(doc, url_for("baixar_prontuario", id=id), url_for("ficha", id=id))
+
+
+@app.get("/internacoes/<int:id>/declaracao")
+def ver_declaracao(id):
+    return _mostrar(_declaracao(id), url_for("baixar_declaracao", id=id), url_for("ficha", id=id))
+
+
+@app.get("/internacoes/<int:id>/declaracao.docx")
+def baixar_declaracao(id):
+    return _baixar(_declaracao(id))
+
+
+# ================================================================ relatórios
+@app.get("/relatorios")
+def pagina_relatorios():
+    hoje = relatorios.hoje_no_brasil()
+    anual = relatorios.resumo_anual(hoje)
+    return render_template("relatorios.html", blocos=relatorios.painel(), hoje=hoje, anual=anual,
+                           aviso_anual=relatorios.aviso_do_resumo(anual))
+
+
+def _relatorio_do_convenio(slug):
+    if slug not in relatorios.CONVENIOS:
+        abort(404)
+    return relatorios.documento_convenio(slug, relatorios.hoje_no_brasil())
+
+
+@app.get("/relatorios/internos-ativos/<slug>")
+def ver_relatorio(slug):
+    return _mostrar(_relatorio_do_convenio(slug), url_for("baixar_relatorio", slug=slug), url_for("pagina_relatorios"))
+
+
+@app.get("/relatorios/internos-ativos/<slug>.docx")
+def baixar_relatorio(slug):
+    return _baixar(_relatorio_do_convenio(slug))
+
+
+@app.get("/relatorios/passaram-pela-casa")
+def ver_relatorio_anual():
+    hoje = relatorios.hoje_no_brasil()
+    return _mostrar(relatorios.documento_anual(hoje), url_for("baixar_relatorio_anual"), url_for("pagina_relatorios"),
+                    avisos=[t for t in (relatorios.aviso_do_resumo(relatorios.resumo_anual(hoje)),) if t])
+
+
+@app.get("/relatorios/passaram-pela-casa.docx")
+def baixar_relatorio_anual():
+    return _baixar(relatorios.documento_anual(relatorios.hoje_no_brasil()))
 
 
 if __name__ == "__main__":

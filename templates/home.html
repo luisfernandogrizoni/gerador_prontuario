@@ -1,93 +1,363 @@
 {% extends "base.html" %}
 
 {% block estilo %}
-  .cartoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin: 20px 0 28px; }
-  .cartao { display: block; background: #fff; border: 1px solid var(--borda); border-radius: 12px; padding: 22px 18px;
-            text-decoration: none; color: var(--texto); transition: border-color .15s, transform .15s; }
-  .cartao:hover { border-color: var(--vermelho); transform: translateY(-2px); }
-  .cartao strong { display: block; font-size: 1.08rem; color: var(--vermelho); margin-bottom: 6px; }
-  .cartao span { color: var(--suave); font-size: .88rem; }
-  .vagas { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 8px 0 28px; }
-  .vaga { border: 1px solid var(--borda); border-radius: 12px; padding: 12px 14px; background: #fff; }
-  .vaga h3 { margin: 0 0 4px; font-size: .88rem; font-weight: 600; }
-  .vaga .numeros { font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
-  .vaga .numeros small { font-size: .9rem; font-weight: 400; color: inherit; opacity: .75; }
-  .vaga .situacao { font-size: .82rem; }
-  .vaga.disponivel, .vaga.lotada { background: var(--verde-claro); border-color: #a8d5b1; color: var(--verde); }
+  /* ---- cabeçalho da página ---- */
+  .painel-topo { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+  .painel-topo .titulo { margin-right: auto; }
+  .painel-topo .data { margin: 0; color: var(--suave); }
+  .painel-topo .data::first-letter { text-transform: uppercase; }
+  .painel-topo .acoes { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  /* ---- indicadores ---- */
+  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 20px; }
+  .kpi { display: flex; align-items: center; gap: 15px; padding: 18px 20px; background: var(--superficie); border: 1px solid var(--borda);
+         border-radius: var(--raio); box-shadow: var(--sombra); text-decoration: none; color: var(--texto);
+         transition: border-color .15s, box-shadow .15s, transform .15s; }
+  .kpi:hover { border-color: var(--borda-forte); box-shadow: 0 6px 16px rgba(16,24,40,.09); transform: translateY(-1px); }
+  .kpi-icone { width: 48px; height: 48px; border-radius: 13px; display: grid; place-items: center; flex: none; }
+  .kpi-icone .icone { width: 23px; height: 23px; }
+  .kpi-icone.verde { background: var(--verde-claro); color: var(--verde); }
+  .kpi-icone.azul { background: var(--azul-claro); color: var(--azul); }
+  .kpi-icone.ambar { background: var(--amarelo); color: var(--ambar); }
+  .kpi-icone.vermelho { background: var(--vermelho-claro); color: var(--vermelho); }
+  .kpi-numero { display: block; font-size: 1.95rem; font-weight: 700; line-height: 1; letter-spacing: -.025em; font-variant-numeric: tabular-nums; }
+  .kpi-rotulo { display: block; margin-top: 5px; font-size: .88rem; font-weight: 600; }
+  .kpi-sub { display: block; font-size: .77rem; color: var(--suave); }
+  @media (max-width: 1060px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 520px) {
+    .kpis { gap: 10px; }
+    .kpi { padding: 12px; gap: 10px; align-items: flex-start; }
+    .kpi-icone { width: 36px; height: 36px; border-radius: 10px; }
+    .kpi-icone .icone { width: 19px; height: 19px; }
+    .kpi-numero { font-size: 1.55rem; }
+    .kpi-rotulo { font-size: .8rem; }
+    .kpi-sub { font-size: .72rem; }
+    .painel-topo .acoes { width: 100%; }
+    .painel-topo .acoes .botao { flex: 1 1 0; padding-left: 8px; padding-right: 8px; white-space: nowrap; }
+    .bloco-topo { flex-wrap: wrap; }
+    .bloco-topo, .bloco-corpo, .fim-lista, .dia { padding-left: 14px; padding-right: 14px; }
+    .fim-rodape { padding-left: 14px; padding-right: 14px; }
+    .grupo-avisos summary, ul.avisos { padding-left: 14px; padding-right: 14px; }
+    .faixa-alerta { margin-left: 14px; margin-right: 14px; }
+    .agenda-rodape { padding-left: 14px; padding-right: 14px; }
+    .vagas { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 1060px) { .atalhos-bloco { display: none; } }
+
+  /* ---- grade principal + lateral ---- */
+  .painel-grade { display: grid; grid-template-columns: minmax(0, 1fr) 372px; gap: 20px; align-items: start; }
+  .principal, .lateral { display: grid; gap: 20px; }
+  @media (max-width: 1060px) { .painel-grade { grid-template-columns: minmax(0, 1fr); } .lateral { order: -1; } }
+
+  .bloco { background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio); box-shadow: var(--sombra); overflow: hidden; }
+  .bloco-topo { display: flex; align-items: center; gap: 10px; padding: 16px 20px; border-bottom: 1px solid #f0f2f5; }
+  .bloco-topo h2 { margin: 0; font-size: 1rem; display: flex; align-items: center; gap: 9px; }
+  .bloco-topo h2 .icone { color: var(--suave); }
+  .bloco-nota { margin-left: auto; font-size: .8rem; color: var(--suave); white-space: nowrap; }
+  .bloco-corpo { padding: 18px 20px 20px; }
+  .pilula { display: inline-block; min-width: 24px; text-align: center; padding: 1px 9px; border-radius: 999px; font-size: .78rem; font-weight: 700;
+            background: #eef1f6; color: #475467; }
+  .pilula.alerta { background: var(--amarelo); color: var(--ambar); }
+
+  /* ---- resumo geral das vagas ---- */
+  .vagas-resumo { display: flex; align-items: center; gap: 8px 20px; flex-wrap: wrap; margin-bottom: 18px; }
+  .vagas-resumo-num { font-size: 1.9rem; font-weight: 700; letter-spacing: -.025em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .vagas-resumo-de { color: var(--suave); font-size: .9rem; margin-left: 6px; }
+  .vagas-resumo .barra { flex: 1 1 220px; margin: 0; height: 10px; }
+  .vagas-resumo .barra span { background: #475467; }
+
+  /* ---- vagas por categoria ---- */
+  .vagas { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+  .vaga { padding: 14px 16px 15px; border: 1px solid var(--borda); border-radius: 11px; background: #fff; }
+  .vaga-topo { display: flex; align-items: baseline; gap: 10px; }
+  .vaga-nome { font-weight: 600; font-size: .92rem; margin-right: auto; display: inline-flex; align-items: center; gap: 8px; }
+  .ponto { width: 10px; height: 10px; border-radius: 50%; background: var(--cor); flex: none; box-shadow: inset 0 0 0 1px rgba(16,24,40,.12); }
+  .vaga-numero { font-size: 1.35rem; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .vaga-numero small { font-size: .85rem; font-weight: 500; color: inherit; opacity: .65; }
+  .barra { height: 8px; border-radius: 999px; background: rgba(16,24,40,.09); margin: 10px 0 8px; overflow: hidden; }
+  .barra span { display: block; height: 100%; border-radius: 999px; background: var(--mais-suave); transition: width .4s ease; }
+  .vaga-texto { font-size: .82rem; font-weight: 500; }
+  /* verde = há vaga ou está lotada; vermelho = passou do limite; cinza = limite não definido */
+  .vaga.disponivel, .vaga.lotada { background: var(--verde-claro); border-color: var(--verde-borda); color: var(--verde); }
+  .vaga.disponivel .barra span { background: #34a853; }
+  .vaga.lotada .barra span { background: var(--verde); }
   .vaga.excedida { background: #fff5f5; border-color: #f0b4b0; color: var(--vermelho); }
+  .vaga.excedida .barra span { background: #d93a30; }
   .vaga.sem_limite { color: var(--suave); }
-  .quadro { background: #fff; border: 1px solid var(--borda); border-radius: 12px; padding: 6px 18px 14px; }
-  .quadro h2 { display: flex; align-items: center; gap: 10px; }
-  .contagem { background: var(--vermelho); color: #fff; border-radius: 999px; font-size: .8rem; padding: 1px 9px; }
-  details { border-top: 1px solid #eee; padding: 8px 0; }
-  summary { cursor: pointer; font-weight: 600; font-size: .95rem; }
-  summary .contagem { background: #888; margin-left: 6px; }
-  ul.avisos { list-style: none; padding: 0; margin: 8px 0 0; }
-  ul.avisos li { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 6px 0; font-size: .9rem; border-bottom: 1px dashed #eee; }
-  ul.avisos li:last-child { border-bottom: 0; }
-  ul.avisos li span { flex: 1 1 320px; }
+  .vaga.sem_limite .barra { display: none; }
+  .vaga.sem_limite .vaga-nome { color: var(--texto); }
+
+  /* ---- tratamentos próximos do fim ---- */
+  .fim-lista { list-style: none; margin: 0; padding: 4px 20px 2px; }
+  .fim { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 18px; align-items: center; padding: 14px 0; border-top: 1px solid #f0f2f5; }
+  .fim:first-child { border-top: 0; }
+  .fim-pessoa a { font-weight: 600; color: var(--texto); text-decoration: none; }
+  .fim-pessoa a:hover { color: var(--vermelho); }
+  .fim-pessoa small { display: block; color: var(--suave); font-size: .77rem; }
+  .fim .barra { height: 5px; margin: 8px 0 0; max-width: 360px; }
+  .fim.proximo .barra span { background: #3b7dd8; }
+  .fim.urgente .barra span { background: #e0a100; }
+  .fim.vencido .barra span { background: #d93a30; }
+  .fim-prazo { text-align: right; white-space: nowrap; }
+  .fim-prazo strong { display: block; font-size: .9rem; font-variant-numeric: tabular-nums; }
+  .etiqueta-prazo { display: inline-block; margin-top: 3px; font-size: .74rem; font-weight: 700; padding: 2px 10px; border-radius: 999px; }
+  .etiqueta-prazo.proximo { background: var(--azul-claro); color: var(--azul); }
+  .etiqueta-prazo.urgente { background: var(--amarelo); color: var(--ambar); }
+  .etiqueta-prazo.vencido { background: var(--vermelho-claro); color: var(--vermelho); }
+  .fim-rodape { display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; padding: 10px 20px 18px; font-size: .8rem; color: var(--suave); }
+  .fim-rodape .botao { margin-right: auto; }
+  .fim-rodape a:not(.botao) { font-weight: 600; }
+  .fim-vazio { display: flex; align-items: center; gap: 12px; padding: 22px 20px 10px; color: var(--suave); }
+  .fim-vazio .icone { width: 26px; height: 26px; color: var(--borda-forte); flex: none; }
+  @media (max-width: 520px) { .fim { grid-template-columns: 1fr; } .fim-prazo { text-align: left; } }
+
+  /* ---- avisos ---- */
+  .vazio-ok { display: flex; align-items: center; gap: 12px; color: var(--verde); font-weight: 600; padding: 4px 0; }
+  .vazio-ok .icone { width: 26px; height: 26px; }
+  .grupo-avisos { border-top: 1px solid #f0f2f5; }
+  .grupo-avisos:first-child { border-top: 0; }
+  .grupo-avisos summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 13px 20px; font-weight: 600; font-size: .92rem; }
+  .grupo-avisos summary::-webkit-details-marker { display: none; }
+  .grupo-avisos summary:hover { background: #fafbfc; }
+  .grupo-avisos summary .icone { margin-left: auto; color: var(--mais-suave); transition: transform .15s; }
+  .grupo-avisos[open] summary .icone { transform: rotate(180deg); }
+  ul.avisos { list-style: none; margin: 0; padding: 0 20px 8px; }
+  ul.avisos li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 14px; align-items: center; padding: 10px 0; border-top: 1px dashed #edf0f4; font-size: .88rem; }
+  ul.avisos li:first-child { border-top: 0; }
+  ul.avisos .acoes-aviso { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
   ul.avisos form { margin: 0; }
-  .vazio { color: var(--suave); padding: 10px 0; }
+  @media (max-width: 640px) { ul.avisos li { grid-template-columns: 1fr; } ul.avisos .acoes-aviso { justify-content: flex-start; } }
+
+  /* ---- agenda dos próximos dias ---- */
+  .faixa-alerta { display: flex; align-items: center; gap: 9px; margin: 14px 20px 0; padding: 9px 12px; border-radius: 10px; background: var(--amarelo);
+                  color: var(--ambar); font-size: .82rem; font-weight: 600; text-decoration: none; }
+  .faixa-alerta:hover { filter: brightness(.97); }
+  .dia { padding: 16px 20px 2px; }
+  .dia-cabeca { display: flex; align-items: baseline; gap: 8px; margin-bottom: 9px; }
+  .dia-cabeca strong { font-size: .76rem; text-transform: uppercase; letter-spacing: .06em; color: var(--suave); }
+  .dia-cabeca span { font-size: .78rem; color: var(--mais-suave); }
+  .dia.hoje .dia-cabeca strong { color: var(--vermelho); }
+  .dia.hoje .dia-cabeca strong::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--vermelho); margin-right: 7px; vertical-align: 1px; }
+  .evento { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px; margin-bottom: 8px;
+            background: #fff; border: 1px solid var(--borda); border-left: 4px solid var(--mais-suave); border-radius: 10px; }
+  .evento.triagem { border-left-color: #3b7dd8; }
+  .evento.internacao { border-left-color: #34a853; }
+  .evento .hora { font-weight: 700; font-size: .88rem; font-variant-numeric: tabular-nums; }
+  .evento .hora.sem { color: var(--mais-suave); font-weight: 500; }
+  .evento-corpo { min-width: 0; }
+  .evento-corpo a { display: block; font-weight: 600; font-size: .9rem; color: var(--texto); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .evento-corpo a:hover { color: var(--vermelho); }
+  .evento-corpo small { display: block; color: var(--suave); font-size: .77rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tag { font-size: .66rem; font-weight: 700; padding: 3px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
+  .tag.triagem { background: var(--azul-claro); color: var(--azul); }
+  .tag.internacao { background: var(--verde-claro); color: var(--verde); }
+  .agenda-vazia { padding: 30px 24px 34px; text-align: center; color: var(--suave); font-size: .9rem; }
+  .agenda-vazia .icone { width: 34px; height: 34px; color: var(--borda-forte); display: block; margin: 0 auto 10px; }
+  .agenda-rodape { padding: 6px 20px 18px; }
+
+  /* ---- atalhos ---- */
+  .atalhos { list-style: none; margin: 0; padding: 6px 8px 8px; }
+  .atalhos a { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; color: var(--texto); text-decoration: none; }
+  .atalhos a:hover { background: #f6f7f9; }
+  .atalhos .ico { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: #f2f4f7; color: var(--suave); flex: none; }
+  .atalhos a:hover .ico { background: var(--vermelho-claro); color: var(--vermelho); }
+  .atalhos strong { display: block; font-size: .92rem; }
+  .atalhos .seta { margin-left: auto; color: var(--mais-suave); }
 {% endblock %}
 
 {% block conteudo %}
-<main>
-  <h1>Sistema de Prontuários</h1>
-  <p class="ajuda">Comunidade Terapêutica — Casa de Acolhida Restauração</p>
+{% set total_avisos = avisos.values() | map('length') | sum %}
+<main class="largo">
+  <div class="painel-topo">
+    <div class="titulo">
+      <h1>Início</h1>
+      <p class="data">{{ hoje_por_extenso }}</p>
+    </div>
+    <div class="acoes">
+      <a class="botao secundario" href="{{ url_for('nova_triagem') }}"><svg class="icone"><use href="#i-mais"/></svg>Nova triagem</a>
+      <a class="botao" href="{{ url_for('formulario') }}"><svg class="icone"><use href="#i-mais"/></svg>Novo prontuário</a>
+    </div>
+  </div>
 
   {% with msgs = get_flashed_messages() %}
     {% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
   {% endwith %}
 
-  <div class="cartoes">
-    <a class="cartao" href="{{ url_for('nova_triagem') }}">
-      <strong>Nova triagem</strong><span>Registrar primeiro contato e triagem de um candidato.</span></a>
-    <a class="cartao" href="{{ url_for('lista_triagens') }}">
-      <strong>Triagens</strong><span>Em admissão, lista de espera e desistências. Mude a situação e admita.</span></a>
-    <a class="cartao" href="{{ url_for('formulario') }}">
-      <strong>Novo prontuário</strong><span>Internação direta: gera o prontuário em Word e registra o interno.</span></a>
-    <a class="cartao" href="{{ url_for('lista_internos') }}">
-      <strong>Lista de internos</strong><span>Ativos e inativos, parcelas e prontuário de cada um.</span></a>
-  </div>
-
-  <h2>Vagas ocupadas</h2>
-  <div class="vagas" id="vagas">
-    {% for v in vagas %}
-    <div class="vaga {{ v.situacao }}">
-      <h3>{{ v.categoria }}</h3>
-      <div class="numeros">{{ v.ocupadas }}{% if v.limite is not none %} <small>/ {{ v.limite }}</small>{% endif %}</div>
-      <div class="situacao">{{ v.texto }}</div>
-    </div>
-    {% endfor %}
-  </div>
-
-  <section class="quadro" id="avisos">
-    {% set total = avisos.values() | map('length') | sum %}
-    <h2>Quadro de avisos {% if total %}<span class="contagem">{{ total }}</span>{% endif %}</h2>
-    {% if not total %}
-      <p class="vazio">Nenhum aviso. Tudo em ordem.</p>
-    {% endif %}
-    {% for categoria, lista in avisos.items() %}
-      <details open>
-        <summary>{{ categoria }} <span class="contagem">{{ lista | length }}</span></summary>
-        <ul class="avisos">
-          {% for a in lista %}
-          <li>
-            <span>{{ a.texto }}</span>
-            <a class="botao pequeno secundario" href="{{ a.url }}">Abrir ficha</a>
-            {% if a.acao %}
-              <form method="post" action="{{ a.acao.url }}"
-                    onsubmit="return confirm('Unificar os dois cadastros? As internações passam para um só cadastro.')">
-                <button class="botao pequeno secundario">{{ a.acao.rotulo }}</button></form>
-            {% endif %}
-            <form method="post" action="{{ url_for('aviso_ciente') }}">
-              <input type="hidden" name="chave" value="{{ a.chave }}">
-              <button class="botao pequeno secundario" title="Tirar do quadro sem corrigir">Ciente</button></form>
-          </li>
-          {% endfor %}
-        </ul>
-      </details>
-    {% endfor %}
+  <section class="kpis" aria-label="Resumo">
+    <a class="kpi" href="{{ url_for('lista_internos') }}">
+      <span class="kpi-icone verde"><svg class="icone"><use href="#i-usuarios"/></svg></span>
+      <span><span class="kpi-numero">{{ resumo.ativo }}</span><span class="kpi-rotulo">Internos ativos</span>
+        <span class="kpi-sub">{{ resumo.inativo }} inativo{{ '' if resumo.inativo == 1 else 's' }} no histórico</span></span>
+    </a>
+    <a class="kpi" href="{{ url_for('lista_triagens', situacao='em_admissao') }}">
+      <span class="kpi-icone azul"><svg class="icone"><use href="#i-prancheta"/></svg></span>
+      <span><span class="kpi-numero">{{ resumo.em_admissao }}</span><span class="kpi-rotulo">Em admissão</span>
+        <span class="kpi-sub">em processo de triagem</span></span>
+    </a>
+    <a class="kpi" href="{{ url_for('lista_triagens', situacao='lista_espera') }}">
+      <span class="kpi-icone ambar"><svg class="icone"><use href="#i-relogio"/></svg></span>
+      <span><span class="kpi-numero">{{ resumo.lista_espera }}</span><span class="kpi-rotulo">Lista de espera</span>
+        <span class="kpi-sub">aguardando uma vaga</span></span>
+    </a>
+    <a class="kpi" href="#avisos">
+      {% if total_avisos %}
+        <span class="kpi-icone vermelho"><svg class="icone"><use href="#i-alerta"/></svg></span>
+        <span><span class="kpi-numero">{{ total_avisos }}</span><span class="kpi-rotulo">Avisos</span>
+          <span class="kpi-sub">pendências nos cadastros</span></span>
+      {% else %}
+        <span class="kpi-icone verde"><svg class="icone"><use href="#i-ok"/></svg></span>
+        <span><span class="kpi-numero">0</span><span class="kpi-rotulo">Avisos</span>
+          <span class="kpi-sub">tudo em ordem</span></span>
+      {% endif %}
+    </a>
   </section>
+
+  <div class="painel-grade">
+    <div class="principal">
+      <section class="bloco" id="vagas" aria-labelledby="t-vagas">
+        <div class="bloco-topo">
+          <h2 id="t-vagas"><svg class="icone"><use href="#i-usuarios"/></svg>Vagas por categoria</h2>
+        </div>
+        <div class="bloco-corpo">
+          {% if vagas_total.limite %}
+            {% set pct = [100, (vagas_total.ocupadas * 100 / vagas_total.limite) | round | int] | min %}
+            <div class="vagas-resumo">
+              <div><span class="vagas-resumo-num">{{ vagas_total.ocupadas }}</span><span class="vagas-resumo-de">de {{ vagas_total.limite }} vagas ocupadas</span></div>
+              <div class="barra" role="img" aria-label="{{ pct }}% das vagas ocupadas"><span style="width: {{ pct }}%"></span></div>
+            </div>
+          {% endif %}
+          <div class="vagas">
+            {% for v in vagas %}
+            <div class="vaga {{ v.situacao }}">
+              <div class="vaga-topo">
+                <span class="vaga-nome"><i class="ponto tipo-{{ v.tipo }}"></i>{{ v.categoria }}</span>
+                <span class="vaga-numero">{{ v.ocupadas }}{% if v.limite is not none %} <small>/ {{ v.limite }}</small>{% endif %}</span>
+              </div>
+              <div class="barra"><span style="width: {{ v.percentual }}%"></span></div>
+              <div class="vaga-texto">{{ v.texto }}</div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+
+      <section class="bloco" id="fim-do-tratamento" aria-labelledby="t-fim">
+        <div class="bloco-topo">
+          <h2 id="t-fim"><svg class="icone"><use href="#i-bandeira"/></svg>Tratamentos próximos do fim</h2>
+          <span class="bloco-nota">
+            {% if fim_do_tratamento.vencidos %}<span class="pilula alerta">{{ fim_do_tratamento.vencidos }} vencido{{ '' if fim_do_tratamento.vencidos == 1 else 's' }}</span> {% endif %}
+            próximos {{ fim_do_tratamento.dias }} dias
+          </span>
+        </div>
+        {% if fim_do_tratamento.itens %}
+          <ul class="fim-lista">
+            {% for t in fim_do_tratamento.itens %}
+              <li class="fim {{ t.situacao }}">
+                <div class="fim-pessoa">
+                  <a href="{{ t.url }}">{{ t.nome }}</a>
+                  <small>{{ t.detalhe }}</small>
+                  <div class="barra" role="img" aria-label="{{ t.percentual }}% do tratamento já cumprido"><span style="width: {{ t.percentual }}%"></span></div>
+                </div>
+                <div class="fim-prazo">
+                  <strong>{{ t.previsao_fmt }}</strong>
+                  <span class="etiqueta-prazo {{ t.situacao }}">{{ t.rotulo }}</span>
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <div class="fim-vazio"><svg class="icone"><use href="#i-ok"/></svg>Nenhum tratamento termina nos próximos {{ fim_do_tratamento.dias }} dias.</div>
+        {% endif %}
+        <div class="fim-rodape">
+          <a class="botao pequeno secundario" href="{{ url_for('lista_internos', situacao='ativo', ordem='previsao', dir='asc') }}">Ver ativos por data de término<svg class="icone"><use href="#i-seta"/></svg></a>
+          {% if fim_do_tratamento.total > fim_do_tratamento.itens | length %}
+            <span>+ {{ fim_do_tratamento.total - (fim_do_tratamento.itens | length) }} no mesmo período</span>
+          {% endif %}
+          {% if fim_do_tratamento.sem_data %}
+            <a href="#avisos">{{ fim_do_tratamento.sem_data }} ativo{{ '' if fim_do_tratamento.sem_data == 1 else 's' }} sem data de internação não {{ 'entra' if fim_do_tratamento.sem_data == 1 else 'entram' }} aqui</a>
+          {% endif %}
+        </div>
+      </section>
+
+      <section class="bloco" id="avisos" aria-labelledby="t-avisos">
+        <div class="bloco-topo">
+          <h2 id="t-avisos"><svg class="icone"><use href="#i-alerta"/></svg>Quadro de avisos</h2>
+          <span class="bloco-nota">{% if total_avisos %}<span class="pilula alerta">{{ total_avisos }}</span>{% endif %}</span>
+        </div>
+        {% if not total_avisos %}
+          <div class="bloco-corpo"><div class="vazio-ok"><svg class="icone"><use href="#i-ok"/></svg>Nenhum aviso. Tudo em ordem.</div></div>
+        {% endif %}
+        {% for categoria, lista in avisos.items() %}
+          <details class="grupo-avisos" {{ 'open' if total_avisos <= 8 }}>
+            <summary>{{ categoria }} <span class="pilula">{{ lista | length }}</span><svg class="icone"><use href="#i-chevron"/></svg></summary>
+            <ul class="avisos">
+              {% for a in lista %}
+              <li>
+                <span>{{ a.texto }}</span>
+                <span class="acoes-aviso">
+                  <a class="botao pequeno secundario" href="{{ a.url }}">Abrir ficha</a>
+                  {% if a.acao %}
+                    <form method="post" action="{{ a.acao.url }}"
+                          onsubmit="return confirm('Unificar os dois cadastros? As internações passam para um só cadastro.')">
+                      <button class="botao pequeno secundario">{{ a.acao.rotulo }}</button></form>
+                  {% endif %}
+                  <form method="post" action="{{ url_for('aviso_ciente') }}">
+                    <input type="hidden" name="chave" value="{{ a.chave }}">
+                    <button class="botao pequeno secundario" title="Tirar do quadro sem corrigir">Ciente</button></form>
+                </span>
+              </li>
+              {% endfor %}
+            </ul>
+          </details>
+        {% endfor %}
+      </section>
+    </div>
+
+    <aside class="lateral">
+      <section class="bloco agenda" aria-labelledby="t-agenda">
+        <div class="bloco-topo">
+          <h2 id="t-agenda"><svg class="icone"><use href="#i-calendario"/></svg>Agenda</h2>
+          <span class="bloco-nota">próximos {{ dias_da_agenda }} dias</span>
+        </div>
+        {% set vencidos = (avisos.get('Internação agendada já passou') or []) | length %}
+        {% if vencidos %}
+          <a class="faixa-alerta" href="#avisos"><svg class="icone"><use href="#i-alerta"/></svg>
+            {{ vencidos }} agendamento{{ '' if vencidos == 1 else 's' }} já passou sem atualização — ver avisos</a>
+        {% endif %}
+        {% for dia in agenda %}
+          <div class="dia {{ 'hoje' if dia.hoje }}">
+            <div class="dia-cabeca"><strong>{{ dia.rotulo }}</strong><span>{{ dia.data_curta }}</span></div>
+            {% for e in dia.eventos %}
+              <div class="evento {{ e.classe }}">
+                <span class="hora {{ '' if e.hora else 'sem' }}">{{ e.hora or '—' }}</span>
+                <span class="evento-corpo"><a href="{{ e.url }}" title="{{ e.nome }}">{{ e.nome }}</a><small>{{ e.detalhe }}</small></span>
+                <span class="tag {{ e.classe }}">{{ e.tipo }}</span>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="agenda-vazia">
+            <svg class="icone"><use href="#i-calendario"/></svg>
+            Nenhuma triagem ou internação agendada para os próximos {{ dias_da_agenda }} dias.
+          </div>
+        {% endfor %}
+        <div class="agenda-rodape"><a class="botao pequeno secundario" href="{{ url_for('lista_triagens') }}">Ver todas as triagens<svg class="icone"><use href="#i-seta"/></svg></a></div>
+      </section>
+
+      <section class="bloco atalhos-bloco" aria-labelledby="t-atalhos">
+        <div class="bloco-topo"><h2 id="t-atalhos">Atalhos</h2></div>
+        <ul class="atalhos">
+          <li><a href="{{ url_for('nova_triagem') }}"><span class="ico"><svg class="icone"><use href="#i-mais"/></svg></span>
+            <span><strong>Nova triagem</strong></span><svg class="icone seta"><use href="#i-seta"/></svg></a></li>
+          <li><a href="{{ url_for('formulario') }}"><span class="ico"><svg class="icone"><use href="#i-prancheta"/></svg></span>
+            <span><strong>Novo prontuário</strong></span><svg class="icone seta"><use href="#i-seta"/></svg></a></li>
+          <li><a href="{{ url_for('lista_triagens') }}"><span class="ico"><svg class="icone"><use href="#i-relogio"/></svg></span>
+            <span><strong>Triagens</strong></span><svg class="icone seta"><use href="#i-seta"/></svg></a></li>
+          <li><a href="{{ url_for('lista_internos') }}"><span class="ico"><svg class="icone"><use href="#i-usuarios"/></svg></span>
+            <span><strong>Lista de internos</strong></span><svg class="icone seta"><use href="#i-seta"/></svg></a></li>
+        </ul>
+      </section>
+    </aside>
+  </div>
 </main>
 {% endblock %}

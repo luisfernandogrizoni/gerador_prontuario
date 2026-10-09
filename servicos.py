@@ -163,6 +163,34 @@ def mudar_status(internacao, dados):
     return {}
 
 
+# ---------------------------------------------------------------- dar baixa
+def dar_baixa(internacao, dados):
+    """Dar baixa em quem está ativo: grava a data e o motivo da saída e passa para inativo.
+    Chamado pela lista de internos. `dados` vem do navegador (JSON).
+    Devolve {campo: mensagem}; vazio = deu certo."""
+    if internacao.status != "ativo":
+        return {"status": "Só quem está ativo pode receber baixa."}
+
+    erros = {}
+    saida = ler_data(dados.get("termino"))
+    if not saida:
+        erros["termino"] = "Informe a data da saída."
+    elif saida > date.today():
+        erros["termino"] = "A data da saída não pode ser no futuro."
+    elif internacao.inicio and saida < internacao.inicio:
+        erros["termino"] = f"A saída não pode ser antes da internação ({internacao.inicio.strftime('%d/%m/%Y')})."
+    if dados.get("motivo") not in MOTIVOS:
+        erros["motivo"] = "Escolha o motivo."
+    if erros:
+        return erros
+
+    internacao.termino = saida
+    internacao.motivo = dados["motivo"]
+    internacao.status = "inativo"
+    db.session.commit()
+    return {}
+
+
 # ------------------------------------------------------------------ parcelas
 def lancar_parcela(internacao, form):
     data = ler_data(form.get("data"))
@@ -208,9 +236,13 @@ def opcoes_formulario():
     """Listas usadas pelos selects dos formulários."""
     from modelos import MODALIDADES
     from prontuario import (CATEGORIA_VALOR_ZERO, CONVENIOS_GRATUITOS, DOCUMENTOS,
-                            FAIXAS_PARTICULAR)
-    return dict(convenios=CONVENIOS, gratuitos=CONVENIOS_GRATUITOS, faixas=FAIXAS_PARTICULAR,
-                categoria_zero=CATEGORIA_VALOR_ZERO, documentos=DOCUMENTOS, motivos=MOTIVOS,
+                            FAIXAS_PARTICULAR, NOME_CURTO, NOME_NA_TELA)
+    # o texto "Categoria: ..." que aparece enquanto se digita o valor usa os nomes curtos das telas
+    faixas = [(limite, NOME_CURTO.get(nome, nome)) for limite, nome in FAIXAS_PARTICULAR]
+    # (valor guardado, nome na tela): o select mostra "Caps AD" e grava "CAPS AD"
+    convenios = [(c, NOME_NA_TELA.get(c, c)) for c in CONVENIOS]
+    return dict(convenios=convenios, gratuitos=CONVENIOS_GRATUITOS, faixas=faixas,
+                categoria_zero=NOME_CURTO[CATEGORIA_VALOR_ZERO], documentos=DOCUMENTOS, motivos=MOTIVOS,
                 modalidades=MODALIDADES, a_definir=CONVENIO_A_DEFINIR,
                 status_triagem=[(s, STATUS[s]) for s in STATUS_TRIAGEM], hoje=date.today().isoformat(),
                 fmt_cpf=fmt_cpf)

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_acoes_documento.html" import acoes_documento %}
 {% set p = i.pessoa %}
 
 {% block titulo %}{{ p.nome }}{% endblock %}
@@ -12,12 +13,34 @@
   dt { font-size: .78rem; color: var(--suave); }
   dd { margin: 2px 0 0; font-size: .95rem; }
   dd:empty::after { content: "—"; color: #bbb; }
-  table.simples { border-collapse: collapse; width: 100%; font-size: .9rem; }
-  .simples th, .simples td { padding: 6px 8px; border-bottom: 1px solid #eee; text-align: left; }
-  .simples td.num { text-align: right; }
+  table.simples { border-collapse: collapse; width: 100%; font-size: .88rem; }
+  .simples th { padding: 10px 12px; text-align: left; background: #f9fafb; color: var(--suave); font-size: .7rem; font-weight: 700;
+                text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--borda); white-space: nowrap; }
+  .simples td { padding: 11px 12px; text-align: left; border-bottom: 1px solid #f0f2f5; vertical-align: middle; }
+  .simples tbody tr:last-child td { border-bottom: 0; }
+  .simples tbody tr:hover { background: #fafbfc; }
+  .simples td.num { text-align: right; white-space: nowrap; }
   .simples form { margin: 0; }
+  .docs { list-style: none; margin: 0; padding: 0; }
+  .docs li { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; padding: 12px 0; border-top: 1px solid #f0f2f5; }
+  .docs li:first-child { border-top: 0; }
+  .docs .nome-doc { font-weight: 600; margin-right: auto; }
+  .docs .acoes-doc { display: flex; gap: 8px; flex-wrap: wrap; }
+  @media (max-width: 640px) { .docs .acoes-doc { width: 100%; } .docs .acoes-doc .botao { flex: 1 1 auto; } }
+  @media print { .docs { display: none; } }
   form.nova-parcela { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-top: 12px; }
   form.nova-parcela label { width: 150px; }
+  @media (max-width: 640px) {
+    .cartao { padding: 2px 14px 14px; overflow-x: auto; }
+    dl { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
+    dd { overflow-wrap: anywhere; }
+    .acoes .botao { flex: 1 1 100%; }
+    form.nova-parcela label { width: calc(50% - 5px); }
+    form.nova-parcela .botao { flex: 1 1 100%; }
+    .simples th, .simples td { padding-left: 6px; padding-right: 6px; }
+    .simples.larga { min-width: 560px; }
+  }
+  @media print { .cartao { overflow: visible; padding-bottom: 8px; } .simples.larga { min-width: 0; } form.nova-parcela { display: none; } }
 {% endblock %}
 
 {% block conteudo %}
@@ -30,16 +53,29 @@
     <h1>{{ p.nome }}</h1>
     <span class="selo {{ i.status }}">{{ i.status_txt }}</span>
   </div>
-  <p class="ajuda">Cadastro nº {{ p.id }} · registro nº {{ i.id }} · {{ i.convenio_txt }}</p>
+  <p class="ajuda">Cadastro nº {{ p.id }} · registro nº {{ i.id }} · {{ i.categoria }}</p>
 
   <div class="acoes">
     <a class="botao" href="{{ url_for('editar_internacao', id=i.id) }}">Editar</a>
-    {% if not i.e_triagem %}
-      <a class="botao secundario" href="{{ url_for('baixar_prontuario', id=i.id) }}">Baixar prontuário</a>
-    {% endif %}
     <a class="botao secundario" href="{{ url_for('formulario', pessoa=p.id) }}">Nova internação desta pessoa</a>
     <a class="botao secundario" href="{{ url_for('nova_triagem', pessoa=p.id) }}">Nova triagem desta pessoa</a>
   </div>
+
+  {% if not i.e_triagem %}
+  <section class="cartao" id="documentos">
+    <h2>Documentos</h2>
+    <ul class="docs">
+      <li>
+        <span class="nome-doc">Prontuário</span>
+        {{ acoes_documento(url_for('ver_prontuario', id=i.id), url_for('baixar_prontuario', id=i.id)) }}
+      </li>
+      <li>
+        <span class="nome-doc">{{ 'Declaração de internação' if i.status == 'ativo' else 'Declaração de ex-interno' }}</span>
+        {{ acoes_documento(url_for('ver_declaracao', id=i.id), url_for('baixar_declaracao', id=i.id)) }}
+      </li>
+    </ul>
+  </section>
+  {% endif %}
 
   <section class="cartao">
     <h2>Dados pessoais</h2>
@@ -64,14 +100,14 @@
   <section class="cartao">
     <h2>{{ 'Triagem' if i.e_triagem else 'Internação' }}</h2>
     <dl>
-      <div><dt>1º contato</dt><dd>{{ i.primeiro_contato | data }} {{ i.hora_primeiro_contato | hora }}</dd></div>
-      <div><dt>Triagem</dt><dd>{{ i.data_triagem | data }} {{ i.hora_triagem | hora }}{{ ' · ' ~ i.modalidade if i.modalidade }}</dd></div>
-      <div><dt>Internação agendada</dt><dd>{{ i.internacao_agendada | data }} {{ i.hora_agendada | hora }}</dd></div>
-      <div><dt>Internado em (efetiva)</dt><dd>{{ i.inicio | data }} {{ i.hora_internacao | hora }}</dd></div>
+      <div><dt>1º contato</dt><dd>{{ [i.primeiro_contato | data, i.hora_primeiro_contato | hora] | select | join(' ') }}</dd></div>
+      <div><dt>Triagem</dt><dd>{{ ([i.data_triagem | data, i.hora_triagem | hora] | select | join(' ')) ~ (' · ' ~ i.modalidade if i.modalidade else '') }}</dd></div>
+      <div><dt>Internação agendada</dt><dd>{{ [i.internacao_agendada | data, i.hora_agendada | hora] | select | join(' ') }}</dd></div>
+      <div><dt>Internado em (efetiva)</dt><dd>{{ [i.inicio | data, i.hora_internacao | hora] | select | join(' ') }}</dd></div>
       <div><dt>Saída</dt><dd>{{ i.termino | data }}{{ ' · ' ~ i.motivo if i.motivo }}</dd></div>
       <div><dt>Responsável</dt><dd>{{ i.resp_nome }}{{ ' (' ~ i.parentesco ~ ')' if i.parentesco }}</dd></div>
       <div><dt>CPF / RG do responsável</dt><dd>{{ [i.resp_cpf | cpf, i.resp_rg | rg] | select | join(' · ') }}</dd></div>
-      <div><dt>Convênio</dt><dd>{{ i.convenio_txt }}</dd></div>
+      <div><dt>Categoria</dt><dd>{{ i.categoria }}</dd></div>
       <div><dt>Contribuição</dt><dd>{{ i.contribuicao_valor | reais }}{{ ' — ' ~ i.contribuicao_condicoes if i.contribuicao_condicoes }}</dd></div>
     </dl>
   </section>
@@ -111,7 +147,7 @@
   {% if outras %}
   <section class="cartao">
     <h2>Outros registros desta pessoa</h2>
-    <table class="simples">
+    <table class="simples larga">
       <thead><tr><th>Registro</th><th>Situação</th><th>1º contato</th><th>Agendada</th><th>Internado em</th><th>Saída</th><th>Responsável</th></tr></thead>
       <tbody>
         {% for o in outras %}

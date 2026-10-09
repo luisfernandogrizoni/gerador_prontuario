@@ -3,29 +3,28 @@
 {% block titulo %}Triagens{% endblock %}
 
 {% block estilo %}
-  dialog { border: 1px solid var(--borda); border-radius: 12px; padding: 18px 20px; width: min(460px, 92vw); }
-  dialog::backdrop { background: rgba(0,0,0,.35); }
-  dialog h2 { margin-top: 0; }
-  dialog .grade { margin-bottom: 14px; }
-  dialog .botoes { display: flex; gap: 8px; justify-content: flex-end; }
+    @media print { @page { size: A4 landscape; margin: 10mm; } }
 {% endblock %}
 
 {% block conteudo %}
 <main class="largo">
-  <div class="topo-lista">
-    <h1>Triagens</h1>
-    <div class="contadores">
-      <span class="contador"><b id="n-em_admissao">–</b>em admissão</span>
-      <span class="contador"><b id="n-lista_espera">–</b>lista de espera</span>
-      <span class="contador"><b id="n-desistiu">–</b>desistências</span>
+  <div class="pagina-topo">
+    <div class="titulo"><h1>Triagens</h1></div>
+    <a class="botao" href="{{ url_for('nova_triagem') }}"><svg class="icone"><use href="#i-mais"/></svg>Nova triagem</a>
+  </div>
+
+  <div class="ferramentas">
+    <div class="segmentado" id="filtro" role="group" aria-label="Situação">
+      <button type="button" data-valor="andamento">Em andamento <span class="n" id="n-andamento">–</span></button>
+      <button type="button" data-valor="em_admissao">Em admissão <span class="n" id="n-em_admissao">–</span></button>
+      <button type="button" data-valor="lista_espera">Lista de espera <span class="n" id="n-lista_espera">–</span></button>
+      <button type="button" data-valor="desistiu">Desistências <span class="n" id="n-desistiu">–</span></button>
+      <button type="button" data-valor="">Todas <span class="n" id="n-todas">–</span></button>
     </div>
-    <select id="filtro" aria-label="Situação">
-      <option value="andamento">Em andamento (admissão + espera)</option>
-      {% for valor, rotulo in status_triagem %}<option value="{{ valor }}">{{ rotulo }}</option>{% endfor %}
-      <option value="">Todas</option>
-    </select>
-    <input id="busca" type="search" placeholder="Buscar por nome, CPF, responsável, cidade…">
-    <a class="botao" href="{{ url_for('nova_triagem') }}">+ Triagem</a>
+    <label class="busca">
+      <svg class="icone"><use href="#i-busca"/></svg>
+      <input id="busca" type="search" placeholder="Buscar por nome, CPF, responsável ou categoria…" aria-label="Buscar">
+    </label>
   </div>
 
   <div id="aviso" class="aviso" hidden></div>
@@ -34,13 +33,12 @@
     <table class="lista">
       <thead>
         <tr>
-          <th data-chave="nome">Nome</th>
+          <th data-chave="nome">Pessoa</th>
+          <th data-chave="categoria">Categoria</th>
           <th data-chave="primeiro_contato">1º contato</th>
           <th data-chave="triagem">Triagem</th>
-          <th data-chave="agendada">Internação agendada</th>
-          <th data-chave="convenio">Convênio</th>
+          <th data-chave="agendada">Agendada</th>
           <th data-chave="responsavel">Responsável</th>
-          <th data-chave="contato">Contato</th>
           <th data-chave="status">Situação</th>
           <th class="sem-ordem"></th>
         </tr>
@@ -49,23 +47,20 @@
     </table>
     <div id="vazio" class="vazio" hidden></div>
   </div>
-  <p class="rodape" id="atualizado"></p>
+  <p class="rodape"><span id="mostrando"></span><span class="ponto">·</span><span id="atualizado"></span></p>
 </main>
 
 <!-- janela que aparece ao escolher "Admitido" -->
 <dialog id="admitir">
   <form method="dialog" id="form-admitir">
     <h2>Admitir <span id="admitir-nome"></span></h2>
-    <p class="ajuda">Informe o dia em que ele <strong>de fato entrou</strong> na casa. Ao confirmar,
-      ele sai das triagens e entra na lista de internos ativos.</p>
-    <p class="ajuda" id="admitir-agendada"></p>
     <div class="grade">
       <label class="c3">Internado em *<input type="date" name="inicio" required></label>
       <label class="c3">Horário<input type="time" name="hora_internacao"></label>
       <label class="c3" id="campo-convenio">Convênio *
         <select name="convenio">
           <option value="">—</option>
-          {% for c in convenios %}<option>{{ c }}</option>{% endfor %}
+          {% for valor, rotulo in convenios %}<option value="{{ valor }}">{{ rotulo }}</option>{% endfor %}
         </select></label>
       <label class="c3">Valor (R$)<input type="number" step="0.01" min="0" name="contribuicao_valor"></label>
     </div>
@@ -81,7 +76,7 @@
 <script>
   const NOVO = {{ novo | tojson }};
   const OPCOES = [...{{ status_triagem | tojson }}, ["ativo", "Admitido → internos"]];
-  const filtro = document.getElementById("filtro");
+  const filtro = new ControleSegmentado(document.getElementById("filtro"));
   const aviso = document.getElementById("aviso");
 
   function mostrarAviso(partes, erro = false) {
@@ -107,8 +102,6 @@
     // sugestão: a data agendada (se houver); quem confirma é a pessoa
     form.inicio.value = item.agendada || new Date().toISOString().slice(0, 10);
     form.hora_internacao.value = item.hora_agendada || "";
-    document.getElementById("admitir-agendada").textContent =
-      item.agendada_fmt ? `Estava agendada para ${item.agendada_fmt}.` : "Não havia data agendada.";
     document.getElementById("campo-convenio").hidden = item.convenio_definido;
     form.convenio.required = !item.convenio_definido;
     dialogo.showModal();
@@ -119,8 +112,19 @@
     });
   }
 
+  // "09/10/2026 14:30 · Presencial" -> data e hora e, embaixo, a modalidade
+  function celulaTriagem(i) {
+    const [quando, modalidade] = String(i.triagem_fmt || "").split(" · ");
+    if (!quando && !modalidade) return "";           // sem triagem marcada: a célula fica vazia (some no cartão do celular)
+    const caixa = document.createElement("div");
+    caixa.append(quando || "");
+    if (modalidade) caixa.append(texto("span", modalidade, "sub"));
+    return caixa;
+  }
+
   function seletorStatus(item) {
     const sel = document.createElement("select");
+    sel.className = "seletor " + item.status;
     for (const [valor, rotulo] of OPCOES) sel.add(new Option(rotulo, valor, false, valor === item.status));
     sel.addEventListener("change", async () => {
       let dados = { status: sel.value };
@@ -141,6 +145,7 @@
       } else {
         mostrarAviso([`Situação de ${item.nome} alterada para "${sel.selectedOptions[0].text}".`]);
       }
+      sel.className = "seletor " + sel.value;
       tabela.carregar();
     });
     return sel;
@@ -149,25 +154,26 @@
   const tabela = new TabelaDinamica({
     url: "{{ url_for('api_triagens') }}",
     destacar: NOVO,
-    camposBusca: i => [i.nome, i.cpf, i.cpf.replace(/\D/g, ""), i.responsavel, i.convenio, i.status_txt],
+    campos: { situacao: filtro },       // a situação escolhida fica na URL: o "voltar" a mantém
+    camposBusca: i => [i.nome, i.cpf, i.cpf.replace(/\D/g, ""), i.responsavel, i.categoria, i.status_txt],
     filtro: i => filtro.value === "andamento" ? i.status !== "desistiu" : (!filtro.value || i.status === filtro.value),
     aoCarregar: itens => {
       for (const s of ["em_admissao", "lista_espera", "desistiu"])
         document.getElementById("n-" + s).textContent = itens.filter(i => i.status === s).length;
+      document.getElementById("n-andamento").textContent = itens.filter(i => i.status !== "desistiu").length;
+      document.getElementById("n-todas").textContent = itens.length;
     },
     colunas: [
-      { celula: i => link(i.nome, `/internacoes/${i.id}`) },
-      { celula: i => i.primeiro_contato_fmt, classe: "fixo" },
-      { celula: i => i.triagem_fmt, classe: "fixo" },
-      { celula: i => i.agendada_fmt, classe: "fixo" },
-      { celula: i => i.convenio },
-      { celula: i => i.parentesco ? `${i.responsavel} (${i.parentesco})` : i.responsavel },
-      { celula: i => i.contato, classe: "fixo" },
+      { celula: celulaPessoa },
+      { celula: i => chipCategoria(i.categoria, i.categoria_tipo), classe: "fixo" },
+      { celula: i => dataOuMudo(i.primeiro_contato_fmt), classe: "fixo" },
+      { celula: celulaTriagem, classe: "fixo" },
+      { celula: i => dataOuMudo(i.agendada_fmt), classe: "fixo" },
+      { celula: celulaResponsavel, classe: "livre" },
       { celula: i => seletorStatus(i), classe: "fixo" },
-      { celula: i => link("Editar", `/internacoes/${i.id}/editar`), classe: "fixo" },
+      { celula: i => link("Editar", `/internacoes/${i.id}/editar`, "botao pequeno secundario"), classe: "fixo acao" },
     ],
   });
-  filtro.addEventListener("change", () => tabela.desenhar());
 
   (async () => {
     await tabela.carregar();
@@ -178,7 +184,7 @@
         mostrarAviso([`Triagem de ${item.nome} registrada.`]);
         document.getElementById("linha-" + NOVO)?.scrollIntoView({ block: "center" });
       }
-      history.replaceState(null, "", location.pathname);
+      tabela.limparParametros("novo");            // F5 não repete o aviso; o resto da URL fica
     }
   })();
 </script>

@@ -38,15 +38,11 @@
   {% elif pessoa %}
     <div class="paciente-escolhido">
       Paciente já cadastrado: <strong>{{ pessoa.nome }}</strong> (cadastro nº {{ pessoa.id }}).
-      Os dados pessoais foram carregados; confira e atualize se precisar.
       <a href="{{ destino_novo }}">Trocar / paciente novo</a>
     </div>
   {% else %}
     <fieldset class="busca-paciente">
       <legend>Paciente já cadastrado?</legend>
-      <p class="ajuda">Se a pessoa já passou pela casa, busque pelo nome ou CPF para vincular esta
-        {{ tipo }} ao mesmo cadastro.
-        Se for paciente novo, é só preencher abaixo.</p>
       <input type="search" id="busca-pessoa" placeholder="Digite nome ou CPF…" autocomplete="off"
              data-destino="{{ destino_novo }}">
       <ul id="resultado-pessoas" class="resultado-pessoas" hidden></ul>
@@ -60,7 +56,7 @@
   <legend>Acolhido</legend>
   <div class="grade">
     {{ entrada('nome', 'Nome completo', 'c6', obrig=true) }}
-    {{ entrada('nascimento', 'Data de nascimento', 'c2', 'date', 'A idade é calculada sozinha.') }}
+    {{ entrada('nascimento', 'Data de nascimento', 'c2', 'date') }}
     {{ entrada('cpf', 'CPF', 'c2', attrs={'data-mascara': 'cpf', 'inputmode': 'numeric', 'placeholder': '000.000.000-00'}) }}
     {{ entrada('rg', 'RG', 'c2', attrs={'data-mascara': 'rg', 'placeholder': '00.000.000-0'}) }}
     {{ entrada('cartao_sus', 'Cartão SUS', 'c3', attrs={'data-mascara': 'sus', 'inputmode': 'numeric', 'placeholder': '000 0000 0000 0000'}) }}
@@ -83,7 +79,7 @@
 <fieldset>
   <legend>Endereço e contatos</legend>
   <div class="grade">
-    {{ entrada('cep', 'CEP', 'c2', ajuda='Preenche rua, bairro, cidade e UF.', attrs={'data-mascara': 'cep', 'inputmode': 'numeric', 'placeholder': '00000-000'}) }}
+    {{ entrada('cep', 'CEP', 'c2', attrs={'data-mascara': 'cep', 'inputmode': 'numeric', 'placeholder': '00000-000'}) }}
     {{ entrada('endereco', 'Rua', 'c3') }}
     {{ entrada('numero', 'Nº', 'c1') }}
     {{ entrada('bairro', 'Bairro', 'c2') }}
@@ -124,8 +120,7 @@
     {{ entrada('data_triagem', 'Triagem', 'c2', 'date') }}
     {{ entrada('hora_triagem', 'Horário', 'c1', 'time') }}
     {{ escolha('modalidade', 'Modalidade da triagem', modalidades, 'c2') }}
-    {{ entrada('internacao_agendada', 'Internação agendada para', 'c2', 'date',
-               'Dia marcado. A internação efetiva é registrada ao admitir.') }}
+    {{ entrada('internacao_agendada', 'Internação agendada para', 'c2', 'date') }}
     {{ entrada('hora_agendada', 'Horário', 'c1', 'time') }}
   </div>
 </fieldset>

@@ -2,21 +2,29 @@
 
 {% block titulo %}Lista de internos{% endblock %}
 
+{% block estilo %}
+    @media print { @page { size: A4 landscape; margin: 10mm; } }
+{% endblock %}
+
 {% block conteudo %}
 <main class="largo">
-  <div class="topo-lista">
-    <h1>Lista de internos</h1>
-    <div class="contadores">
-      <span class="contador"><b id="n-ativos">–</b>ativos</span>
-      <span class="contador"><b id="n-inativos">–</b>inativos</span>
+  <div class="pagina-topo">
+    <div class="titulo">
+      <h1>Internos</h1>
     </div>
-    <select id="filtro" aria-label="Situação">
-      <option value="ativo">Só ativos</option>
-      <option value="inativo">Só inativos</option>
-      <option value="">Todos</option>
-    </select>
-    <input id="busca" type="search" placeholder="Buscar por nome, CPF, responsável, convênio…">
-    <a class="botao" href="{{ url_for('formulario') }}">+ Prontuário</a>
+    <a class="botao" href="{{ url_for('formulario') }}"><svg class="icone"><use href="#i-mais"/></svg>Novo prontuário</a>
+  </div>
+
+  <div class="ferramentas">
+    <div class="segmentado" id="filtro" role="group" aria-label="Situação">
+      <button type="button" data-valor="ativo">Ativos <span class="n" id="n-ativos">–</span></button>
+      <button type="button" data-valor="inativo">Inativos <span class="n" id="n-inativos">–</span></button>
+      <button type="button" data-valor="">Todos <span class="n" id="n-todos">–</span></button>
+    </div>
+    <label class="busca">
+      <svg class="icone"><use href="#i-busca"/></svg>
+      <input id="busca" type="search" placeholder="Buscar por nome, CPF, responsável ou categoria…" aria-label="Buscar">
+    </label>
   </div>
 
   <div id="aviso" class="aviso" hidden></div>
@@ -26,73 +34,161 @@
       <thead>
         <tr>
           <!-- data-chave = campo do JSON usado para ordenar; data-tipo diz como comparar -->
-          <th data-chave="nome">Nome</th>
-          <th data-chave="cpf">CPF</th>
-          <th data-chave="idade" data-tipo="numero">Idade</th>
-          <th data-chave="convenio">Convênio / categoria</th>
+          <th data-chave="nome">Interno</th>
+          <th data-chave="categoria">Categoria</th>
           <th data-chave="valor" data-tipo="numero">Contribuição</th>
-          <th data-chave="parcelas" data-tipo="numero">Parcelas</th>
           <th data-chave="inicio">Início</th>
           <th data-chave="previsao">Prev. término</th>
           <th data-chave="termino">Saída</th>
           <th data-chave="responsavel">Responsável</th>
-          <th data-chave="contato">Contato</th>
           <th data-chave="status_txt">Situação</th>
-          <th class="sem-ordem">Prontuário</th>
+          <th class="sem-ordem"></th>
         </tr>
       </thead>
       <tbody id="linhas"></tbody>
     </table>
     <div id="vazio" class="vazio" hidden></div>
   </div>
-  <p class="rodape" id="atualizado"></p>
+  <p class="rodape"><span id="mostrando"></span><span class="ponto">·</span><span id="atualizado"></span></p>
 </main>
+
+<!-- janela que aparece ao clicar em "Dar baixa" -->
+<dialog id="baixa">
+  <form id="form-baixa">
+    <h2>Dar baixa em <span id="baixa-nome"></span></h2>
+    <div class="grade">
+      <label class="c3">Data da saída *<input type="date" name="termino" required></label>
+      <label class="c3">Motivo *
+        <select name="motivo" required>
+          <option value="">—</option>
+          {% for m in motivos %}<option>{{ m }}</option>{% endfor %}
+        </select></label>
+    </div>
+    <p class="erro" id="baixa-erro" role="alert"></p>
+    <div class="botoes">
+      <button type="button" class="botao secundario" id="baixa-cancelar">Cancelar</button>
+      <button class="botao" id="baixa-confirmar">Dar baixa</button>
+    </div>
+  </form>
+</dialog>
 
 <script src="{{ url_for('static', filename='tabela.js') }}"></script>
 <script>
   const NOVO = {{ novo | tojson }};            // id da internação recém-gravada (ou null)
-  const filtro = document.getElementById("filtro");
+  const BAIXAR = {{ baixar | tojson }};        // 1 = veio de "Salvar e baixar prontuário"
+  const filtro = new ControleSegmentado(document.getElementById("filtro"));
+  const aviso = document.getElementById("aviso");
+
+  function mostrarAviso(partes, erro = false) {
+    aviso.className = "aviso" + (erro ? " erro" : "");
+    aviso.replaceChildren(...partes);
+    aviso.hidden = false;
+  }
+
+
+  // R$ 900,00 e, embaixo, quantas parcelas já foram pagas (a tabela precisa caber na tela)
+  function celulaContribuicao(i) {
+    const caixa = document.createElement("div");
+    caixa.append(i.valor_fmt);
+    if (i.parcelas) caixa.append(texto("span", `${i.parcelas} parcela${i.parcelas === 1 ? "" : "s"}`, "sub"));
+    return caixa;
+  }
+
+  // "Inativo (Desistência)" -> etiqueta "Inativo" e, embaixo, "Desistência"
+  function celulaSituacao(i) {
+    const [, rotulo, motivo] = String(i.status_txt).match(/^(.*?)\s*(?:\((.*)\))?$/);
+    const caixa = document.createElement("div");
+    caixa.append(selo(rotulo, i.status));
+    if (motivo) caixa.append(texto("span", motivo, "sub"));
+    return caixa;
+  }
 
   const tabela = new TabelaDinamica({
     url: "{{ url_for('api_internos') }}",
     destacar: NOVO,
-    camposBusca: i => [i.nome, i.cpf, i.cpf.replace(/\D/g, ""), i.responsavel, i.convenio, i.status_txt],
+    campos: { situacao: filtro },       // a situação escolhida fica na URL: o "voltar" a mantém
+    camposBusca: i => [i.nome, i.cpf, i.cpf.replace(/\D/g, ""), i.responsavel, i.categoria, i.status_txt],
     filtro: i => !filtro.value || i.status === filtro.value,
     aoCarregar: itens => {
       document.getElementById("n-ativos").textContent = itens.filter(i => i.status === "ativo").length;
       document.getElementById("n-inativos").textContent = itens.filter(i => i.status === "inativo").length;
+      document.getElementById("n-todos").textContent = itens.length;
     },
     colunas: [
-      { celula: i => link(i.nome, `/internacoes/${i.id}`) },
-      { celula: i => i.cpf, classe: "fixo" },
-      { celula: i => i.idade, classe: "num" },
-      { celula: i => i.convenio },
-      { celula: i => i.valor_fmt, classe: "num" },
-      { celula: i => i.parcelas || "", classe: "num" },
-      { celula: i => i.inicio_fmt || "sem data", classe: "fixo" },
-      { celula: i => i.previsao_fmt, classe: "fixo" },
-      { celula: i => i.termino_fmt, classe: "fixo" },
-      { celula: i => i.parentesco ? `${i.responsavel} (${i.parentesco})` : i.responsavel },
-      { celula: i => i.contato, classe: "fixo" },
-      { celula: i => selo(i.status_txt, i.status), classe: "fixo" },
-      { celula: i => link("Baixar", `/internacoes/${i.id}/prontuario`), classe: "fixo" },
+      { celula: celulaPessoa },
+      { celula: i => chipCategoria(i.categoria, i.categoria_tipo), classe: "fixo" },
+      { celula: celulaContribuicao, classe: "num" },
+      { celula: i => dataOuMudo(i.inicio_fmt, "sem data"), classe: "fixo" },
+      { celula: i => dataOuMudo(i.previsao_fmt), classe: "fixo" },
+      { celula: i => dataOuMudo(i.termino_fmt), classe: "fixo" },
+      { celula: celulaResponsavel, classe: "livre" },
+      { celula: celulaSituacao, classe: "fixo" },
+      // só quem está ativo pode receber baixa
+      { celula: i => i.status === "ativo" ? botao("Dar baixa", () => perguntarBaixa(i), "botao pequeno secundario", "saida") : "",
+        classe: "fixo acao" },
     ],
   });
-  filtro.addEventListener("change", () => tabela.desenhar());
 
-  // chegou aqui logo depois de salvar um prontuário: avisa, baixa o .docx e destaca a linha
+  // ------------------------------------------------------------ dar baixa
+  const dialogo = document.getElementById("baixa");
+  const formBaixa = document.getElementById("form-baixa");
+  const erroBaixa = document.getElementById("baixa-erro");
+  const confirmar = document.getElementById("baixa-confirmar");
+  let emBaixa = null;
+
+  const hojeIso = () => {                       // data de hoje NO FUSO LOCAL (toISOString usaria UTC)
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+
+  function perguntarBaixa(item) {
+    emBaixa = item;
+    formBaixa.reset();
+    erroBaixa.textContent = "";
+    document.getElementById("baixa-nome").textContent = item.nome;
+    formBaixa.termino.max = hojeIso();          // não deixa escolher data futura
+    formBaixa.termino.min = item.inicio || "";  // nem anterior à internação
+    formBaixa.termino.value = hojeIso();
+    dialogo.showModal();
+  }
+
+  document.getElementById("baixa-cancelar").addEventListener("click", () => dialogo.close());
+
+  formBaixa.addEventListener("submit", async e => {
+    e.preventDefault();
+    confirmar.disabled = true;                  // evita clique duplo
+    try {
+      const r = await fetch(`/internacoes/${emBaixa.id}/baixa`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(Object.fromEntries(new FormData(formBaixa))),
+      });
+      const resp = await r.json();
+      if (!r.ok) { erroBaixa.textContent = Object.values(resp.erros).join(" "); return; }   // janela continua aberta
+      dialogo.close();
+      mostrarAviso([`${emBaixa.nome} recebeu baixa: ${resp.status}, saída em ${resp.saida}. `, link("Ver ficha", resp.ficha)]);
+      tabela.carregar();
+    } catch {
+      erroBaixa.textContent = "Não foi possível falar com o sistema. Tente de novo.";
+    } finally {
+      confirmar.disabled = false;
+    }
+  });
+
+  // ------------------------------------------------------------ depois de salvar um prontuário
   (async () => {
     await tabela.carregar();
     if (!NOVO) return;
     const item = tabela.itens.find(i => i.id === NOVO);
     if (item && filtro.value && item.status !== filtro.value) { filtro.value = ""; tabela.desenhar(); }
     const url = `/internacoes/${NOVO}/prontuario`;
-    const aviso = document.getElementById("aviso");
-    aviso.hidden = false;
-    aviso.append(`Prontuário de ${item ? item.nome : "novo interno"} salvo na lista. O download começou — se não começar, `,
-                 link("clique aqui", url), ".");
-    window.location.href = url;                       // dispara o download sem sair da página
-    history.replaceState(null, "", location.pathname); // F5 não baixa de novo
+    const nome = item ? item.nome : "novo interno";
+    if (BAIXAR) {
+      mostrarAviso([`Prontuário de ${nome} salvo. O download começou. `, link("Baixar de novo", url)]);
+      window.location.href = url;               // dispara o download sem sair da página
+    } else {
+      mostrarAviso([`Prontuário de ${nome} salvo. `, link("Baixar o prontuário", url)]);
+    }
+    tabela.limparParametros("novo", "baixar");  // F5 não baixa nem avisa de novo; o resto da URL fica
     document.getElementById("linha-" + NOVO)?.scrollIntoView({ block: "center" });
   })();
 </script>
