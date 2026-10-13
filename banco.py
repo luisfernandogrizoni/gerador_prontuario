@@ -15,6 +15,7 @@ No Render:
 """
 
 import os
+from pathlib import Path
 
 from sqlalchemy.engine import make_url
 
@@ -41,10 +42,19 @@ def url_do_banco():
 
 
 def opcoes_do_motor(url):
-    """Conexões de Postgres ficam ociosas e a hospedagem as derruba: testa antes de usar."""
+    """Opções do SQLAlchemy para cada tipo de banco."""
+    # os erros do banco nunca mostram os valores gravados (são dados pessoais e iriam parar nos logs)
+    base = {"hide_parameters": True}
     if isinstance(url, str) or url.get_backend_name() == "sqlite":
-        return {}
-    return {"pool_pre_ping": True, "pool_recycle": 1800}
+        # servidor do escritório: se outra pessoa está gravando, espera até 15 s a vez (o padrão é 5 s)
+        return {**base, "connect_args": {"timeout": 15}}
+    # conexões de Postgres ficam ociosas e a hospedagem as derruba: testa antes de usar
+    return {**base, "pool_pre_ping": True, "pool_recycle": 1800}
+
+
+def arquivo_ultimo_backup(pasta_instance):
+    """Arquivo onde o backup.py anota quando terminou o último backup (o sistema lê para avisar se atrasar)."""
+    return Path(os.environ.get("ARQUIVO_ULTIMO_BACKUP") or Path(pasta_instance) / "ultimo_backup.txt")
 
 
 def descrever(url):

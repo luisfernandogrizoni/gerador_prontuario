@@ -7,12 +7,14 @@ some sozinho. Quem quiser tirar um aviso sem corrigir (ex.: "são pessoas
 diferentes") clica em "Ciente" — isso grava a chave em avisos_dispensados.
 """
 
+import os
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timedelta
 
-from flask import url_for
+from flask import current_app, url_for
 
+from banco import arquivo_ultimo_backup
 from modelos import ENVELOPE_PENDENTE, AvisoDispensado, Internacao, Pessoa, db
 from relatorios import hoje_no_brasil
 from validacao import cpf_valido, fmt_cpf, normalizar_nome, so_digitos
@@ -21,6 +23,11 @@ from validacao import cpf_valido, fmt_cpf, normalizar_nome, so_digitos
 # ao escritório. Passou disso, o aviso fica vermelho: é hora de cobrar.
 PRAZO_ENVELOPE_DIAS = 7
 CATEGORIA_ENVELOPE = "Prontuário a receber da casa de acolhida"
+
+# No servidor do escritório (servidor.py), o backup diário (backup.py) anota quando terminou. Passou deste
+# prazo sem backup, a página inicial avisa. 3 dias cobrem um fim de semana prolongado com o computador desligado.
+PRAZO_BACKUP = timedelta(days=3)
+CATEGORIA_BACKUP = "Backup do banco"
 
 
 @dataclass
@@ -122,12 +129,29 @@ def gerar_avisos():
 
     dispensados = set(db.session.execute(db.select(AvisoDispensado.chave)).scalars())
     avisos = [a for a in avisos if a.chave not in dispensados]
+    avisos.extend(a for a in (_aviso_do_backup(),) if a)
 
     grupos = defaultdict(list)
     for a in avisos:
         grupos[a.categoria].append(a)
-    # o envelope pendente é tarefa com prazo, não correção de cadastro: vem primeiro (o mais antigo no topo)
-    return dict(sorted(grupos.items(), key=lambda g: (g[0] != CATEGORIA_ENVELOPE, g[0])))
+    # o backup e o envelope pendente são tarefas com prazo, não correções de cadastro: vêm primeiro
+    return dict(sorted(grupos.items(), key=lambda g: (g[0] not in (CATEGORIA_BACKUP, CATEGORIA_ENVELOPE), g[0])))
+
+
+def _aviso_do_backup():
+    """Só no servidor do escritório (AVISAR_BACKUP=1): confere se o backup diário continua rodando."""
+    if os.environ.get("AVISAR_BACKUP") != "1":
+        return None
+    try:
+        ultimo = datetime.fromisoformat(arquivo_ultimo_backup(current_app.instance_path).read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        texto = "Nenhum backup do banco foi feito ainda. Confira a tarefa de backup do Windows (veja implantacao/LEIA-ME.md)."
+    else:
+        if datetime.now() - ultimo <= PRAZO_BACKUP:
+            return None
+        texto = (f"O último backup do banco foi em {ultimo:%d/%m/%Y %H:%M}. "
+                 "Confira a tarefa de backup do Windows e o disco de destino (veja implantacao/LEIA-ME.md).")
+    return Aviso(CATEGORIA_BACKUP, texto, "", "backup", dispensavel=False)
 
 
 def dias_de_espera(internacao, hoje=None):

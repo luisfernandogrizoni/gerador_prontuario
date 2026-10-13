@@ -35,6 +35,7 @@ as variáveis de ambiente da hospedagem). Em produção use HTTPS e um servidor 
 verdade (gunicorn app:app) — `python app.py` é só para uso local.
 """
 
+import os
 from datetime import date
 
 from flask import (Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file,
@@ -63,7 +64,9 @@ app.config["SECRET_KEY"] = autenticacao.chave_secreta(app.instance_path)  # assi
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,       # o JavaScript da página não lê o cookie
     SESSION_COOKIE_SAMESITE="Lax",      # o navegador não manda o cookie em POST vindo de outro site
-    SESSION_COOKIE_SECURE=not app.debug,   # só trafega por HTTPS (exceto em desenvolvimento)
+    # só trafega por HTTPS, exceto em desenvolvimento e na rede interna do escritório, que usa http
+    # (servidor.py liga SESSAO_SEM_HTTPS=1; em hospedagem com HTTPS a variável não existe)
+    SESSION_COOKIE_SECURE=not app.debug and os.environ.get("SESSAO_SEM_HTTPS") != "1",
     SESSION_REFRESH_EACH_REQUEST=False,    # o login não se renova sozinho: vale 10 h e acabou
     PERMANENT_SESSION_LIFETIME=autenticacao.DURACAO_LOGIN,
 )

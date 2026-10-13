@@ -297,7 +297,7 @@
               <li>
                 <span>{{ a.texto }}{% if a.etiqueta %} <span class="etiqueta-prazo {{ a.etiqueta[0] }}">{{ a.etiqueta[1] }}</span>{% endif %}</span>
                 <span class="acoes-aviso">
-                  <a class="botao pequeno secundario" href="{{ a.url }}">Abrir ficha</a>
+                  {% if a.url %}<a class="botao pequeno secundario" href="{{ a.url }}">Abrir ficha</a>{% endif %}
                   {% if a.acao %}
                     <form method="post" action="{{ a.acao.url }}"
                           {% if a.acao.confirmar %}onsubmit='return confirm({{ a.acao.confirmar | tojson }})'{% endif %}>

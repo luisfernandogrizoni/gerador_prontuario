@@ -2,4 +2,5 @@ Flask>=3.0
 Flask-SQLAlchemy>=3.1
 python-docx>=1.1   # gera os documentos em Word: prontuário, declarações e relatórios (documentos.py)
 gunicorn>=22.0   # servidor de produção (a hospedagem roda: gunicorn app:app)
+waitress>=3.0   # servidor de produção no Windows, para o computador do escritório (servidor.py)
 psycopg[binary]>=3.2   # driver do Postgres (banco da hospedagem; veja banco.py)
