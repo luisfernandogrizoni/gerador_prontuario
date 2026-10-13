@@ -84,6 +84,18 @@
   .vaga.sem_limite .barra { display: none; }
   .vaga.sem_limite .vaga-nome { color: var(--texto); }
 
+  /* ---- exames e enxoval de quem tem a internação marcada ---- */
+  .imprimir-lista { list-style: none; margin: 0; padding: 4px 20px 6px; }
+  .imprimir-lista li { display: flex; align-items: center; gap: 10px 14px; padding: 11px 0; border-top: 1px solid #f0f2f5; }
+  .imprimir-lista li:first-child { border-top: 0; }
+  .imprimir-lista .quem { margin-right: auto; min-width: 0; }
+  .imprimir-lista .quem a { display: block; font-weight: 600; color: var(--texto); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .imprimir-lista .quem a:hover { color: var(--vermelho); }
+  .imprimir-lista .quem small { display: block; color: var(--suave); font-size: .77rem; }
+  .imprimir-lista .botao { flex: none; }
+  .imprimir-mais { padding: 4px 20px 16px; font-size: .8rem; color: var(--suave); }
+  @media (max-width: 520px) { .imprimir-lista, .imprimir-mais { padding-left: 14px; padding-right: 14px; } }
+
   /* ---- tratamentos próximos do fim ---- */
   .fim-lista { list-style: none; margin: 0; padding: 4px 20px 2px; }
   .fim { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 18px; align-items: center; padding: 14px 0; border-top: 1px solid #f0f2f5; }
@@ -341,6 +353,26 @@
         {% endfor %}
         <div class="agenda-rodape"><a class="botao pequeno secundario" href="{{ url_for('lista_triagens') }}">Ver todas as triagens<svg class="icone"><use href="#i-seta"/></svg></a></div>
       </section>
+
+      {% if para_imprimir.total %}
+      <section class="bloco" aria-labelledby="t-imprimir">
+        <div class="bloco-topo">
+          <h2 id="t-imprimir"><svg class="icone"><use href="#i-impressora"/></svg>Exames e enxoval</h2>
+          <span class="bloco-nota">internação marcada</span>
+        </div>
+        <ul class="imprimir-lista">
+          {% for p in para_imprimir.itens %}
+          <li>
+            <span class="quem"><a href="{{ p.ficha }}" title="{{ p.nome }}">{{ p.nome }}</a><small>internação {{ p.quando }}</small></span>
+            <a class="botao pequeno secundario" href="{{ p.url }}" target="_blank" rel="noopener" title="Imprimir o pedido de exames e o enxoval de {{ p.nome }}"><svg class="icone"><use href="#i-impressora"/></svg>Imprimir</a>
+          </li>
+          {% endfor %}
+        </ul>
+        {% if para_imprimir.total > para_imprimir.itens | length %}
+          <p class="imprimir-mais">e mais {{ para_imprimir.total - para_imprimir.itens | length }} — <a href="{{ url_for('lista_triagens') }}">ver as triagens</a></p>
+        {% endif %}
+      </section>
+      {% endif %}
 
       <section class="bloco atalhos-bloco" aria-labelledby="t-atalhos">
         <div class="bloco-topo"><h2 id="t-atalhos">Atalhos</h2></div>

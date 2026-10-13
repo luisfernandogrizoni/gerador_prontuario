@@ -1,7 +1,7 @@
 """
 Banco de dados (SQLite via Flask-SQLAlchemy).
 
-Três tabelas:
+Tabelas dos acolhidos:
 
     pessoas      quem é o acolhido (dados que não mudam de uma internação para outra)
        │ 1
@@ -10,6 +10,7 @@ Três tabelas:
        │ 1       espera, desistência) e, ao ser admitida, vira internação (ativo/inativo).
        │ N       Responsável, convênio e datas ficam aqui — mudam a cada internação.
     parcelas     contribuições pagas naquela internação (nº, data, valor)
+    relatorios_sociais  o relatório do Serviço Social daquela internação (1 por internação)
 
 Os nomes das colunas são os mesmos dos campos dos formulários (name="..."):
     preencher(form)      formulário -> colunas (só os campos que vieram no form)
@@ -19,11 +20,12 @@ Os nomes das colunas são os mesmos dos campos dos formulários (name="..."):
 from datetime import date, datetime, time
 
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import Date, DateTime, Float, ForeignKey, String, Time
+from sqlalchemy import JSON, Date, DateTime, Float, ForeignKey, String, Time
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from prontuario import (calcular_idade, categoria_efetiva, classificar, fmt_data, fmt_reais, ler_data,
                         ler_valor, previsao_termino, tipo_da_categoria)
+from servico_social import preenchido
 from validacao import fmt_cpf, fmt_hora, fmt_telefone, ler_hora, limpar_rg, so_digitos
 
 db = SQLAlchemy()
@@ -216,6 +218,8 @@ class Internacao(CamposDeFormulario, db.Model):
     pessoa: Mapped[Pessoa] = relationship(back_populates="internacoes")
     parcelas: Mapped[list["Parcela"]] = relationship(
         back_populates="internacao", order_by="Parcela.numero", cascade="all, delete-orphan")
+    relatorio_social: Mapped["RelatorioSocial | None"] = relationship(
+        back_populates="internacao", uselist=False, cascade="all, delete-orphan")
 
     def normalizar(self):
         self.resp_cpf = so_digitos(self.resp_cpf)
@@ -271,6 +275,7 @@ class Internacao(CamposDeFormulario, db.Model):
             "contato": p.contato1 or p.contato2 or p.contato3,
             "status": self.status,
             "status_txt": self.status_txt,
+            "relatorio_social": preenchido(self.relatorio_social),     # o relatório do Serviço Social já foi escrito?
         }
 
     def para_lista(self):
@@ -312,6 +317,21 @@ class Parcela(db.Model):
     valor: Mapped[float | None] = mapped_column(Float)
 
     internacao: Mapped[Internacao] = relationship(back_populates="parcelas")
+
+
+# =========================================================================
+class RelatorioSocial(db.Model):
+    """O relatório do Serviço Social de uma internação (servico_social.py): só as respostas que foram digitadas, num
+    JSON {campo: texto}. Uma linha por internação; mora aqui, não em colunas, porque o modelo do escritório pode mudar."""
+    __tablename__ = "relatorios_sociais"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    internacao_id: Mapped[int] = mapped_column(ForeignKey("internacoes.id"), unique=True)
+    dados: Mapped[dict] = mapped_column(JSON, default=dict)
+    atualizado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
+    atualizado_por: Mapped[str] = mapped_column(String(50), default="")      # o usuário que salvou por último
+
+    internacao: Mapped[Internacao] = relationship(back_populates="relatorio_social")
 
 
 # =========================================================================

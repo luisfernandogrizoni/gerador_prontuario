@@ -200,12 +200,18 @@
     const item = tabela.itens.find(i => i.id === NOVO);
     if (item && filtro.value && item.status !== filtro.value) { filtro.value = ""; tabela.desenhar(); }
     const url = `/internacoes/${NOVO}/prontuario`;
+    const conjunto = `/internacoes/${NOVO}/impressos`;      // o prontuário e os outros impressos da internação, num documento só
     const nome = item ? item.nome : "novo interno";
+    const escrito = item && item.relatorio_social;
+    const partes = ["prontuário", "manual de orientação", "ficha multiprofissional", "capa do envelope", ...(escrito ? ["relatório do Serviço Social"] : [])];
+    const lista = partes.slice(0, -1).join(", ") + " e " + partes[partes.length - 1];
+    const relatorio = escrito ? [] : [" · ", link("Escrever o relatório do Serviço Social", `/internacoes/${NOVO}/relatorio-social`)];
     if (BAIXAR) {
-      mostrarAviso([`Prontuário de ${nome} salvo. O download começou. `, link("Baixar de novo", url)]);
-      window.location.href = url;               // dispara o download sem sair da página
+      mostrarAviso([`Prontuário de ${nome} salvo. O download começou (${lista}). `, link("Baixar de novo", conjunto + ".docx"), " · ",
+                    link("Só o prontuário", url), " · ", link("Escolher o que imprimir", conjunto), ...relatorio]);
+      window.location.href = conjunto + ".docx";  // dispara o download sem sair da página
     } else {
-      mostrarAviso([`Prontuário de ${nome} salvo. `, link("Baixar o prontuário", url)]);
+      mostrarAviso([`Prontuário de ${nome} salvo. `, link("Imprimir o conjunto", conjunto), " · ", link("Baixar o prontuário", url), ...relatorio]);
     }
     tabela.limparParametros("novo", "baixar");  // F5 não baixa nem avisa de novo; o resto da URL fica
     document.getElementById("linha-" + NOVO)?.scrollIntoView({ block: "center" });

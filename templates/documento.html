@@ -25,11 +25,14 @@
   .opcao-coluna .ponto { width: 9px; height: 9px; border-radius: 50%; background: var(--cor); box-shadow: inset 0 0 0 1px rgba(16,24,40,.15); flex: none; }
   .opcao-coluna .marca { font-weight: 700; width: 1em; text-align: center; }
   .opcao-coluna.ativa { border-color: transparent; }   /* ativa: fundo e texto são os da cor do convênio (.tipo-<cor>, base.html) */
+  .opcao-coluna .aviso-item { font-weight: 500; opacity: .75; }
   @media (max-width: 760px) { .opcoes-doc { margin-top: 0; } }
   .mesa { background: #e4e7ec; border-radius: var(--raio); padding: 24px clamp(8px, 3vw, 28px); overflow-x: auto; }
   .papel { width: 210mm; max-width: 100%; margin: 0 auto; background: #fff; box-shadow: 0 2px 12px rgba(16, 24, 40, .18); color: #000; }
+  .papel.paisagem { width: 297mm; }
   .papel + .papel { margin-top: 18px; }
   .folha { width: 100%; height: 297mm; border-collapse: collapse; table-layout: fixed; }
+  .papel.paisagem .folha { height: 210mm; }
   .folha > thead > tr > td, .folha > tfoot > tr > td { padding: 10mm clamp(12px, 5vw, var(--margem)) 0; vertical-align: top; }
   .folha > tfoot > tr > td { padding: 0 clamp(12px, 5vw, var(--margem)) 9mm; vertical-align: bottom; }
   .folha > tbody > tr > td { padding: 3mm clamp(12px, 5vw, var(--margem)) 6mm; vertical-align: top; height: 100%; }
@@ -55,6 +58,7 @@
   table.doc-tabela { border-collapse: collapse; table-layout: fixed; margin-left: auto; margin-right: auto; }
   .doc-tabela th, .doc-tabela td { border: .5pt solid var(--borda-tab, #808080); padding: 2.5pt 4.5pt; overflow-wrap: anywhere; }
   .doc-tabela.sem-bordas th, .doc-tabela.sem-bordas td { border: 0; }
+  .doc-tabela td:empty::before { content: "\00a0"; }       /* célula vazia mantém a altura de uma linha (folhas de preencher à mão) */
   .doc-tabela.sombreado th { background: #d9d9d9; }
   .doc-tabela th { text-align: center; font-weight: 700; }
   .doc-tabela tr { break-inside: avoid; }
@@ -69,6 +73,9 @@
   .doc-assinatura .traco { width: 8cm; max-width: 100%; margin: 0 auto 2pt; border-top: .75pt solid #000; }
   .doc-assinatura .nome { font-weight: 700; }
   .doc-assinatura .papel-de-quem { font-style: italic; }
+  .doc-colunas { display: grid; }
+  .doc-imagem { line-height: 0; }
+  .doc-imagem img { height: auto; }
 
   @media (max-width: 760px) {
     .opcoes-doc .grupo, .opcoes-doc form { width: 100%; }
@@ -83,13 +90,16 @@
   }
   @media print {
     @page { size: A4; margin: 0; }
+    @page paisagem { size: A4 landscape; margin: 0; }           /* as páginas em paisagem (capa do envelope, folha de enfermagem) */
     .cabecalho-impressao, .barra-doc, .opcoes-doc, .aviso { display: none !important; }
     main, main.largo { max-width: none; margin: 0; padding: 0; }
     .mesa { background: none; padding: 0; border-radius: 0; overflow: visible; }
     .papel { width: auto; box-shadow: none; break-after: page; }
+    .papel.paisagem { page: paisagem; }
     .papel:last-of-type { break-after: auto; }
     .papel + .papel { margin-top: 0; }
     .folha { height: 296mm; }
+    .papel.paisagem .folha { height: 209mm; }
     .folha > thead { display: table-header-group; }
     .folha > tfoot { display: table-footer-group; }
     .timbre-topo { grid-template-columns: 23mm 1fr 23mm; font-size: 10pt; }
@@ -101,7 +111,7 @@
   {% for linha in linhas %}<div>{% for texto, estilo in linha %}<span class="{{ estilo }}">{{ texto }}</span>{% endfor %}</div>{% endfor %}
 {%- endmacro %}
 
-{% macro corpo(blocos, doc) -%}
+{% macro corpo(blocos, doc, largura) -%}
   {% for b in blocos %}
     {% if b.tipo == 'titulo' %}
       <h2 style="font-size: {{ b.tamanho }}pt; margin: {{ b.antes }}pt 0 {{ b.depois }}pt;">{{ b.texto }}</h2>
@@ -113,7 +123,7 @@
       </p>
     {% elif b.tipo == 'tabela' %}
       <table class="doc-tabela{{ ' sem-bordas' if b.sem_bordas }}{{ ' sombreado' if b.sombreado }}"
-             style="--borda-tab: #{{ b.cor_borda }}; width: {{ (b.largura_total() * 100 / doc.largura_util) | round(2) }}%; margin-top: {{ b.antes }}pt; font-size: {{ b.tamanho }}pt;">
+             style="--borda-tab: #{{ b.cor_borda }}; width: {{ (b.largura_total() * 100 / largura) | round(2) }}%; margin-top: {{ b.antes }}pt; font-size: {{ b.tamanho }}pt;">
         <colgroup>{% for p in b.porcentagens() %}<col style="width: {{ p }}%">{% endfor %}</colgroup>
         {% if b.cabecalho %}<thead><tr{% if b.altura_cabecalho %} style="height: {{ b.altura_cabecalho / 20 }}pt;"{% endif %}>{% for c in b.colunas %}<th>{{ c.titulo }}</th>{% endfor %}</tr></thead>{% endif %}
         <tbody>
@@ -125,7 +135,7 @@
         </tbody>
       </table>
     {% elif b.tipo == 'formulario' %}
-      <table class="doc-form" style="width: {{ (b.largura_total() * 100 / doc.largura_util) | round(2) }}%; margin-top: {{ b.antes }}pt; font-size: {{ b.tamanho }}pt;">
+      <table class="doc-form" style="width: {{ (b.largura_total() * 100 / largura) | round(2) }}%; margin-top: {{ b.antes }}pt; font-size: {{ b.tamanho }}pt;">
         <colgroup>{% for g in b.grade %}<col style="width: {{ (g * 100 / b.largura_total()) | round(3) }}%">{% endfor %}</colgroup>
         <tbody>
           {% for linha in b.linhas %}
@@ -148,6 +158,12 @@
         <div>{{ b.cargo }}</div>
         <div class="papel-de-quem">{{ b.papel }}</div>
       </div>
+    {% elif b.tipo == 'imagem' %}
+      <div class="doc-imagem al-{{ b.alinhamento }}" style="margin-top: {{ b.antes }}pt;"><img src="{{ url_for('static', filename=b.arquivo) }}" alt="" style="width: {{ b.largura }}mm;"></div>
+    {% elif b.tipo == 'colunas' %}
+      <div class="doc-colunas" style="grid-template-columns: repeat({{ b.colunas | length }}, minmax(0, 1fr)); column-gap: {{ b.espaco / 20 }}pt; margin-top: {{ b.antes }}pt;">
+        {% for coluna in b.colunas %}<div>{{ corpo(coluna, doc, largura) }}</div>{% endfor %}
+      </div>
     {% endif %}
   {% endfor %}
 {%- endmacro %}
@@ -162,8 +178,17 @@
       <a class="botao secundario" href="{{ docx }}"><svg class="icone"><use href="#i-baixar"/></svg>Baixar .docx</a>
     </div>
   </div>
-  {% if barra and (barra.colunas or barra.emissores) %}
+  {% if barra and (barra.colunas or barra.emissores or barra.itens) %}
   <div class="opcoes-doc">
+    {% for grupo in barra.itens or [] %}
+    <div class="grupo" role="group" aria-label="{{ grupo.titulo }}">
+      <span class="rotulo">{{ grupo.titulo }}</span>
+      {% for c in grupo.itens %}
+        <a class="opcao-coluna tipo-particular{{ ' ativa' if c.ativa }}" href="{{ c.url }}" data-substituir aria-pressed="{{ 'true' if c.ativa else 'false' }}"
+           title="{{ 'Tirar' if c.ativa else 'Incluir' }}: {{ c.nome }}"><span class="marca">{{ '✓' if c.ativa else '+' }}</span>{{ c.nome }}{% if c.aviso %}<small class="aviso-item">({{ c.aviso }})</small>{% endif %}</a>
+      {% endfor %}
+    </div>
+    {% endfor %}
     {% if barra.colunas %}
     <div class="grupo" role="group" aria-label="Colunas por convênio">
       <span class="rotulo">Colunas por convênio</span>
@@ -190,22 +215,26 @@
   {% for texto in avisos %}<div class="aviso erro">{{ texto }}</div>{% endfor %}
 
   <div class="mesa">
-    {% for pagina in doc.paginas() %}
-    <article class="papel{{ ' larga' if doc.tem_tabela_larga }}" style="--margem: {{ (doc.margem_lateral / 56.7) | round(1) }}mm;">
+    {% for folha in doc.paginas() %}
+    <article class="papel{{ ' larga' if doc.tem_tabela_larga }}{{ ' paisagem' if folha.paisagem }}" style="--margem: {{ (doc.margem_lateral / 56.7) | round(1) }}mm;">
       <table class="folha">
+        {% if folha.timbre %}
         <thead><tr><td>
           <div class="timbre timbre-topo">
             <img src="{{ url_for('static', filename='timbre/logo-topo.jpg') }}" alt="">
             <div>{{ timbre(cabecalho) }}</div><span></span>
           </div>
         </td></tr></thead>
-        <tbody><tr><td class="doc-corpo">{{ corpo(pagina, doc) }}</td></tr></tbody>
+        {% endif %}
+        <tbody><tr><td class="doc-corpo">{{ corpo(folha.blocos, doc, doc.largura_da(folha)) }}</td></tr></tbody>
+        {% if folha.timbre %}
         <tfoot><tr><td>
           <div class="timbre timbre-rodape">
             <img src="{{ url_for('static', filename='timbre/logo-rodape.jpg') }}" alt="">
             <div>{{ timbre(rodape) }}</div><span></span>
           </div>
         </td></tr></tfoot>
+        {% endif %}
       </table>
     </article>
     {% endfor %}

@@ -30,7 +30,9 @@ import banco
 from modelos import db
 
 RAIZ = Path(__file__).parent
-TABELAS_COPIADAS = ("pessoas", "internacoes", "parcelas", "avisos_dispensados", "convenios", "niveis_acesso", "funcionarios")   # ordem das chaves
+TABELAS_COPIADAS = ("pessoas", "internacoes", "parcelas", "relatorios_sociais", "avisos_dispensados", "convenios", "niveis_acesso",
+                    "funcionarios")   # ordem das chaves
+OPCIONAIS = {"relatorios_sociais"}    # tabelas mais novas: um banco de origem antigo pode não tê-las (a cópia segue sem elas)
 SEM_ID_SEQUENCIAL = {"avisos_dispensados"}   # a chave é um texto, não há sequência para acertar
 # Cadastros de fábrica: o sistema os cria sozinho ao subir, então um destino "vazio" já os tem. Não contam como dados
 # do destino, e a cópia sempre os substitui pelos da origem (se a origem for um banco antigo, sem eles, ficam os de fábrica
@@ -84,6 +86,7 @@ def copiar(origem, substituir):
             # os cadastros andam juntos (funcionários apontam para níveis): só copia se a origem tiver todos
             if not all(inspect(o).has_table(nome) for nome in CADASTROS):
                 tabelas = [t for t in tabelas if t.name not in CADASTROS]
+            tabelas = [t for t in tabelas if t.name not in OPCIONAIS or inspect(o).has_table(t.name)]
             existentes = {t.name: d.execute(select(func.count()).select_from(t)).scalar() for t in tabelas if t.name not in CADASTROS}
             if any(existentes.values()):
                 resumo = ", ".join(f"{n}: {q}" for n, q in existentes.items())

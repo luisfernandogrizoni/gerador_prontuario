@@ -73,9 +73,22 @@
   </form>
 </dialog>
 
+<!-- janela que aparece ao marcar a data da internação -->
+<dialog id="imprimir-triagem">
+  <form method="dialog">
+    <h2>Imprimir exames e enxoval?</h2>
+    <p><strong id="imprimir-nome"></strong> — internação marcada para <strong id="imprimir-data"></strong>.</p>
+    <div class="botoes">
+      <button class="botao secundario" value="depois">Agora não</button>
+      <a class="botao" id="imprimir-link" href="#" target="_blank" rel="noopener"><svg class="icone"><use href="#i-impressora"/></svg>Imprimir</a>
+    </div>
+  </form>
+</dialog>
+
 <script src="{{ url_for('static', filename='tabela.js') }}"></script>
 <script>
   const NOVO = {{ novo | tojson }};
+  const IMPRIMIR = {{ imprimir | tojson }};     // 1 = a internação acabou de ser marcada: pergunta se imprime exames e enxoval
   const OPCOES = [...{{ status_triagem | tojson }}, ["ativo", "Admitido → internos"]];
   const filtro = new ControleSegmentado(document.getElementById("filtro"));
   const aviso = document.getElementById("aviso");
@@ -111,6 +124,17 @@
         resolve(dialogo.returnValue === "confirmar" ? Object.fromEntries(new FormData(form)) : null);
       }, { once: true });
     });
+  }
+
+  // internação marcada: oferece imprimir o pedido de exames e o enxoval (também ficam na página inicial e na ficha)
+  function perguntarImpressao(item) {
+    const dialogo = document.getElementById("imprimir-triagem");
+    const ancora = document.getElementById("imprimir-link");
+    document.getElementById("imprimir-nome").textContent = item.nome;
+    document.getElementById("imprimir-data").textContent = item.agendada_fmt;
+    ancora.href = `/internacoes/${item.id}/impressos?itens=exames,enxoval&imprimir=1`;
+    ancora.onclick = () => setTimeout(() => dialogo.close(), 0);
+    dialogo.showModal();
   }
 
   // "09/10/2026 14:30 · Presencial" -> data e hora e, embaixo, a modalidade
@@ -184,8 +208,9 @@
         if (!tabela.filtro(item)) { filtro.value = ""; tabela.desenhar(); }
         mostrarAviso([`Triagem de ${item.nome} registrada.`]);
         document.getElementById("linha-" + NOVO)?.scrollIntoView({ block: "center" });
+        if (IMPRIMIR && item.agendada) perguntarImpressao(item);
       }
-      tabela.limparParametros("novo");            // F5 não repete o aviso; o resto da URL fica
+      tabela.limparParametros("novo", "imprimir");   // F5 não repete o aviso nem a pergunta; o resto da URL fica
     }
   })();
 </script>

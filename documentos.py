@@ -12,22 +12,25 @@ quando o endereço, o CNPJ ou a logo mudarem. O texto de cada documento mora no 
 declaracoes.py, relatorios.py).
 
 Uma página nova começa onde um parágrafo tem `quebra_antes`; no Word isso é uma quebra de página e no navegador
-cada página vira uma folha A4 com o seu timbre.
+cada página vira uma folha A4 com o seu timbre. Uma página que precisa ser diferente (em paisagem, ou sem o timbre,
+como a capa do envelope) começa com um bloco `Pagina(...)`: no Word vira uma seção nova.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
 from typing import ClassVar
 
 from docx import Document as DocxDocument
+from docx.enum.section import WD_ORIENT, WD_SECTION
 from docx.enum.table import WD_ALIGN_VERTICAL, WD_ROW_HEIGHT_RULE, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Mm, Pt, RGBColor, Twips
 
-PASTA_TIMBRE = Path(__file__).parent / "static" / "timbre"
+PASTA_ESTATICOS = Path(__file__).parent / "static"
+PASTA_TIMBRE = PASTA_ESTATICOS / "timbre"
 LOGO_TOPO = PASTA_TIMBRE / "logo-topo.jpg"
 LOGO_RODAPE = PASTA_TIMBRE / "logo-rodape.jpg"
 
@@ -56,7 +59,7 @@ RODAPE = [
 TAMANHO_CABECALHO, TAMANHO_RODAPE = 10, 9
 
 # página A4 (em twips: 1 cm = 567). Em cima e embaixo a margem é a do prontuário; dos lados cada documento escolhe.
-LARGURA_PAGINA = 11906
+LARGURA_PAGINA, ALTURA_PAGINA = 11906, 16838
 MARGEM_VERTICAL, MARGEM_LATERAL_PADRAO, DISTANCIA_TIMBRE = 720, 1134, 708
 
 
@@ -190,6 +193,47 @@ class Assinatura:
 
 
 @dataclass
+class Pagina:
+    """Começa uma página nova que não é a comum: em paisagem e/ou sem o timbre (a capa do envelope). Vale até o
+    próximo `Pagina`; as páginas começadas por `quebra_antes` seguem o jeito da anterior."""
+    tipo: ClassVar[str] = "pagina"
+    paisagem: bool = False
+    timbre: bool = True
+
+
+@dataclass
+class Imagem:
+    """Figura de static/ (ex.: "timbre/logo-topo.jpg"), com a largura em milímetros."""
+    tipo: ClassVar[str] = "imagem"
+    arquivo: str
+    largura: float
+    alinhamento: str = "esquerda"      # esquerda | centro | direita
+    antes: float = 0
+
+    @property
+    def caminho(self):
+        return PASTA_ESTATICOS / self.arquivo
+
+
+@dataclass
+class Colunas:
+    """Parágrafos lado a lado (a lista do enxoval). Cada coluna é uma lista de `Paragrafo`."""
+    tipo: ClassVar[str] = "colunas"
+    colunas: list
+    espaco: int = 360                  # distância entre as colunas, em twips
+    antes: float = 0
+
+
+@dataclass
+class Folha:
+    """Uma página do documento já separada: os blocos dela e como ela é."""
+    blocos: list = field(default_factory=list)
+    paisagem: bool = False
+    timbre: bool = True
+    secao: bool = False                # começou por um `Pagina`: no Word é uma seção nova
+
+
+@dataclass
 class Documento:
     nome_arquivo: str                  # sem a extensão
     titulo: str                        # aparece na aba do navegador e nas propriedades do Word
@@ -203,19 +247,27 @@ class Documento:
     def largura_util(self):
         return LARGURA_PAGINA - 2 * self.margem_lateral
 
+    def largura_da(self, folha):
+        """Largura útil (entre as margens) de uma `Folha`, em twips: a paisagem é mais larga."""
+        return (ALTURA_PAGINA if folha.paisagem else LARGURA_PAGINA) - 2 * self.margem_lateral
+
     @property
     def tem_tabela_larga(self):
         """Tabela com 4 colunas ou mais: no celular a folha rola de lado em vez de espremer as colunas."""
         return any(getattr(bloco, "tipo", "") == "tabela" and len(bloco.colunas) >= 4 for bloco in self.blocos)
 
     def paginas(self):
-        """Os blocos separados em páginas: uma nova a cada bloco com quebra_antes."""
-        paginas = []
+        """Os blocos separados em páginas (`Folha`): uma nova a cada `Pagina` e a cada bloco com quebra_antes."""
+        folhas = []
         for bloco in self.blocos:
-            if getattr(bloco, "quebra_antes", False) or not paginas:
-                paginas.append([])
-            paginas[-1].append(bloco)
-        return paginas
+            if getattr(bloco, "tipo", "") == "pagina":
+                folhas.append(Folha([], bloco.paisagem, bloco.timbre, secao=bool(folhas)))
+                continue
+            if not folhas or (getattr(bloco, "quebra_antes", False) and folhas[-1].blocos):
+                anterior = folhas[-1] if folhas else None
+                folhas.append(Folha([], anterior.paisagem if anterior else False, anterior.timbre if anterior else True))
+            folhas[-1].blocos.append(bloco)
+        return folhas
 
 
 ALINHAMENTO_DOCX = {"esquerda": WD_ALIGN_PARAGRAPH.LEFT, "centro": WD_ALIGN_PARAGRAPH.CENTER,
@@ -349,31 +401,61 @@ def _faixa_do_timbre(parte, logo, largura_logo_cm, linhas, tamanho, largura_util
 
 
 def _base_docx(doc):
-    """Documento em branco, A4, já com o timbre e a fonte do documento como padrão."""
+    """Documento em branco com a fonte do documento como padrão (as páginas, com o timbre, vêm em _configurar_secao)."""
     d = DocxDocument()
-    secao = d.sections[0]
-    secao.page_width, secao.page_height = Mm(210), Mm(297)
-    secao.top_margin = secao.bottom_margin = Twips(MARGEM_VERTICAL)
-    secao.left_margin = secao.right_margin = Twips(doc.margem_lateral)
-    secao.header_distance = secao.footer_distance = Twips(DISTANCIA_TIMBRE)
     normal = d.styles["Normal"]
     normal.font.name, normal.font.size = doc.fonte, Pt(doc.tamanho)
     fontes = normal.element.get_or_add_rPr().get_or_add_rFonts()
     for atributo in ("w:ascii", "w:hAnsi", "w:cs", "w:eastAsia"):
         fontes.set(qn(atributo), doc.fonte)
-    _faixa_do_timbre(secao.header, LOGO_TOPO, 2.3, CABECALHO, TAMANHO_CABECALHO, doc.largura_util)
-    _faixa_do_timbre(secao.footer, LOGO_RODAPE, 2.5, RODAPE, TAMANHO_RODAPE, doc.largura_util)
     return d
 
 
-def _paragrafo_docx(d, doc, bloco):
-    p = d.add_paragraph()
+def _configurar_secao(secao, doc, folha):
+    """Tamanho e direção do papel, margens e timbre (ou nada, nas páginas sem timbre) de uma seção."""
+    largura, altura = (ALTURA_PAGINA, LARGURA_PAGINA) if folha.paisagem else (LARGURA_PAGINA, ALTURA_PAGINA)
+    secao.orientation = WD_ORIENT.LANDSCAPE if folha.paisagem else WD_ORIENT.PORTRAIT
+    secao.page_width, secao.page_height = Twips(largura), Twips(altura)
+    secao.top_margin = secao.bottom_margin = Twips(MARGEM_VERTICAL)
+    secao.left_margin = secao.right_margin = Twips(doc.margem_lateral)
+    secao.header_distance = secao.footer_distance = Twips(DISTANCIA_TIMBRE)
+    secao.header.is_linked_to_previous = secao.footer.is_linked_to_previous = False
+    if folha.timbre:
+        util = doc.largura_da(folha)
+        _faixa_do_timbre(secao.header, LOGO_TOPO, 2.3, CABECALHO, TAMANHO_CABECALHO, util)
+        _faixa_do_timbre(secao.footer, LOGO_RODAPE, 2.5, RODAPE, TAMANHO_RODAPE, util)
+    else:                                                            # sem timbre: cabeçalho e rodapé vazios e pequenos
+        for parte in (secao.header, secao.footer):
+            for p in parte.paragraphs:
+                _miniatura(p)
+
+
+def _miniatura(paragrafo):
+    """Deixa um parágrafo vazio com 1 pt de altura (a marca de fim de seção não pode empurrar uma página em branco)."""
+    formato = paragrafo.paragraph_format
+    formato.space_before = formato.space_after = Pt(0)
+    formato.line_spacing = Pt(1)
+    propriedades = paragrafo._p.get_or_add_pPr()
+    marca = propriedades.find(qn("w:rPr"))
+    if marca is None:                                                # o Word exige o rPr antes do sectPr
+        marca = OxmlElement("w:rPr")
+        posterior = next((e for e in (propriedades.find(qn("w:sectPr")), propriedades.find(qn("w:pPrChange"))) if e is not None), None)
+        if posterior is not None:
+            posterior.addprevious(marca)
+        else:
+            propriedades.append(marca)
+    _filho(marca, "w:sz", val=2)
+
+
+def _paragrafo_docx(d, doc, bloco, alvo=None, quebra=None):
+    """`alvo` = onde escrever (o documento, ou uma célula de tabela); `quebra` troca bloco.quebra_antes."""
+    p = (alvo or d).add_paragraph()
     p.alignment = ALINHAMENTO_DOCX[bloco.alinhamento]
     formato = p.paragraph_format
     formato.space_before, formato.space_after = Pt(bloco.antes), Pt(bloco.depois)
     formato.line_spacing = bloco.entrelinha
     formato.keep_with_next = bloco.unido_ao_proximo
-    if bloco.quebra_antes:
+    if bloco.quebra_antes if quebra is None else quebra:
         formato.page_break_before = True
     if bloco.recuo:
         formato.left_indent = Twips(bloco.recuo)
@@ -443,10 +525,10 @@ def _formulario_docx(d, doc, bloco):
             coluna += celula.span
 
 
-def _pauta_docx(d, doc, bloco):
+def _pauta_docx(d, doc, bloco, largura):
     tabela = d.add_table(rows=bloco.linhas, cols=1)
-    _configurar_tabela(tabela, doc.largura_util, {"bottom": "000000", "insideH": "000000"}, margens=(0, 0, 0, 0))
-    _grade(tabela, [doc.largura_util])
+    _configurar_tabela(tabela, largura, {"bottom": "000000", "insideH": "000000"}, margens=(0, 0, 0, 0))
+    _grade(tabela, [largura])
     for linha in tabela.rows:
         linha.height, linha.height_rule = Twips(int(bloco.altura * 20)), WD_ROW_HEIGHT_RULE.EXACTLY
         p = linha.cells[0].paragraphs[0]
@@ -454,9 +536,32 @@ def _pauta_docx(d, doc, bloco):
         _fonte(p.add_run(""), doc.fonte, 6)
 
 
-def _assinaturas_docx(d, doc, bloco):
+def _imagem_docx(d, doc, bloco):
+    p = d.add_paragraph()
+    p.alignment = ALINHAMENTO_DOCX[bloco.alinhamento]
+    p.paragraph_format.space_before, p.paragraph_format.space_after = Pt(bloco.antes), Pt(0)
+    p.add_run().add_picture(str(bloco.caminho), width=Mm(bloco.largura))
+
+
+def _colunas_docx(d, doc, bloco, largura):
+    """Tabela sem bordas: uma coluna de verdade por coluna do bloco, com uma coluna vazia no meio para o espaço."""
+    n = len(bloco.colunas)
+    util = (largura - bloco.espaco * (n - 1)) // n
+    larguras = [x for i in range(n) for x in ((util,) if i == 0 else (bloco.espaco, util))]
+    tabela = d.add_table(rows=1, cols=len(larguras))
+    _configurar_tabela(tabela, sum(larguras), None, margens=(0, 0, 0, 0))
+    _grade(tabela, larguras)
+    for celula, paragrafos in zip(tabela.rows[0].cells[::2], bloco.colunas):
+        for paragrafo in paragrafos:
+            _paragrafo_docx(d, doc, paragrafo, alvo=celula, quebra=False)
+        inicial = celula.paragraphs[0]                              # o parágrafo vazio que toda célula já traz
+        if not inicial.text and len(celula.paragraphs) > 1:
+            inicial._element.getparent().remove(inicial._element)
+
+
+def _assinaturas_docx(d, doc, bloco, largura):
     n = len(bloco.rotulos)
-    larguras = [doc.largura_util // n] * n
+    larguras = [largura // n] * n
     tabela = d.add_table(rows=2, cols=n)
     _configurar_tabela(tabela, sum(larguras), None, margens=(0, 0, 0, 0))
     _grade(tabela, larguras)
@@ -479,19 +584,33 @@ def _assinatura_docx(d, doc, bloco):
 def para_docx(doc):
     """Documento -> BytesIO com o arquivo .docx pronto para enviar."""
     d = _base_docx(doc)
-    for bloco in doc.blocos:
-        if bloco.tipo == "titulo":
-            _paragrafo_docx(d, doc, Paragrafo([Texto(bloco.texto, negrito=True)], "centro", antes=bloco.antes,
-                                              depois=bloco.depois, tamanho=bloco.tamanho))
-        elif bloco.tipo == "paragrafo":
-            _paragrafo_docx(d, doc, bloco)
-        elif bloco.tipo in ("tabela", "formulario", "pauta", "assinaturas"):
-            if bloco.antes:                                  # o espaço antes de uma tabela é um parágrafo vazio
-                _paragrafo_docx(d, doc, Paragrafo([""], antes=bloco.antes, tamanho=1))
-            {"tabela": _tabela_docx, "formulario": _formulario_docx, "pauta": _pauta_docx,
-             "assinaturas": _assinaturas_docx}[bloco.tipo](d, doc, bloco)
-        elif bloco.tipo == "assinatura":
-            _assinatura_docx(d, doc, bloco)
+    for numero, folha in enumerate(doc.paginas()):
+        if numero == 0:
+            _configurar_secao(d.sections[0], doc, folha)
+        elif folha.secao:                                    # página diferente (paisagem, sem timbre): seção nova
+            secao = d.add_section(WD_SECTION.NEW_PAGE)
+            _miniatura(d.paragraphs[-1])                     # o parágrafo com a marca de fim da seção anterior não pode abrir uma página em branco
+            _configurar_secao(secao, doc, folha)
+        largura = doc.largura_da(folha)
+        for posicao, bloco in enumerate(folha.blocos):
+            # o primeiro bloco de uma página que já começa em página nova não precisa de outra quebra
+            quebra = getattr(bloco, "quebra_antes", False) and not (posicao == 0 and (numero == 0 or folha.secao))
+            if bloco.tipo == "titulo":
+                _paragrafo_docx(d, doc, Paragrafo([Texto(bloco.texto, negrito=True)], "centro", antes=bloco.antes,
+                                                  depois=bloco.depois, tamanho=bloco.tamanho))
+            elif bloco.tipo == "paragrafo":
+                _paragrafo_docx(d, doc, bloco, quebra=quebra)
+            elif bloco.tipo in ("tabela", "formulario", "pauta", "assinaturas", "colunas"):
+                if bloco.antes:                              # o espaço antes de uma tabela é um parágrafo vazio
+                    _paragrafo_docx(d, doc, Paragrafo([""], antes=bloco.antes, tamanho=1))
+                if bloco.tipo in ("tabela", "formulario"):
+                    {"tabela": _tabela_docx, "formulario": _formulario_docx}[bloco.tipo](d, doc, bloco)
+                else:
+                    {"pauta": _pauta_docx, "assinaturas": _assinaturas_docx, "colunas": _colunas_docx}[bloco.tipo](d, doc, bloco, largura)
+            elif bloco.tipo == "imagem":
+                _imagem_docx(d, doc, bloco)
+            elif bloco.tipo == "assinatura":
+                _assinatura_docx(d, doc, bloco)
     propriedades = d.core_properties
     propriedades.title, propriedades.author, propriedades.last_modified_by = doc.titulo, "Sistema de Prontuários", "Sistema de Prontuários"
     propriedades.comments = propriedades.subject = propriedades.keywords = ""
