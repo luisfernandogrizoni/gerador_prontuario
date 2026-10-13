@@ -3,13 +3,16 @@
 
 {% block estilo %}
   .entrar { max-width: 380px; margin: 56px auto; background: #fff; border: 1px solid var(--borda); border-radius: 12px; padding: 24px 24px 26px; }
+  .entrar { text-align: center; }
+  .entrar-logo { display: block; width: 84px; height: 84px; margin: 0 auto 12px; }
   .entrar h1 { margin-top: 0; }
-  .entrar form { display: grid; gap: 14px; margin-top: 18px; }
+  .entrar form { display: grid; gap: 14px; margin-top: 18px; text-align: left; }
   .entrar .botao { width: 100%; padding: 10px; }
 {% endblock %}
 
 {% block conteudo %}
 <main class="entrar">
+  <img class="entrar-logo" src="{{ url_for('static', filename='marca/logo.png') }}" alt="Casa de Acolhida Restauração" width="84" height="84">
   <h1>Entrar</h1>
   <p class="ajuda">Sistema de Prontuários — acesso restrito. Os dados dos internos são confidenciais.</p>
   {% if erro %}<p class="caixa-erros erro" role="alert">{{ erro }}</p>{% endif %}
