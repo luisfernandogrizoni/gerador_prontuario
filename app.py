@@ -7,9 +7,11 @@ Telas:
     /triagens                       lista de triagens (muda a situação pelo navegador)
     /triagens/nova                  formulário de triagem (?pessoa=<id> = paciente já cadastrado)
     /internos                       lista de internos (ativos / inativos); "Dar baixa" muda para inativo
+                                    e pergunta se o prontuário em papel já voltou ao escritório (avisos.py cobra)
     /prontuario/novo                formulário do prontuário (?pessoa=<id> = paciente já cadastrado)
     /internacoes/<id>               ficha: dados, parcelas, outras internações, ações
     /internacoes/<id>/editar        abre o formulário certo (triagem ou prontuário) já preenchido
+    /internacoes/<id>/envelope      marca se o prontuário em papel de quem recebeu baixa já voltou ao escritório
     /internacoes/<id>/prontuario    baixa o .docx
 
 Organização:
@@ -45,8 +47,9 @@ import documentos
 import painel
 import relatorios
 import servicos
-from avisos import gerar_avisos
-from modelos import STATUS_INTERNACAO, STATUS_TRIAGEM, AvisoDispensado, Internacao, Parcela, Pessoa, db
+from avisos import dias_de_espera, gerar_avisos, tempo_decorrido
+from modelos import (ENVELOPE_RECEBIDO, STATUS_INTERNACAO, STATUS_TRIAGEM, AvisoDispensado, Internacao,
+                     Parcela, Pessoa, db)
 from migracoes import migrar
 from prontuario import fmt_data, fmt_reais, gerar_docx, montar_documento
 from validacao import fmt_cep, fmt_cpf, fmt_hora, fmt_rg
@@ -227,7 +230,24 @@ def baixa_interno(id):
     if erros:
         return jsonify(ok=False, erros=erros), 400
     return jsonify(ok=True, status=internacao.status_txt, saida=fmt_data(internacao.termino),
-                   ficha=url_for("ficha", id=id))
+                   envelope=internacao.envelope, ficha=url_for("ficha", id=id))
+
+
+@app.post("/internacoes/<int:id>/envelope")
+def registrar_envelope(id):
+    """Onde está o prontuário em papel de quem recebeu baixa. Chamado pelo quadro de avisos (voltar=home)
+    e pelo cartão da ficha."""
+    internacao = _buscar(Internacao, id)
+    erro = servicos.registrar_envelope(internacao, request.form.get("situacao"))
+    if erro:
+        flash(erro)
+    elif internacao.envelope == ENVELOPE_RECEBIDO:
+        flash(f"Prontuário de {internacao.pessoa.nome} registrado como recebido no escritório.")
+    else:
+        flash(f"Prontuário de {internacao.pessoa.nome} registrado como ainda na casa de acolhida.")
+    if request.form.get("voltar") == "home":
+        return redirect(url_for("home") + "#avisos")
+    return redirect(url_for("ficha", id=id) + "#envelope")
 
 
 @app.get("/prontuario/novo")
@@ -253,7 +273,10 @@ def gerar():
 # ===================================================================== ficha
 @app.get("/internacoes/<int:id>")
 def ficha(id):
-    return render_template("ficha.html", i=_buscar(Internacao, id))
+    internacao = _buscar(Internacao, id)
+    dias, atrasado = dias_de_espera(internacao)
+    return render_template("ficha.html", i=internacao, envelope_atrasado=atrasado,
+                           envelope_tempo=tempo_decorrido(dias) if dias is not None else "")
 
 
 @app.get("/internacoes/<int:id>/editar")

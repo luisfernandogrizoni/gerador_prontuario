@@ -13,8 +13,14 @@ from datetime import date
 
 from flask import url_for
 
-from modelos import AvisoDispensado, Internacao, Pessoa, db
+from modelos import ENVELOPE_PENDENTE, AvisoDispensado, Internacao, Pessoa, db
+from relatorios import hoje_no_brasil
 from validacao import cpf_valido, fmt_cpf, normalizar_nome, so_digitos
+
+# Depois da baixa, o prontuário em papel (envelope) tem este prazo para voltar da casa de acolhida
+# ao escritório. Passou disso, o aviso fica vermelho: é hora de cobrar.
+PRAZO_ENVELOPE_DIAS = 7
+CATEGORIA_ENVELOPE = "Prontuário a receber da casa de acolhida"
 
 
 @dataclass
@@ -23,11 +29,20 @@ class Aviso:
     texto: str
     url: str          # onde resolver
     chave: str        # identifica o aviso para "Ciente"
-    acao: dict | None = None  # ação extra (ex.: unificar cadastros)
+    # ação extra, um botão que envia um formulário: {"rotulo", "url", "confirmar" (pergunta, opcional),
+    # "campos" (campos ocultos), "principal" (botão cheio em vez de branco)} — ex.: unificar cadastros,
+    # marcar o prontuário como recebido
+    acao: dict | None = None
+    etiqueta: tuple[str, str] | None = None   # (cor, texto) ao lado do aviso: cor = proximo | urgente | vencido
+    dispensavel: bool = True                  # False = não tem "Ciente": só some quando resolvido
 
 
 def _ficha(internacao):
     return url_for("ficha", id=internacao.id)
+
+
+def tempo_decorrido(dias):
+    return "hoje" if dias == 0 else f"há {dias} dia{'' if dias == 1 else 's'}"
 
 
 def gerar_avisos():
@@ -49,6 +64,11 @@ def gerar_avisos():
                 avisos.append(Aviso("Telefone fora do padrão",
                                     f"{p.nome}: {tel} (sem DDD ou com dígitos a mais).",
                                     _ficha(ultima), f"tel:{p.id}:{tel}"))
+
+    # o mais antigo (o que está esperando há mais tempo) no topo da lista
+    pendentes = sorted((i for i in internacoes if i.status == "inativo" and i.envelope == ENVELOPE_PENDENTE),
+                       key=lambda i: (i.termino or date.max, i.id))
+    avisos.extend(_aviso_do_envelope(i, hoje_no_brasil()) for i in pendentes)
 
     for i in internacoes:
         nome = i.pessoa.nome
@@ -97,7 +117,8 @@ def gerar_avisos():
                 _ficha(outro.ultima_internacao) if outro.ultima_internacao else "#",
                 f"dup:{manter.id}:{outro.id}",
                 acao={"rotulo": f"Unificar no cadastro {manter.id}",
-                      "url": url_for("unificar_pessoas", manter=manter.id, remover=outro.id)}))
+                      "url": url_for("unificar_pessoas", manter=manter.id, remover=outro.id),
+                      "confirmar": "Unificar os dois cadastros? As internações passam para um só cadastro."}))
 
     dispensados = set(db.session.execute(db.select(AvisoDispensado.chave)).scalars())
     avisos = [a for a in avisos if a.chave not in dispensados]
@@ -105,4 +126,26 @@ def gerar_avisos():
     grupos = defaultdict(list)
     for a in avisos:
         grupos[a.categoria].append(a)
-    return dict(sorted(grupos.items()))
+    # o envelope pendente é tarefa com prazo, não correção de cadastro: vem primeiro (o mais antigo no topo)
+    return dict(sorted(grupos.items(), key=lambda g: (g[0] != CATEGORIA_ENVELOPE, g[0])))
+
+
+def dias_de_espera(internacao, hoje=None):
+    """Há quantos dias o prontuário de quem recebeu baixa espera na casa de acolhida, contando da
+    data da saída (None = sem data de saída) — e se já passou do prazo."""
+    if not internacao.termino:
+        return None, False
+    dias = max(((hoje or hoje_no_brasil()) - internacao.termino).days, 0)
+    return dias, dias > PRAZO_ENVELOPE_DIAS
+
+
+def _aviso_do_envelope(i, hoje):
+    """Quem recebeu baixa e cujo prontuário em papel ainda não voltou da casa de acolhida."""
+    dias, atrasado = dias_de_espera(i, hoje)
+    saida = f"saída em {i.termino.strftime('%d/%m/%Y')} ({i.motivo or 'motivo não informado'})" if i.termino else "sem data de saída"
+    texto = (f"{i.pessoa.nome}: {saida}. O prontuário ainda não voltou ao escritório"
+             + (": cobrar a casa de acolhida." if atrasado else "."))
+    etiqueta = None if dias is None else ("vencido" if atrasado else "proximo", tempo_decorrido(dias))
+    return Aviso(CATEGORIA_ENVELOPE, texto, _ficha(i), f"envelope:{i.id}", etiqueta=etiqueta, dispensavel=False,
+                 acao={"rotulo": "Chegou ao escritório", "url": url_for("registrar_envelope", id=i.id),
+                       "campos": {"situacao": "recebido", "voltar": "home"}, "principal": True})
