@@ -28,6 +28,10 @@
   .docs .acoes-doc { display: flex; gap: 8px; flex-wrap: wrap; }
   @media (max-width: 640px) { .docs .acoes-doc { width: 100%; } .docs .acoes-doc .botao { flex: 1 1 auto; } }
   @media print { .docs { display: none; } }
+  .envelope { display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; padding: 6px 0 0; }
+  .envelope .situacao { margin-right: auto; display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
+  .envelope form { display: flex; gap: 8px; flex-wrap: wrap; margin: 0; }
+  @media (max-width: 640px) { .envelope form, .envelope .botao { width: 100%; } }
   form.nova-parcela { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-top: 12px; }
   form.nova-parcela label { width: 150px; }
   @media (max-width: 640px) {
@@ -74,6 +78,35 @@
         {{ acoes_documento(url_for('ver_declaracao', id=i.id), url_for('baixar_declaracao', id=i.id)) }}
       </li>
     </ul>
+  </section>
+  {% endif %}
+
+  {% if i.status == 'inativo' %}
+  <section class="cartao" id="envelope">
+    <h2>Prontuário em papel</h2>
+    <div class="envelope">
+      <div class="situacao">
+        {% if i.envelope == 'recebido' %}
+          <span class="selo ativo">No escritório</span>
+          {% if i.envelope_recebido_em %}<span>desde {{ i.envelope_recebido_em | data }}</span>{% endif %}
+        {% elif i.envelope == 'pendente' %}
+          <span class="selo {{ 'desistiu' if envelope_atrasado else 'lista_espera' }}">Na casa de acolhida</span>
+          {% if envelope_tempo %}<span>saiu {{ envelope_tempo }}{{ ' · cobrar a casa de acolhida' if envelope_atrasado }}</span>{% endif %}
+        {% else %}
+          <span class="selo">Sem registro</span><span>O prontuário voltou ao escritório?</span>
+        {% endif %}
+      </div>
+      <form method="post" action="{{ url_for('registrar_envelope', id=i.id) }}">
+        {% if i.envelope == 'recebido' %}
+          <button class="botao secundario" name="situacao" value="pendente">Desfazer</button>
+        {% elif i.envelope == 'pendente' %}
+          <button class="botao" name="situacao" value="recebido">Chegou ao escritório</button>
+        {% else %}
+          <button class="botao" name="situacao" value="recebido">Sim, voltou</button>
+          <button class="botao secundario" name="situacao" value="pendente">Não, está na casa de acolhida</button>
+        {% endif %}
+      </form>
+    </div>
   </section>
   {% endif %}
 

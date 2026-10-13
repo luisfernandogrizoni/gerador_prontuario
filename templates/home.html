@@ -126,6 +126,7 @@
   ul.avisos li:first-child { border-top: 0; }
   ul.avisos .acoes-aviso { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
   ul.avisos form { margin: 0; }
+  ul.avisos .etiqueta-prazo { margin: 0 0 0 6px; vertical-align: 1px; }
   @media (max-width: 640px) { ul.avisos li { grid-template-columns: 1fr; } ul.avisos .acoes-aviso { justify-content: flex-start; } }
 
   /* ---- agenda dos próximos dias ---- */
@@ -203,7 +204,7 @@
       {% if total_avisos %}
         <span class="kpi-icone vermelho"><svg class="icone"><use href="#i-alerta"/></svg></span>
         <span><span class="kpi-numero">{{ total_avisos }}</span><span class="kpi-rotulo">Avisos</span>
-          <span class="kpi-sub">pendências nos cadastros</span></span>
+          <span class="kpi-sub">pendências a resolver</span></span>
       {% else %}
         <span class="kpi-icone verde"><svg class="icone"><use href="#i-ok"/></svg></span>
         <span><span class="kpi-numero">0</span><span class="kpi-rotulo">Avisos</span>
@@ -288,22 +289,26 @@
           <div class="bloco-corpo"><div class="vazio-ok"><svg class="icone"><use href="#i-ok"/></svg>Nenhum aviso. Tudo em ordem.</div></div>
         {% endif %}
         {% for categoria, lista in avisos.items() %}
-          <details class="grupo-avisos" {{ 'open' if total_avisos <= 8 }}>
+          {# grupos de poucos avisos abrem sozinhos; o que tem prazo (sem "Ciente") abre sempre #}
+          <details class="grupo-avisos" {{ 'open' if total_avisos <= 8 or (lista | rejectattr('dispensavel') | list) }}>
             <summary>{{ categoria }} <span class="pilula">{{ lista | length }}</span><svg class="icone"><use href="#i-chevron"/></svg></summary>
             <ul class="avisos">
               {% for a in lista %}
               <li>
-                <span>{{ a.texto }}</span>
+                <span>{{ a.texto }}{% if a.etiqueta %} <span class="etiqueta-prazo {{ a.etiqueta[0] }}">{{ a.etiqueta[1] }}</span>{% endif %}</span>
                 <span class="acoes-aviso">
                   <a class="botao pequeno secundario" href="{{ a.url }}">Abrir ficha</a>
                   {% if a.acao %}
                     <form method="post" action="{{ a.acao.url }}"
-                          onsubmit="return confirm('Unificar os dois cadastros? As internações passam para um só cadastro.')">
-                      <button class="botao pequeno secundario">{{ a.acao.rotulo }}</button></form>
+                          {% if a.acao.confirmar %}onsubmit='return confirm({{ a.acao.confirmar | tojson }})'{% endif %}>
+                      {% for campo, valor in (a.acao.campos or {}).items() %}<input type="hidden" name="{{ campo }}" value="{{ valor }}">{% endfor %}
+                      <button class="botao pequeno{{ '' if a.acao.principal else ' secundario' }}">{{ a.acao.rotulo }}</button></form>
                   {% endif %}
+                  {% if a.dispensavel %}
                   <form method="post" action="{{ url_for('aviso_ciente') }}">
                     <input type="hidden" name="chave" value="{{ a.chave }}">
                     <button class="botao pequeno secundario" title="Tirar do quadro sem corrigir">Ciente</button></form>
+                  {% endif %}
                 </span>
               </li>
               {% endfor %}

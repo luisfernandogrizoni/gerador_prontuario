@@ -27,3 +27,9 @@ def migrar(db):
              WHERE status IN ('em_admissao', 'lista_espera', 'desistiu')
                AND termino IS NULL AND inicio IS NOT NULL"""))
         db.session.commit()
+
+    # 2) envelope do prontuário: quem já tinha baixa fica "sem controle" ('') e não gera aviso
+    if "envelope" not in _colunas(db, "internacoes"):
+        db.session.execute(text("ALTER TABLE internacoes ADD COLUMN envelope VARCHAR(10) NOT NULL DEFAULT ''"))
+        db.session.execute(text("ALTER TABLE internacoes ADD COLUMN envelope_recebido_em DATE"))
+        db.session.commit()

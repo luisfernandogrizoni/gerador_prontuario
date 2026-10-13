@@ -40,11 +40,18 @@ STATUS_TRIAGEM = ("em_admissao", "lista_espera", "desistiu")
 STATUS_INTERNACAO = ("ativo", "inativo")
 MODALIDADES = ["Presencial", "Online"]
 
+# Onde está o prontuário em papel (o envelope com os termos de compromisso) de quem recebeu baixa.
+# Ele vai para a casa de acolhida com o interno e precisa voltar ao escritório para o relatório de saída.
+# "" = sem controle (baixas anteriores a este recurso, que não geram aviso).
+ENVELOPE_PENDENTE = "pendente"     # ainda na casa de acolhida
+ENVELOPE_RECEBIDO = "recebido"     # de volta ao escritório
+
 
 class CamposDeFormulario:
     """Comportamento comum: copiar formulário <-> colunas, convertendo pelo tipo."""
 
-    CAMPOS_DO_SISTEMA = {"id", "pessoa_id", "internacao_id", "status", "criado_em", "atualizado_em"}
+    CAMPOS_DO_SISTEMA = {"id", "pessoa_id", "internacao_id", "status", "criado_em", "atualizado_em",
+                         "envelope", "envelope_recebido_em"}
 
     def preencher(self, form):
         for coluna in self.__table__.columns:
@@ -179,6 +186,9 @@ class Internacao(CamposDeFormulario, db.Model):
     data_documento: Mapped[date | None] = mapped_column(Date)
     termino: Mapped[date | None] = mapped_column(Date)
     motivo: Mapped[str] = mapped_column(String(20), default="")
+    # --- envelope do prontuário depois da baixa (ENVELOPE_PENDENTE / ENVELOPE_RECEBIDO, ou "")
+    envelope: Mapped[str] = mapped_column(String(10), default="")
+    envelope_recebido_em: Mapped[date | None] = mapped_column(Date)
 
     # --- responsável (pode mudar de uma internação para outra)
     resp_nome: Mapped[str] = mapped_column(String(200), default="")

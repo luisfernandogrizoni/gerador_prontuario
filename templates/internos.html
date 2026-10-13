@@ -4,6 +4,17 @@
 
 {% block estilo %}
     @media print { @page { size: A4 landscape; margin: 10mm; } }
+
+    /* pergunta da janela "Dar baixa": o prontuário em papel já voltou ao escritório? */
+    .pergunta { box-shadow: none; margin: 0 0 14px; padding: 8px 14px 14px; }
+    .pergunta legend { font-size: .85rem; }
+    .opcao { flex-direction: row; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--borda); border-radius: 10px;
+             font-size: .92rem; cursor: pointer; }
+    .opcao + .opcao { margin-top: 8px; }
+    .opcao input { width: auto; padding: 0; margin: 0; accent-color: var(--vermelho); }
+    .opcao:hover { border-color: var(--borda-forte); }
+    .opcao:has(input:checked) { border-color: var(--vermelho); background: var(--vermelho-claro); }
+    .opcao:has(input:focus-visible) { outline: 3px solid rgba(179,38,30,.3); outline-offset: 2px; }
 {% endblock %}
 
 {% block conteudo %}
@@ -64,6 +75,11 @@
           {% for m in motivos %}<option>{{ m }}</option>{% endfor %}
         </select></label>
     </div>
+    <fieldset class="pergunta">
+      <legend>O prontuário já voltou ao escritório? *</legend>
+      <label class="opcao"><input type="radio" name="prontuario_voltou" value="sim" required>Sim, já está no escritório</label>
+      <label class="opcao"><input type="radio" name="prontuario_voltou" value="nao">Não, ainda está na casa de acolhida</label>
+    </fieldset>
     <p class="erro" id="baixa-erro" role="alert"></p>
     <div class="botoes">
       <button type="button" class="botao secundario" id="baixa-cancelar">Cancelar</button>
@@ -165,7 +181,9 @@
       const resp = await r.json();
       if (!r.ok) { erroBaixa.textContent = Object.values(resp.erros).join(" "); return; }   // janela continua aberta
       dialogo.close();
-      mostrarAviso([`${emBaixa.nome} recebeu baixa: ${resp.status}, saída em ${resp.saida}. `, link("Ver ficha", resp.ficha)]);
+      const partes = [`${emBaixa.nome} recebeu baixa: ${resp.status}, saída em ${resp.saida}. `];
+      if (resp.envelope === "pendente") partes.push("O prontuário ainda precisa voltar da casa de acolhida. ", link("Ver avisos", "{{ url_for('home') }}#avisos"), " · ");
+      mostrarAviso([...partes, link("Ver ficha", resp.ficha)]);
       tabela.carregar();
     } catch {
       erroBaixa.textContent = "Não foi possível falar com o sistema. Tente de novo.";
