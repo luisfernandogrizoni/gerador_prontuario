@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block titulo %}Casa de Acolhida Restauração{% endblock %}</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='marca/favicon-32.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='marca/apple-touch-icon.png') }}">
   <style>
     /* ============================ identidade visual ============================
        Nada vem de fora (sem fontes nem bibliotecas de terceiros): o sistema guarda dados
@@ -34,9 +37,7 @@
     .topo nav { max-width: 1320px; margin: 0 auto; padding: 0 20px; min-height: var(--altura-topo); display: flex;
                 align-items: center; gap: 4px; flex-wrap: wrap; }
     .marca { display: flex; align-items: center; gap: 11px; text-decoration: none; color: var(--texto); margin-right: auto; padding: 8px 0; }
-    .marca-logo { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: #fff;
-                  background: linear-gradient(145deg, #cf3a2f, #8f1d17); box-shadow: 0 2px 6px rgba(179,38,30,.35); }
-    .marca-logo .icone { width: 20px; height: 20px; }
+    .marca-logo { width: 40px; height: 40px; flex: none; }
     .marca strong { display: block; font-size: .98rem; line-height: 1.15; letter-spacing: -.01em; }
     .marca small { display: block; color: var(--suave); font-size: .72rem; letter-spacing: .03em; }
     .topo .item { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 9px; font-size: .92rem;
@@ -243,6 +244,7 @@
       .atalhos-bloco, .agenda-rodape, .seta, .grupo-avisos summary .icone { display: none !important; }
       .cabecalho-impressao { display: flex; justify-content: space-between; gap: 12px; margin: 0 0 12px; padding-bottom: 5px;
                              border-bottom: 1px solid #888; font-size: 8.5pt; color: #444; }
+      .cabecalho-impressao img { width: 16px; height: 16px; margin-right: 6px; vertical-align: -3px; }
       main, main.largo { max-width: none; margin: 0; padding: 0; }
       h1 { font-size: 16pt; }
       .pagina-topo, .painel-topo { margin-bottom: 10px; }
@@ -286,7 +288,6 @@
   <!-- ícones (desenhados aqui mesmo; usados com <svg class="icone"><use href="#i-nome"/></svg>) -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
     <defs>
-      <symbol id="i-casa" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></symbol>
       <symbol id="i-mais" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol>
       <symbol id="i-busca" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
       <symbol id="i-calendario" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
@@ -308,7 +309,7 @@
   <header class="topo">
     <nav>
       <a class="marca" href="{{ url_for('home') }}">
-        <span class="marca-logo"><svg class="icone"><use href="#i-casa"/></svg></span>
+        <img class="marca-logo" src="{{ url_for('static', filename='marca/logo.png') }}" alt="" width="40" height="40">
         <span><strong>Casa de Acolhida Restauração</strong><small>SISTEMA DE PRONTUÁRIOS</small></span>
       </a>
       {% if usuario_atual %}
@@ -329,7 +330,7 @@
   {% if usuario_atual %}
   <!-- só aparece ao imprimir -->
   <div class="cabecalho-impressao">
-    <strong>Casa de Acolhida Restauração · Sistema de prontuários</strong>
+    <strong><img src="{{ url_for('static', filename='marca/logo.png') }}" alt="" width="16" height="16">Casa de Acolhida Restauração · Sistema de prontuários</strong>
     <span>Documento confidencial · <span id="impresso-em" data-usuario="{{ usuario_atual.nome }}"></span></span>
   </div>
   {% endif %}
