@@ -21,6 +21,10 @@ Telas:
     /cadastros/niveis               níveis de acesso, em cascata (do que tem mais acesso para o que tem menos); o
                                     primeiro é o do administrador, e só ele altera os níveis
     /internacoes/<id>/prontuario    baixa o .docx
+    /internacoes/<id>/impressos     os impressos da triagem (pedido de exames, enxoval) e da internação (prontuário, manual
+                                    de orientação, ficha multiprofissional, capa do envelope, relatório do Serviço Social)
+                                    num documento só
+    /internacoes/<id>/relatorio-social   a assistente social escreve o relatório do Serviço Social no sistema
 
 Organização:
     validacao.py   CPF, RG, CEP, telefone, hora
@@ -30,6 +34,10 @@ Organização:
     avisos.py      quadro de avisos
     catalogo.py    o que o sistema sabe de cada convênio (lido do cadastro, uma vez por requisição)
     cadastros.py   cadastros de convênios e de funcionários
+    fichas.py      pedido de exames, enxoval, capa do envelope e ficha multiprofissional (em branco)
+    manual_de_orientacao.py  o manual que a família recebe na internação (o texto fica lá)
+    servico_social.py  o relatório do Serviço Social: perguntas, gravação e documento
+    impressos.py   reúne os impressos de cada acolhido num documento só
     vagas.py       ocupação das vagas por categoria
     painel.py      números e agenda dos próximos dias da página inicial
     autenticacao.py  login: usuários, senhas, sessão e proteção das rotas
@@ -57,8 +65,10 @@ import cadastros as cadastros_
 import catalogo
 import declaracoes
 import documentos
+import impressos
 import painel
 import relatorios
+import servico_social
 import servicos
 from avisos import dias_de_espera, gerar_avisos, tempo_decorrido
 from modelos import (ENVELOPE_RECEBIDO, STATUS_INTERNACAO, STATUS_TRIAGEM, AvisoDispensado, Convenio, Funcionario,
@@ -153,7 +163,7 @@ def home():
     hoje = date.today()
     lista_de_vagas = gerar_vagas()
     return render_template("home.html", avisos=gerar_avisos(), vagas=lista_de_vagas, vagas_total=totais(lista_de_vagas),
-                           resumo=painel.resumo(), agenda=painel.agenda(hoje=hoje),
+                           resumo=painel.resumo(), agenda=painel.agenda(hoje=hoje), para_imprimir=painel.impressos_da_internacao(hoje=hoje),
                            dias_da_agenda=painel.DIAS_DA_AGENDA, fim_do_tratamento=painel.tratamentos_a_finalizar(hoje=hoje),
                            hoje_por_extenso=painel.data_por_extenso(hoje))
 
@@ -182,8 +192,9 @@ def api_pessoas():
 # ================================================================= triagens
 @app.get("/triagens")
 def lista_triagens():
+    # novo = triagem recém-gravada (a linha é destacada); imprimir = 1 pergunta se imprime exames e enxoval dela
     return render_template("triagens.html", novo=request.args.get("novo", type=int),
-                           **servicos.opcoes_formulario())
+                           imprimir=request.args.get("imprimir", type=int), **servicos.opcoes_formulario())
 
 
 @app.get("/api/triagens")
@@ -204,12 +215,16 @@ def nova_triagem():
 
 @app.post("/triagens/salvar")
 def salvar_triagem():
+    anterior = db.session.get(Internacao, request.form.get("internacao_id", type=int) or 0)
+    agendada_antes = anterior.internacao_agendada if anterior else None
     internacao, erros = servicos.salvar_triagem(request.form)
     if erros:
         pessoa = db.session.get(Pessoa, request.form.get("pessoa_id", type=int) or 0)
         return render_template("triagem_form.html", d=request.form, erros=erros, pessoa=pessoa,
                                **servicos.opcoes_formulario(request.form.get("convenio", ""))), 400
-    return redirect(url_for("lista_triagens", novo=internacao.id))
+    # internação marcada (ou remarcada): a lista pergunta se é para imprimir o pedido de exames e o enxoval
+    imprimir = 1 if internacao.internacao_agendada and internacao.internacao_agendada != agendada_antes else None
+    return redirect(url_for("lista_triagens", novo=internacao.id, imprimir=imprimir))
 
 
 @app.post("/triagens/<int:id>/status")
@@ -291,7 +306,8 @@ def ficha(id):
     internacao = _buscar(Internacao, id)
     dias, atrasado = dias_de_espera(internacao)
     return render_template("ficha.html", i=internacao, envelope_atrasado=atrasado,
-                           envelope_tempo=tempo_decorrido(dias) if dias is not None else "")
+                           envelope_tempo=tempo_decorrido(dias) if dias is not None else "",
+                           relatorio_preenchido=servico_social.preenchido(internacao.relatorio_social))
 
 
 @app.get("/internacoes/<int:id>/editar")
@@ -385,6 +401,49 @@ def ver_declaracao(id):
 @app.get("/internacoes/<int:id>/declaracao.docx")
 def baixar_declaracao(id):
     return _baixar(_declaracao(id, _emissor()[0]))
+
+
+# Os impressos da triagem (pedido de exames, enxoval) e da internação (prontuário, ficha multiprofissional, capa do
+# envelope, relatório do Serviço Social) saem num documento só; ?itens=a,b escolhe quais (veja impressos.py).
+def _impresso(id):
+    internacao = _buscar(Internacao, id)
+    itens = impressos.ler_itens(request.args.get("itens"), internacao)
+    return internacao, itens, impressos.documento(internacao, itens, relatorios.hoje_no_brasil())
+
+
+@app.get("/internacoes/<int:id>/impressos")
+def ver_impressos(id):
+    internacao, itens, doc = _impresso(id)
+    barra = {"itens": impressos.barra(internacao, itens, lambda novos: url_for("ver_impressos", id=id, itens=",".join(novos)))}
+    return _mostrar(doc, url_for("baixar_impressos", id=id, itens=",".join(itens)), url_for("ficha", id=id), barra=barra)
+
+
+@app.get("/internacoes/<int:id>/impressos.docx")
+def baixar_impressos(id):
+    return _baixar(_impresso(id)[2])
+
+
+# ------------------------------------------------- relatório do Serviço Social
+def _tela_relatorio(internacao, form, erros, status=200):
+    relatorio = internacao.relatorio_social
+    acolhido, responsavel = servico_social.identificacao(internacao, relatorios.hoje_no_brasil())
+    valores = servico_social.valores_do_formulario(form) if form is not None else servico_social.valores(internacao, relatorio)
+    return render_template("servico_social_form.html", i=internacao, secoes=servico_social.SECOES, v=valores, erros=erros,
+                           relatorio=relatorio, acolhido=acolhido, responsavel=responsavel), status
+
+
+@app.route("/internacoes/<int:id>/relatorio-social", methods=["GET", "POST"])
+def relatorio_social(id):
+    internacao = _buscar(Internacao, id)
+    if request.method == "POST":
+        _, erros = servicos.salvar_relatorio_social(internacao, request.form, g.usuario.nome if g.get("usuario") else "")
+        if erros:
+            return _tela_relatorio(internacao, request.form, erros, 400)
+        if request.form.get("acao") == "imprimir":
+            return redirect(url_for("ver_impressos", id=id, itens="relatorio-social", imprimir=1))
+        flash("Relatório do Serviço Social salvo.")
+        return redirect(url_for("relatorio_social", id=id))
+    return _tela_relatorio(internacao, None, {})
 
 
 # ================================================================ relatórios

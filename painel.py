@@ -22,6 +22,7 @@ from validacao import fmt_hora
 DIAS_DA_AGENDA = 14
 DIAS_FIM_DO_TRATAMENTO = 60      # quantos dias à frente a lista "tratamentos próximos do fim" olha
 LINHAS_FIM_DO_TRATAMENTO = 8     # quantas linhas aparecem na home (o resto fica no link "ver todos")
+LINHAS_DOS_IMPRESSOS = 6         # idem, na lista de quem tem internação marcada (exames e enxoval)
 URGENTE_ATE = 7                  # faltando até 7 dias, o prazo fica em destaque
 DIAS_DA_SEMANA = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira",
                   "sábado", "domingo"]
@@ -112,6 +113,21 @@ def tratamentos_a_finalizar(dias=DIAS_FIM_DO_TRATAMENTO, hoje=None, maximo=LINHA
     itens.sort(key=lambda t: (t["restam"], t["nome"].lower()))
     return {"itens": itens[:maximo], "total": len(itens), "dias": dias, "sem_data": sem_data,
             "vencidos": sum(1 for t in itens if t["restam"] < 0)}
+
+
+def impressos_da_internacao(hoje=None, maximo=LINHAS_DOS_IMPRESSOS):
+    """Quem está na triagem e já tem a internação marcada (de hoje em diante, sem limite de dias): a lista de exames e o
+    enxoval são entregues à família nesse momento, então ficam à mão aqui para imprimir quando for preciso.
+
+        {"itens": [...só os `maximo` primeiros...], "total": n}"""
+    hoje = hoje or date.today()
+    marcadas = db.session.execute(
+        db.select(Internacao).filter(Internacao.status.in_(NA_TRIAGEM), Internacao.internacao_agendada >= hoje)
+        .order_by(Internacao.internacao_agendada, Internacao.id)).scalars().all()
+    itens = [{"nome": i.pessoa.nome, "ficha": url_for("ficha", id=i.id),
+              "quando": f"{DIAS_CURTOS[i.internacao_agendada.weekday()]}, {i.internacao_agendada:%d/%m}",
+              "url": url_for("ver_impressos", id=i.id, itens="exames,enxoval", imprimir=1)} for i in marcadas]
+    return {"itens": itens[:maximo], "total": len(itens)}
 
 
 def agenda(dias=DIAS_DA_AGENDA, hoje=None):

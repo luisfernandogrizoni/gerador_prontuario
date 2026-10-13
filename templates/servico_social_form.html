@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% from "_voltar.html" import linha_voltar with context %}
+{#
+  O relatório do Serviço Social, escrito direto no sistema (servico_social.py descreve as perguntas).
+  Variáveis: i (internação), secoes, v (valores de cada campo), erros, relatorio (o já gravado, ou None),
+  acolhido e responsavel ([(rótulo, valor)] que vêm do cadastro).
+#}
+
+{% block titulo %}Relatório do Serviço Social · {{ i.pessoa.nome }}{% endblock %}
+
+{% block estilo %}
+  .cabecalho-rel { display: flex; align-items: flex-end; gap: 8px 16px; flex-wrap: wrap; margin-bottom: 4px; }
+  .cabecalho-rel h1 { margin: 0 auto 0 0; }
+  .cabecalho-rel .estado { font-size: .85rem; color: var(--suave); }
+  .cadastro-resumo { margin-bottom: 16px; background: var(--superficie); border: 1px solid var(--borda); border-radius: 10px; padding: 14px 18px; }
+  .cadastro-resumo dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px 18px; margin: 0; }
+  .cadastro-resumo dt { font-size: .76rem; color: var(--suave); }
+  .cadastro-resumo dd { margin: 1px 0 0; font-size: .93rem; overflow-wrap: anywhere; }
+  .cadastro-resumo dd:empty::after { content: "—"; color: #bbb; }
+  .cadastro-resumo h3 { margin: 12px 0 8px; font-size: .8rem; color: var(--suave); text-transform: uppercase; letter-spacing: .05em; }
+  .cadastro-resumo h3:first-child { margin-top: 0; }
+  .cadastro-resumo .corrigir { font-size: .85rem; }
+  fieldset legend { font-weight: 700; padding: 0 6px; }
+  .subtitulo-secao { margin: -2px 0 12px; color: var(--suave); font-size: .85rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .rotulo-campo { display: block; font-size: .9rem; margin-bottom: 4px; }
+  textarea { resize: vertical; line-height: 1.4; min-height: 4.4em; }
+  .escolhas { display: flex; flex-wrap: wrap; gap: 6px 8px; }
+  .escolhas label.opcao { display: inline-flex; flex-direction: row; align-items: center; gap: 7px; cursor: pointer; padding: 6px 13px; margin: 0;
+                          border: 1px solid var(--borda-forte); border-radius: 999px; font-size: .9rem; background: #fff; user-select: none; }
+  .escolhas label.opcao input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .escolhas label.opcao:hover { border-color: var(--vermelho); }
+  .escolhas label.opcao:has(input:checked) { background: var(--vermelho-claro); border-color: var(--vermelho); color: var(--vermelho); font-weight: 600; }
+  .escolhas label.opcao:has(input:focus-visible) { outline: 3px solid rgba(179,38,30,.3); outline-offset: 2px; }
+  .sim-nao { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 12px; align-items: center; }
+  .sim-nao .escolhas { flex-wrap: nowrap; }
+  @media (max-width: 640px) { .sim-nao { grid-template-columns: 1fr; } }
+  .barra-salvar { position: sticky; bottom: 0; z-index: 3; display: flex; gap: 10px; flex-wrap: wrap; padding: 12px 0; margin-top: 4px;
+                  background: linear-gradient(to top, var(--fundo) 70%, transparent); }
+  @media (max-width: 640px) { .barra-salvar .botao { flex: 1 1 100%; } }
+  @media print { .barra-salvar { display: none; } }
+{% endblock %}
+
+{% macro controle(c) -%}
+  {% set nome = c.chave %}
+  {% if c.tipo == 'longo' %}
+    <label class="{{ c.colunas }}{{ ' com-erro' if erros.get(nome) }}"><span class="rotulo-campo">{{ c.rotulo }}</span>
+      <textarea name="{{ nome }}" rows="{{ c.linhas }}" maxlength="5000" data-cresce>{{ v.get(nome, '') }}</textarea>
+      {% if erros.get(nome) %}<small class="erro">{{ erros[nome] }}</small>{% endif %}</label>
+  {% elif c.tipo == 'escolha' %}
+    <div class="{{ c.colunas }}{{ ' com-erro' if erros.get(nome) }}" role="radiogroup" aria-label="{{ c.rotulo }}"><span class="rotulo-campo">{{ c.rotulo }}</span>
+      <div class="escolhas">
+        {% for o in c.opcoes %}<label class="opcao"><input type="radio" name="{{ nome }}" value="{{ o }}"{{ ' checked' if v.get(nome) == o }} data-desmarca>{{ o }}</label>{% endfor %}
+      </div>
+      {% if erros.get(nome) %}<small class="erro">{{ erros[nome] }}</small>{% endif %}</div>
+  {% elif c.tipo == 'sim_nao' %}
+    <div class="{{ c.colunas }}"><span class="rotulo-campo">{{ c.rotulo }}</span>
+      <div class="sim-nao">
+        <div class="escolhas">
+          <label class="opcao"><input type="radio" name="{{ nome }}" value="sim"{{ ' checked' if v.get(nome) == 'sim' }} data-desmarca>Sim</label>
+          <label class="opcao"><input type="radio" name="{{ nome }}" value="nao"{{ ' checked' if v.get(nome) == 'nao' }} data-desmarca>Não</label>
+        </div>
+        <input type="text" name="{{ nome }}_detalhe" value="{{ v.get(nome ~ '_detalhe', '') }}" maxlength="200" placeholder="Se sim, especifique" aria-label="Se sim, especifique">
+      </div></div>
+  {% else %}
+    <label class="{{ c.colunas }}{{ ' com-erro' if erros.get(nome) }}">{{ c.rotulo }}
+      <input type="{{ 'date' if c.tipo == 'data' else 'text' }}" name="{{ nome }}" value="{{ v.get(nome, '') }}"{{ ' maxlength=200' | safe if c.tipo != 'data' }}>
+      {% if erros.get(nome) %}<small class="erro">{{ erros[nome] }}</small>{% endif %}</label>
+  {% endif %}
+{%- endmacro %}
+
+{% block conteudo %}
+<main>
+  {{ linha_voltar(url_for('ficha', id=i.id)) }}
+  {% with msgs = get_flashed_messages() %}
+    {% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
+  {% endwith %}
+
+  <div class="cabecalho-rel">
+    <h1>Relatório do Serviço Social</h1>
+    {% if relatorio and relatorio.dados %}
+      <span class="estado">salvo em {{ relatorio.atualizado_em.strftime('%d/%m/%Y às %H:%M') }}{{ ' por ' ~ relatorio.atualizado_por if relatorio.atualizado_por }}</span>
+    {% else %}
+      <span class="estado">ainda não preenchido</span>
+    {% endif %}
+  </div>
+  <p class="ajuda">{{ i.pessoa.nome }} · {{ i.status_txt }}</p>
+
+  <section class="cadastro-resumo">
+    <h3>Do cadastro do acolhido</h3>
+    <dl>{% for rotulo, valor in acolhido %}<div><dt>{{ rotulo }}</dt><dd>{{ valor }}</dd></div>{% endfor %}</dl>
+    <h3>Responsável</h3>
+    <dl>{% for rotulo, valor in responsavel %}<div><dt>{{ rotulo }}</dt><dd>{{ valor }}</dd></div>{% endfor %}</dl>
+    <p class="corrigir"><a href="{{ url_for('editar_internacao', id=i.id) }}">Corrigir no cadastro</a></p>
+  </section>
+
+  <form method="post" id="form-relatorio">
+    {% if erros %}<div class="caixa-erros"><strong>Confira os campos marcados em vermelho.</strong></div>{% endif %}
+    {% for secao in secoes %}
+    <fieldset>
+      <legend>{{ loop.index }}) {{ secao.titulo }}</legend>
+      {% if secao.subtitulo %}<p class="subtitulo-secao">{{ secao.subtitulo }}</p>{% endif %}
+      <div class="grade">
+        {% for campo in secao.campos %}{{ controle(campo) }}{% endfor %}
+      </div>
+    </fieldset>
+    {% endfor %}
+
+    <div class="barra-salvar">
+      <button class="botao" type="submit" name="acao" value="salvar">Salvar</button>
+      <button class="botao secundario" type="submit" name="acao" value="imprimir"><svg class="icone"><use href="#i-impressora"/></svg>Salvar e imprimir</button>
+      <a class="botao secundario" href="{{ url_for('ficha', id=i.id) }}">Cancelar</a>
+    </div>
+  </form>
+</main>
+
+<script>
+  // o campo de texto cresce enquanto se escreve (sem barra de rolagem dentro dele)
+  function crescer(t) { t.style.height = "auto"; t.style.height = Math.max(t.scrollHeight + 2, 0) + "px"; }
+  document.querySelectorAll("textarea[data-cresce]").forEach(function (t) { crescer(t); t.addEventListener("input", function () { crescer(t); }); });
+
+  // clicar de novo numa opção já marcada a desmarca (uma resposta pode ficar em branco). O clique é no rótulo, então
+  // é no grupo que se anota se a opção já estava marcada, antes do navegador marcá-la.
+  document.querySelectorAll(".escolhas").forEach(function (grupo) {
+    grupo.addEventListener("mousedown", function (e) {
+      var rotulo = e.target.closest("label.opcao");
+      if (rotulo) { var r = rotulo.querySelector("input"); r.dataset.estava = r.checked ? "1" : ""; }
+    });
+  });
+  document.querySelectorAll("input[data-desmarca]").forEach(function (r) {
+    r.addEventListener("click", function () {
+      if (r.dataset.estava) { r.checked = false; r.dataset.estava = ""; r.dispatchEvent(new Event("change", { bubbles: true })); }
+    });
+  });
+
+  // avisa antes de sair da página com texto ainda não salvo
+  (function () {
+    var form = document.getElementById("form-relatorio"), alterado = false, enviando = false;
+    form.addEventListener("input", function () { alterado = true; });
+    form.addEventListener("change", function () { alterado = true; });
+    form.addEventListener("submit", function () { enviando = true; });
+    window.addEventListener("beforeunload", function (e) { if (alterado && !enviando) { e.preventDefault(); e.returnValue = ""; } });
+  })();
+</script>
+{% endblock %}

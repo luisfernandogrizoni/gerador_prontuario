@@ -1,5 +1,5 @@
 """
-Regras de negócio: validar e gravar triagens e prontuários, mudar status,
+Regras de negócio: validar e gravar triagens e prontuários, mudar status, gravar o relatório do Serviço Social,
 lançar parcelas e unificar cadastros duplicados.
 
 As rotas (app.py) só chamam estas funções. Cada função de gravação devolve
@@ -10,8 +10,9 @@ volta para a tela com as mensagens ao lado de cada campo.
 from datetime import date
 
 import catalogo
+import servico_social
 from modelos import (ENVELOPE_PENDENTE, ENVELOPE_RECEBIDO, STATUS, STATUS_TRIAGEM, Internacao, Parcela,
-                     Pessoa, db)
+                     Pessoa, RelatorioSocial, db)
 from prontuario import CONVENIO_A_DEFINIR, ler_data, ler_valor
 from relatorios import hoje_no_brasil
 from validacao import cpf_valido, fmt_cpf, ler_hora, normalizar_nome, rg_valido, so_digitos
@@ -240,6 +241,20 @@ def registrar_envelope(internacao, situacao):
         return "Situação do prontuário inválida."
     db.session.commit()
     return None
+
+
+# ----------------------------------------------- relatório do Serviço Social
+def salvar_relatorio_social(internacao, form, usuario=""):
+    """Grava o que a assistente social digitou (veja servico_social.py). Devolve (relatório, erros): com erros, nada foi gravado."""
+    dados, erros = servico_social.ler_formulario(form)
+    if erros:
+        return None, erros
+    relatorio = internacao.relatorio_social or RelatorioSocial(internacao=internacao)
+    relatorio.dados = dados                 # um dicionário novo: é assim que o SQLAlchemy percebe a mudança no JSON
+    relatorio.atualizado_por = usuario[:50]
+    db.session.add(relatorio)
+    db.session.commit()
+    return relatorio, {}
 
 
 # ------------------------------------------------------------------ parcelas

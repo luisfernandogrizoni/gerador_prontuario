@@ -29,6 +29,7 @@
   .docs .acoes-doc { display: flex; gap: 8px; flex-wrap: wrap; }
   @media (max-width: 640px) { .docs .acoes-doc { width: 100%; } .docs .acoes-doc .botao { flex: 1 1 auto; } }
   @media print { .docs { display: none; } }
+  .acoes-doc.espaco { margin-top: 12px; }
   .envelope { display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; padding: 6px 0 0; }
   .envelope .situacao { margin-right: auto; display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
   .envelope form { display: flex; gap: 8px; flex-wrap: wrap; margin: 0; }
@@ -67,21 +68,48 @@
     <a class="botao secundario" href="{{ url_for('nova_triagem', pessoa=p.id) }}">Nova triagem desta pessoa</a>
   </div>
 
-  {% if not i.e_triagem %}
   <section class="cartao" id="documentos">
     <h2>Documentos</h2>
     <ul class="docs">
+      {% if i.e_triagem %}
+      <li>
+        <span class="nome-doc">Pedido de exames e enxoval</span>
+        {{ acoes_documento(url_for('ver_impressos', id=i.id, itens='exames,enxoval'), url_for('baixar_impressos', id=i.id, itens='exames,enxoval')) }}
+      </li>
+      {% else %}
       <li>
         <span class="nome-doc">Prontuário</span>
         {{ acoes_documento(url_for('ver_prontuario', id=i.id), url_for('baixar_prontuario', id=i.id)) }}
       </li>
       <li>
+        <span class="nome-doc">Conjunto da internação</span>
+        {{ acoes_documento(url_for('ver_impressos', id=i.id), url_for('baixar_impressos', id=i.id)) }}
+      </li>
+      <li>
         <span class="nome-doc">{{ 'Declaração de internação' if i.status == 'ativo' else 'Declaração de ex-interno' }}</span>
         {{ acoes_documento(url_for('ver_declaracao', id=i.id), url_for('baixar_declaracao', id=i.id)) }}
       </li>
+      {% endif %}
     </ul>
   </section>
-  {% endif %}
+
+  <section class="cartao" id="relatorio-social">
+    <h2>Relatório do Serviço Social</h2>
+    <div class="envelope">
+      <div class="situacao">
+        {% if relatorio_preenchido %}
+          <span class="selo ativo">Preenchido</span>
+          <span>{{ i.relatorio_social.atualizado_em.strftime('%d/%m/%Y') }}{{ ' · ' ~ i.relatorio_social.atualizado_por if i.relatorio_social.atualizado_por }}</span>
+        {% else %}
+          <span class="selo">Ainda não preenchido</span>
+        {% endif %}
+      </div>
+      <a class="botao{{ ' secundario' if relatorio_preenchido }}" href="{{ url_for('relatorio_social', id=i.id) }}">{{ 'Editar' if relatorio_preenchido else 'Escrever o relatório' }}</a>
+    </div>
+    {% if relatorio_preenchido %}
+      {{ acoes_documento(url_for('ver_impressos', id=i.id, itens='relatorio-social'), url_for('baixar_impressos', id=i.id, itens='relatorio-social'), 'espaco') }}
+    {% endif %}
+  </section>
 
   {% if i.status == 'inativo' %}
   <section class="cartao" id="envelope">
