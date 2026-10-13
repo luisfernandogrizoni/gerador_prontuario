@@ -38,8 +38,9 @@ def _nome_de_arquivo(texto):
     return re.sub(r'[\\/:*?"<>|]+', " ", texto).strip()
 
 
-def documento(internacao, hoje):
-    """Internação ativa ou inativa -> Documento (blocos). Levanta ValueError para triagem."""
+def documento(internacao, hoje, emissor=None):
+    """Internação ativa ou inativa -> Documento (blocos). Levanta ValueError para triagem.
+    `emissor` assina como responsável pela emissão (sem ele, o de fábrica)."""
     tipo = tipo_da_declaracao(internacao)
     if tipo is None:
         raise ValueError("só internos ativos ou inativos têm declaração")
@@ -58,5 +59,5 @@ def documento(internacao, hoje):
         titulo = f"Declaração de ex-interno - {pessoa.nome}"
     blocos = [Titulo("Declaração", tamanho=14, antes=30, depois=26),
               Paragrafo(identificacao + situacao, "justificado", primeira_linha=708, entrelinha=1.5)]
-    blocos += fecho(hoje)
+    blocos += fecho(hoje, emissor)
     return Documento(nome_arquivo=_nome_de_arquivo(titulo), titulo=titulo, blocos=blocos, fonte="Verdana", tamanho=10)

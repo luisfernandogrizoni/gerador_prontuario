@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_voltar.html" import linha_voltar with context %}
 {% block titulo %}Alterar senha — Casa de Acolhida Restauração{% endblock %}
 
 {% block estilo %}
@@ -8,6 +9,7 @@
 
 {% block conteudo %}
 <main class="senha">
+  {{ linha_voltar(url_for('home')) }}
   <h1>Alterar minha senha</h1>
   {% if erro %}<p class="caixa-erros erro" role="alert">{{ erro }}</p>{% endif %}
   <form method="post" action="{{ url_for('alterar_senha') }}">

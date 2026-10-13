@@ -1,8 +1,9 @@
 """
 Relatórios do sistema, em Word e no navegador (veja documentos.py):
 
-  * internos ativos por convênio (Caps AD e Prefeitura Tarumã) — o nome sai só com as iniciais;
-  * quantos internos passaram pela casa no ano — número geral, sem separar por convênio.
+  * internos ativos por convênio (Caps AD, Prefeitura Tarumã e os convênios que forem cadastrados) — o nome sai só
+    com as iniciais;
+  * quantos internos passaram pela casa no ano — número geral, com colunas opcionais por convênio.
 
 Este módulo decide o que entra em cada relatório; a aparência (timbre, tabelas, assinatura) é do documentos.py.
 """
@@ -10,13 +11,11 @@ Este módulo decide o que entra em cada relatório; a aparência (timbre, tabela
 import unicodedata
 from datetime import date, datetime, timedelta, timezone
 
+import catalogo
 from documentos import N, Coluna, Documento, Paragrafo, Tabela, Texto, Titulo, fecho
 from modelos import STATUS_INTERNACAO, Internacao, Pessoa, db
-from prontuario import NOME_NA_TELA, TIPO_DA_CATEGORIA, fmt_data
+from prontuario import fmt_data
 from validacao import fmt_cpf
-
-# endereço da URL -> convênio como está guardado no banco
-CONVENIOS = {"caps-ad": "CAPS AD", "taruma": "Prefeitura Tarumã"}
 
 # partes de nome que não viram inicial ("Maria da Silva" -> "M. S.")
 LIGACOES = {"da", "de", "do", "das", "dos", "e", "di", "du", "del", "von", "van"}
@@ -55,10 +54,16 @@ def _chave_de_ordem(nome):
     return "".join(c for c in sem_acento if not unicodedata.combining(c)).casefold()
 
 
+def convenio_do_relatorio(slug):
+    """O convênio (catalogo.ConvenioDef) do endereço do relatório, ou None se não existir ou não tiver relatório."""
+    convenio = catalogo.atual().por_slug(slug)
+    return convenio if convenio and convenio.gratuito else None
+
+
 def internos_ativos(slug):
     """Internos ativos do convênio, em ordem alfabética do nome: lista de dicionários para a tela e o Word."""
     internacoes = db.session.execute(
-        db.select(Internacao).join(Pessoa).filter(Internacao.status == "ativo", Internacao.convenio == CONVENIOS[slug])
+        db.select(Internacao).join(Pessoa).filter(Internacao.status == "ativo", Internacao.convenio == convenio_do_relatorio(slug).nome)
     ).scalars().all()
     internacoes.sort(key=lambda i: _chave_de_ordem(i.pessoa.nome))
     return [{
@@ -69,8 +74,8 @@ def internos_ativos(slug):
     } for i in internacoes]
 
 
-def documento_convenio(slug, hoje):
-    convenio = CONVENIOS[slug]
+def documento_convenio(slug, hoje, emissor=None):
+    convenio = convenio_do_relatorio(slug).nome
     itens = internos_ativos(slug)
     blocos = [Titulo("RELATÓRIO DE INTERNOS ATIVOS", tamanho=15),
               Paragrafo([N(f"Convênio: {convenio}")], "centro", depois=14, tamanho=12),
@@ -84,21 +89,27 @@ def documento_convenio(slug, hoje):
         blocos.append(Paragrafo([N(f"Total de internos ativos: {len(itens)}")], antes=10))
     else:
         blocos.append(Paragrafo([Texto("Não há internos ativos neste convênio na data do relatório.", italico=True)], "centro", antes=10))
-    blocos += fecho(hoje)
+    blocos += fecho(hoje, emissor)
     return Documento(nome_arquivo=f"Relatório {convenio} - {hoje:%d-%m-%Y}", titulo=f"Relatório de internos ativos – {convenio}",
                      blocos=blocos)
 
 
 # ------------------------------------------------------------ quantos passaram pela casa no ano
-def resumo_anual(hoje):
+def resumo_anual(hoje, convenio=None):
     """
     Pessoas que estiveram internadas em algum momento do ano de `hoje` (de 1º de janeiro até hoje).
 
     Conta pessoas, não internações: quem saiu e voltou no mesmo ano conta uma vez. Registros sem a data necessária
     para saber se estavam na casa no ano não entram e são avisados em `sem_data`.
+
+    `convenio` (nome guardado) faz a mesma conta só com os registros daquele convênio: é a coluna do convênio no
+    relatório. Quem passou por mais de um convênio no ano aparece em cada um deles.
     """
     ano, inicio_do_ano = hoje.year, date(hoje.year, 1, 1)
-    registros = db.session.execute(db.select(Internacao).filter(Internacao.status.in_(STATUS_INTERNACAO))).scalars().all()
+    consulta = db.select(Internacao).filter(Internacao.status.in_(STATUS_INTERNACAO))
+    if convenio is not None:
+        consulta = consulta.filter(Internacao.convenio == convenio)
+    registros = db.session.execute(consulta).scalars().all()
     por_pessoa, sem_data = {}, 0
     for r in registros:
         if r.inicio is None:                                  # sem data de internação: não dá para saber
@@ -131,22 +142,43 @@ def aviso_do_resumo(resumo):
             f"{'entraram' if n != 1 else 'entrou'} na contagem. Corrija nas fichas (veja os avisos da tela inicial).")
 
 
-def documento_anual(hoje):
+def colunas_disponiveis(hoje):
+    """Convênios que podem virar coluna do relatório anual: os ativos e os desativados que tiveram internos no ano.
+    Um convênio novo, cadastrado em Cadastros > Convênios, entra aqui sozinho."""
+    return [c for c in catalogo.atual().com_relatorio if c.ativo or resumo_anual(hoje, c.nome)["total"]]
+
+
+LARGURA_DA_TABELA = 9638        # largura útil da folha, em twips (7338 + 2300 na tabela de uma coluna só)
+
+
+def _colunas_da_tabela_anual(convenios):
+    """Descrição + geral (+ uma coluna para cada convênio). Sem convênios, a tabela é a de sempre."""
+    if not convenios:
+        return [Coluna("Descrição", 7338), Coluna("Internos", 2300, "centro")]
+    k = 1 + len(convenios)
+    numerica = 1450 if k <= 3 else 1250 if k <= 5 else 1050
+    return [Coluna("Descrição", LARGURA_DA_TABELA - k * numerica), Coluna("Internos (geral)", numerica, "centro"),
+            *[Coluna(c.nome_tela, numerica, "centro") for c in convenios]]
+
+
+def documento_anual(hoje, colunas=(), emissor=None):
+    """`colunas`: convênios (catalogo.ConvenioDef) que ganham uma coluna ao lado do total geral."""
     r = resumo_anual(hoje)
     ano, total = r["ano"], r["total"]
     verbo, substantivo = ("passaram", "internos") if total != 1 else ("passou", "interno")
+    rotulos = [f"Total de internos que passaram pela casa em {ano}", f"Ingressaram em {ano}",
+               f"Já estavam internados antes de 01/01/{ano}", f"Permanecem internados em {hoje.strftime('%d/%m/%Y')}",
+               f"Saíram durante {ano}"]
+    campos = ["total", "ingressaram", "ja_estavam", "permanecem", "sairam"]
+    resumos = [r] + [resumo_anual(hoje, c.nome) for c in colunas]
     blocos = [Titulo("RELATÓRIO DE INTERNOS", tamanho=15),
               Paragrafo([N(f"Passaram pela casa em {ano}")], "centro", depois=14, tamanho=12),
               Paragrafo([f"Informamos que, de 01/01/{ano} a {hoje.strftime('%d/%m/%Y')}, {verbo} pela Comunidade Terapêutica Casa de "
                          f"Acolhida Restauração ", N(f"{total} {substantivo}"), "."], "justificado", depois=12),
-              Tabela(colunas=[Coluna("Descrição", 7338), Coluna("Internos", 2300, "centro")],
-                     linhas=[[f"Total de internos que passaram pela casa em {ano}", total],
-                             [f"Ingressaram em {ano}", r["ingressaram"]],
-                             [f"Já estavam internados antes de 01/01/{ano}", r["ja_estavam"]],
-                             [f"Permanecem internados em {hoje.strftime('%d/%m/%Y')}", r["permanecem"]],
-                             [f"Saíram durante {ano}", r["sairam"]]],
+              Tabela(colunas=_colunas_da_tabela_anual(colunas),
+                     linhas=[[rotulo, *[x[campo] for x in resumos]] for rotulo, campo in zip(rotulos, campos)],
                      negrito_linhas=(0,))]
-    blocos += fecho(hoje)
+    blocos += fecho(hoje, emissor)
     return Documento(nome_arquivo=f"Relatório de internos {ano} - {hoje:%d-%m-%Y}", titulo=f"Relatório de internos – {ano}", blocos=blocos)
 
 
@@ -154,7 +186,8 @@ def documento_anual(hoje):
 def painel():
     """Um bloco por convênio, com a lista de quem entra no relatório."""
     blocos = []
-    for slug, convenio in CONVENIOS.items():
-        nome = NOME_NA_TELA.get(convenio, convenio)
-        blocos.append({"slug": slug, "nome": nome, "tipo": TIPO_DA_CATEGORIA.get(nome, "outro"), "itens": internos_ativos(slug)})
+    for c in catalogo.atual().com_relatorio:
+        itens = internos_ativos(c.slug)
+        if c.ativo or itens:                      # convênio desativado só aparece enquanto ainda tem gente internada
+            blocos.append({"slug": c.slug, "nome": c.nome_tela, "tipo": c.cor, "itens": itens})
     return blocos

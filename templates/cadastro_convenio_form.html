@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% import "_campos.html" as f with context %}
+{% from "_voltar.html" import linha_voltar with context %}
+
+{% block titulo %}{{ 'Editar convênio' if convenio else 'Novo convênio' }}{% endblock %}
+
+{% block estilo %}
+  .cores { display: flex; flex-wrap: wrap; gap: 8px; }
+  .opcao-cor { position: relative; flex-direction: row; cursor: pointer; padding: 5px; border: 2px solid transparent; border-radius: 12px; }
+  .opcao-cor input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .opcao-cor .chip { font-size: .85rem; padding: 3px 12px; }
+  .opcao-cor:hover { border-color: var(--borda-forte); }
+  .opcao-cor:has(input:checked) { border-color: var(--vermelho); }
+  .opcao-cor:has(input:focus-visible) { outline: 3px solid rgba(179,38,30,.3); outline-offset: 2px; }
+  .botoes-form { margin-top: 4px; }
+{% endblock %}
+
+{% block conteudo %}
+<main>
+  {{ linha_voltar(url_for('lista_convenios')) }}
+  <h1>{{ 'Editar convênio' if convenio else 'Novo convênio' }}</h1>
+
+  <form method="post">
+    {% if erros %}<div class="caixa-erros"><strong>Confira os campos marcados em vermelho.</strong></div>{% endif %}
+    <fieldset>
+      <legend>Convênio</legend>
+      <div class="grade">
+        {% if convenio %}
+          <label class="c3">Guardado como<input value="{{ convenio.nome }}" readonly></label>
+        {% else %}
+          {{ f.entrada('nome', 'Nome do convênio', 'c3', obrig=true, attrs={'maxlength': 50, 'autofocus': true}) }}
+        {% endif %}
+        {{ f.entrada('nome_tela', 'Nome nas telas', 'c3', attrs={'maxlength': 50, 'placeholder': 'o mesmo, se ficar em branco'}) }}
+        {{ f.entrada('vagas', 'Vagas', 'c2', 'number', obrig=true, attrs={'min': 0, 'max': 999, 'step': 1, 'inputmode': 'numeric'}) }}
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Cor</legend>
+      <div class="cores" role="radiogroup" aria-label="Cor do convênio">
+        {% for chave, rotulo in cores %}
+          <label class="opcao-cor"><input type="radio" name="cor" value="{{ chave }}"{{ ' checked' if d.get('cor') == chave }}><span class="chip {{ chave }}">{{ rotulo }}</span></label>
+        {% endfor %}
+      </div>
+      {% if erros.get('cor') %}<small class="erro">{{ erros['cor'] }}</small>{% endif %}
+    </fieldset>
+
+    {% if convenio %}
+    <fieldset>
+      <legend>Situação</legend>
+      <label class="caixa"><input type="checkbox" name="ativo" value="1"{{ ' checked' if d.get('ativo') == '1' }}>Ativo</label>
+    </fieldset>
+    {% endif %}
+
+    <div class="botoes-form">
+      <button class="botao" type="submit">{{ 'Salvar alterações' if convenio else 'Cadastrar convênio' }}</button>
+      <a class="botao secundario" href="{{ url_for('lista_convenios') }}">Cancelar</a>
+    </div>
+  </form>
+</main>
+{% endblock %}

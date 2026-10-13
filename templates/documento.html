@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_voltar.html" import voltar with context %}
 {#
   Mostra um Documento (documentos.py) para ver e imprimir no navegador: cada página é uma folha A4 com o timbre.
   Variáveis: doc (Documento), docx (endereço do download), avisos (alertas só da tela), cabecalho/rodape (timbre).
@@ -8,11 +9,23 @@
 
 {% block estilo %}
   .barra-doc { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; margin-bottom: 18px; }
-  .barra-doc .voltar { display: inline-flex; align-items: center; gap: 6px; color: var(--suave); font-weight: 600; text-decoration: none; }
-  .barra-doc .voltar:hover { color: var(--vermelho); }
-  .barra-doc .voltar .icone { transform: rotate(180deg); }
   .barra-doc h1 { font-size: 1.1rem; margin: 0 auto 0 4px; }
   .barra-doc .botoes-doc { display: flex; gap: 8px; flex-wrap: wrap; }
+  /* opções acima do documento (só na tela): colunas por convênio e quem assina */
+  .opcoes-doc { display: flex; align-items: center; gap: 10px 26px; flex-wrap: wrap; margin: -6px 0 18px; }
+  .opcoes-doc .grupo { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .opcoes-doc .rotulo { color: var(--suave); font-size: .82rem; font-weight: 600; }
+  .opcoes-doc form { margin: 0; }
+  .opcoes-doc label { flex-direction: row; align-items: center; gap: 8px; }
+  .opcoes-doc select { width: auto; padding: 5px 9px; font-size: .88rem; }
+  .opcao-coluna { white-space: nowrap; display: inline-flex; align-items: center; gap: 7px; padding: 5px 13px 5px 11px; border-radius: 999px; font-size: .86rem;
+                  font-weight: 600; text-decoration: none; border: 1px solid var(--borda-forte); }
+  .opcao-coluna:not(.ativa) { background: #fff; color: var(--texto); }
+  .opcao-coluna:not(.ativa):hover { border-color: var(--vermelho); }
+  .opcao-coluna .ponto { width: 9px; height: 9px; border-radius: 50%; background: var(--cor); box-shadow: inset 0 0 0 1px rgba(16,24,40,.15); flex: none; }
+  .opcao-coluna .marca { font-weight: 700; width: 1em; text-align: center; }
+  .opcao-coluna.ativa { border-color: transparent; }   /* ativa: fundo e texto são os da cor do convênio (.tipo-<cor>, base.html) */
+  @media (max-width: 760px) { .opcoes-doc { margin-top: 0; } }
   .mesa { background: #e4e7ec; border-radius: var(--raio); padding: 24px clamp(8px, 3vw, 28px); overflow-x: auto; }
   .papel { width: 210mm; max-width: 100%; margin: 0 auto; background: #fff; box-shadow: 0 2px 12px rgba(16, 24, 40, .18); color: #000; }
   .papel + .papel { margin-top: 18px; }
@@ -58,6 +71,10 @@
   .doc-assinatura .papel-de-quem { font-style: italic; }
 
   @media (max-width: 760px) {
+    .opcoes-doc .grupo, .opcoes-doc form { width: 100%; }
+    .opcoes-doc label { flex-direction: column; align-items: stretch; gap: 4px; width: 100%; }
+    .opcoes-doc select { width: 100%; max-width: 100%; }
+    .papel.larga { min-width: 560px; }          /* tabela com 4+ colunas: a mesa rola de lado, as colunas não se espremem */
     .barra-doc .botoes-doc { width: 100%; }
     .barra-doc .botoes-doc .botao { flex: 1 1 0; }
     .folha { height: auto; }
@@ -66,7 +83,7 @@
   }
   @media print {
     @page { size: A4; margin: 0; }
-    .cabecalho-impressao, .barra-doc, .aviso { display: none !important; }
+    .cabecalho-impressao, .barra-doc, .opcoes-doc, .aviso { display: none !important; }
     main, main.largo { max-width: none; margin: 0; padding: 0; }
     .mesa { background: none; padding: 0; border-radius: 0; overflow: visible; }
     .papel { width: auto; box-shadow: none; break-after: page; }
@@ -138,18 +155,43 @@
 {% block conteudo %}
 <main class="largo">
   <div class="barra-doc">
-    <a class="voltar" href="{{ doc.voltar or 'javascript:history.back()' }}"><svg class="icone"><use href="#i-seta"/></svg>Voltar</a>
+    {{ voltar(doc.voltar or url_for('home')) }}
     <h1>{{ doc.titulo }}</h1>
     <div class="botoes-doc">
       <button type="button" class="botao" onclick="window.print()"><svg class="icone"><use href="#i-impressora"/></svg>Imprimir</button>
       <a class="botao secundario" href="{{ docx }}"><svg class="icone"><use href="#i-baixar"/></svg>Baixar .docx</a>
     </div>
   </div>
+  {% if barra and (barra.colunas or barra.emissores) %}
+  <div class="opcoes-doc">
+    {% if barra.colunas %}
+    <div class="grupo" role="group" aria-label="Colunas por convênio">
+      <span class="rotulo">Colunas por convênio</span>
+      {% for c in barra.colunas %}
+        {# a cor do convênio vem das classes .chip.<cor> (base.html): o texto e o fundo ficam num elemento só para ler a cor #}
+        <a class="opcao-coluna tipo-{{ c.tipo }}{{ ' ativa' if c.ativa }}" href="{{ c.url }}" data-substituir aria-pressed="{{ 'true' if c.ativa else 'false' }}"
+           title="{{ 'Remover' if c.ativa else 'Adicionar' }} a coluna {{ c.nome }}">
+          {% if c.ativa %}<span class="marca">✓</span>{% else %}<i class="ponto"></i><span class="marca">+</span>{% endif %}{{ c.nome }}</a>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if barra.emissores %}
+    <form method="get" class="grupo">
+      {% for chave, valor in barra.manter.items() %}<input type="hidden" name="{{ chave }}" value="{{ valor }}">{% endfor %}
+      <label><span class="rotulo">Responsável pela emissão</span>
+        <select name="emissor" onchange="trocarEmissor(this.form)">
+          {% for id, rotulo in barra.emissores %}<option value="{{ id }}"{{ ' selected' if id == barra.emissor_id }}>{{ rotulo }}</option>{% endfor %}
+        </select></label>
+      <noscript><button class="botao pequeno secundario">Aplicar</button></noscript>
+    </form>
+    {% endif %}
+  </div>
+  {% endif %}
   {% for texto in avisos %}<div class="aviso erro">{{ texto }}</div>{% endfor %}
 
   <div class="mesa">
     {% for pagina in doc.paginas() %}
-    <article class="papel" style="--margem: {{ (doc.margem_lateral / 56.7) | round(1) }}mm;">
+    <article class="papel{{ ' larga' if doc.tem_tabela_larga }}" style="--margem: {{ (doc.margem_lateral / 56.7) | round(1) }}mm;">
       <table class="folha">
         <thead><tr><td>
           <div class="timbre timbre-topo">
@@ -170,6 +212,10 @@
   </div>
 </main>
 <script>
+  // trocar quem assina recarrega o documento no lugar (sem acrescentar uma página ao histórico: o "Voltar" continua indo para a tela de onde veio)
+  function trocarEmissor(form) {
+    location.replace(location.pathname + "?" + new URLSearchParams(new FormData(form)).toString());
+  }
   // "Imprimir" nas outras telas abre este documento já com a janela de impressão
   if (new URLSearchParams(location.search).get("imprimir")) {
     window.addEventListener("load", function () { setTimeout(function () { window.print(); }, 350); });

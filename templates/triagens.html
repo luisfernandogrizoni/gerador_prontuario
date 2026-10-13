@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_voltar.html" import linha_voltar with context %}
 
 {% block titulo %}Triagens{% endblock %}
 
@@ -8,9 +9,9 @@
 
 {% block conteudo %}
 <main class="largo">
+  {{ linha_voltar(url_for('home')) }}
   <div class="pagina-topo">
     <div class="titulo"><h1>Triagens</h1></div>
-    <a class="botao" href="{{ url_for('nova_triagem') }}"><svg class="icone"><use href="#i-mais"/></svg>Nova triagem</a>
   </div>
 
   <div class="ferramentas">

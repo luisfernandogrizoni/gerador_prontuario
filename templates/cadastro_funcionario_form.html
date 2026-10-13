@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% import "_campos.html" as f with context %}
+{% from "_voltar.html" import linha_voltar with context %}
+
+{% block titulo %}{{ 'Editar funcionário' if funcionario else 'Novo funcionário' }}{% endblock %}
+
+{% block estilo %}
+  .botoes-form { margin-top: 4px; }
+  .caixas { display: grid; gap: 10px; }
+{% endblock %}
+
+{% block conteudo %}
+<main>
+  {{ linha_voltar(url_for('lista_funcionarios')) }}
+  <h1>{{ 'Editar funcionário' if funcionario else 'Novo funcionário' }}</h1>
+
+  <form method="post" autocomplete="off">
+    {% if erros %}<div class="caixa-erros"><strong>Confira os campos marcados em vermelho.</strong></div>{% endif %}
+    <fieldset>
+      <legend>Funcionário</legend>
+      <div class="grade">
+        {{ f.entrada('nome', 'Nome', 'c4', obrig=true, attrs={'maxlength': 200, 'autofocus': true}) }}
+        {{ f.entrada('cargo', 'Cargo', 'c2', obrig=true, attrs={'maxlength': 100}) }}
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Acesso ao sistema</legend>
+      {% if pode_acessos %}
+      <div class="grade">
+        {{ f.escolha('nivel_id', 'Nível de acesso', niveis, 'c2', obrig=true, vazio=none) }}
+        {{ f.escolha('usuario', 'Usuário de login', usuarios, 'c2', vazio='Sem acesso') }}
+        {% if not login_atual %}
+          {{ f.entrada('novo_usuario', 'Criar um usuário novo', 'c2', attrs={'maxlength': 50, 'autocapitalize': 'none', 'spellcheck': 'false', 'autocomplete': 'off'}) }}
+        {% endif %}
+        {{ f.entrada('senha', 'Nova senha' if login_atual else 'Senha', 'c3', 'password', attrs={'autocomplete': 'new-password', 'placeholder': 'em branco: mantém a atual' if login_atual else ''}) }}
+        {{ f.entrada('confirmacao', 'Repita a senha', 'c3', 'password', attrs={'autocomplete': 'new-password'}) }}
+      </div>
+      {% else %}
+      <div class="grade">
+        <label class="c3">Nível de acesso<input value="{{ nivel_atual }}" readonly></label>
+        <label class="c3">Usuário de login<input value="{{ login_atual }}" readonly></label>
+      </div>
+      {% endif %}
+    </fieldset>
+
+    <fieldset>
+      <legend>Assinatura dos documentos</legend>
+      <div class="caixas">
+        <label class="caixa"><input type="checkbox" name="ativo" value="1"{{ ' checked' if d.get('ativo') == '1' }}>Ativo</label>
+        <label class="caixa{{ ' com-erro' if erros.get('padrao') }}"><input type="checkbox" name="padrao" value="1"{{ ' checked' if d.get('padrao') == '1' }}>Assina por padrão, quando ninguém escolhe outra pessoa</label>
+        {% if erros.get('padrao') %}<small class="erro">{{ erros['padrao'] }}</small>{% endif %}
+      </div>
+    </fieldset>
+
+    <div class="botoes-form">
+      <button class="botao" type="submit">{{ 'Salvar alterações' if funcionario else 'Cadastrar funcionário' }}</button>
+      <a class="botao secundario" href="{{ url_for('lista_funcionarios') }}">Cancelar</a>
+    </div>
+  </form>
+</main>
+{% endblock %}

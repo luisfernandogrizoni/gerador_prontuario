@@ -9,9 +9,10 @@ volta para a tela com as mensagens ao lado de cada campo.
 
 from datetime import date
 
+import catalogo
 from modelos import (ENVELOPE_PENDENTE, ENVELOPE_RECEBIDO, STATUS, STATUS_TRIAGEM, Internacao, Parcela,
                      Pessoa, db)
-from prontuario import CONVENIO_A_DEFINIR, CONVENIOS, ler_data, ler_valor
+from prontuario import CONVENIO_A_DEFINIR, ler_data, ler_valor
 from relatorios import hoje_no_brasil
 from validacao import cpf_valido, fmt_cpf, ler_hora, normalizar_nome, rg_valido, so_digitos
 
@@ -58,7 +59,7 @@ def validar_prontuario(form, pessoa_id=None):
         erros["inicio"] = "A data em que foi efetivamente internado é obrigatória."
     if termino and inicio and termino < inicio:
         erros["termino"] = "O término não pode ser antes do início."
-    if form.get("convenio") not in CONVENIOS:
+    if not catalogo.atual().existe(form.get("convenio")):
         erros["convenio"] = "Escolha o convênio."
     return erros
 
@@ -70,7 +71,7 @@ def validar_triagem(form, pessoa_id=None):
         erros["internacao_agendada"] = "O agendamento não pode ser antes do 1º contato."
     if form.get("status") not in STATUS_TRIAGEM:
         erros["status"] = "Escolha a situação da triagem."
-    if form.get("convenio") not in CONVENIOS + [CONVENIO_A_DEFINIR]:
+    if not (catalogo.atual().existe(form.get("convenio")) or form.get("convenio") == CONVENIO_A_DEFINIR):
         erros["convenio"] = "Escolha o convênio (ou \"A definir\")."
     return erros
 
@@ -155,7 +156,7 @@ def mudar_status(internacao, dados):
     if not inicio:
         erros["inicio"] = "Informe a data em que foi efetivamente internado."
     convenio = dados.get("convenio") or internacao.convenio
-    if convenio not in CONVENIOS:
+    if not catalogo.atual().existe(convenio):
         erros["convenio"] = "Defina o convênio para admitir."
     if erros:
         return erros
@@ -282,16 +283,16 @@ def buscar_pessoas(termo, limite=10):
     return achados
 
 
-def opcoes_formulario():
-    """Listas usadas pelos selects dos formulários."""
+def opcoes_formulario(convenio_atual=""):
+    """Listas usadas pelos selects dos formulários. `convenio_atual`: o convênio do registro que está sendo
+    editado, que continua na lista mesmo se foi desativado depois."""
     from modelos import MODALIDADES
-    from prontuario import (CATEGORIA_VALOR_ZERO, CONVENIOS_GRATUITOS, DOCUMENTOS,
-                            FAIXAS_PARTICULAR, NOME_CURTO, NOME_NA_TELA)
+    from prontuario import CATEGORIA_VALOR_ZERO, DOCUMENTOS, FAIXAS_PARTICULAR, NOME_CURTO
     # o texto "Categoria: ..." que aparece enquanto se digita o valor usa os nomes curtos das telas
     faixas = [(limite, NOME_CURTO.get(nome, nome)) for limite, nome in FAIXAS_PARTICULAR]
     # (valor guardado, nome na tela): o select mostra "Caps AD" e grava "CAPS AD"
-    convenios = [(c, NOME_NA_TELA.get(c, c)) for c in CONVENIOS]
-    return dict(convenios=convenios, gratuitos=CONVENIOS_GRATUITOS, faixas=faixas,
+    cadastro = catalogo.atual()
+    return dict(convenios=cadastro.para_escolher(convenio_atual), gratuitos=cadastro.gratuitos, faixas=faixas,
                 categoria_zero=NOME_CURTO[CATEGORIA_VALOR_ZERO], documentos=DOCUMENTOS, motivos=MOTIVOS,
                 modalidades=MODALIDADES, a_definir=CONVENIO_A_DEFINIR,
                 status_triagem=[(s, STATUS[s]) for s in STATUS_TRIAGEM], hoje=date.today().isoformat(),

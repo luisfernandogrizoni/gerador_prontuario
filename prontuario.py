@@ -14,6 +14,7 @@ tanto ao enviar o formulário quanto ao baixar de novo pela lista.
 
 from datetime import date
 
+import catalogo
 from documentos import Assinaturas, Celula, Coluna, Documento, Formulario, N, Paragrafo, Pauta, S, Tabela, para_docx
 from validacao import fmt_cpf, fmt_rg
 
@@ -31,9 +32,7 @@ DOCUMENTOS = {
     "ctps": "Carteira de Trabalho",
 }
 
-# Convênios em que a contribuição voluntária é sempre R$ 0,00
-CONVENIOS_GRATUITOS = ["CAPS AD", "Prefeitura Tarumã"]
-CONVENIOS = CONVENIOS_GRATUITOS + ["Particular"]
+# Os convênios (nome, vagas, cor, se a contribuição é sempre R$ 0,00) vêm do cadastro: veja catalogo.py.
 # Só triagens (em admissão / lista de espera) podem ficar sem convênio definido
 CONVENIO_A_DEFINIR = "A definir"
 
@@ -49,12 +48,8 @@ CATEGORIA_VALOR_ZERO = "Social"  # particular com valor = 0,00
 # Nome curto das categorias nas telas (o Word usa o nome completo): Social Total e valor 0,00 são "Social"
 NOME_CURTO = {"Social Total": "Social", CATEGORIA_VALOR_ZERO: "Social",
               "Social Parcial I": "Social I", "Social Parcial II": "Social II"}
-# Como o convênio aparece nas telas (o valor guardado no banco e o Word continuam "CAPS AD")
-NOME_NA_TELA = {"CAPS AD": "Caps AD"}
-# Cor de cada categoria nas telas (classe CSS): Social vai do azul acinzentado mais escuro (contribui menos)
-# ao mais claro (contribui mais); Particular é azul bebê.
-TIPO_DA_CATEGORIA = {"Caps AD": "caps", "Prefeitura Tarumã": "taruma", "Social": "social",
-                     "Social I": "social-1", "Social II": "social-2", "Particular": "particular"}
+# O nome do convênio nas telas (o valor guardado no banco e o Word continuam "CAPS AD") e a cor de cada
+# categoria também vêm do cadastro (catalogo.py).
 
 
 # ---------------------------------------------------------------- utilidades
@@ -118,15 +113,17 @@ def fmt_reais(valor):
 def classificar(convenio, valor):
     """
     Regra da contribuição:
-      - CAPS AD / Prefeitura Tarumã -> valor 0,00 (categoria = o próprio convênio)
+      - convênio gratuito (CAPS AD, Prefeitura Tarumã e os que forem cadastrados) -> valor 0,00
+        (categoria = o próprio convênio)
       - Particular -> categoria pela faixa de valor (FAIXAS_PARTICULAR);
                       valor = 0,00 -> CATEGORIA_VALOR_ZERO
       - qualquer outro (ex.: registro importado sem convênio) -> "A definir"
     Devolve (valor_final, texto_da_linha_convenio).
     """
-    if convenio in CONVENIOS_GRATUITOS:
+    cadastro = catalogo.atual()
+    if cadastro.e_gratuito(convenio):
         return 0.0, convenio
-    if convenio not in CONVENIOS:
+    if not cadastro.existe(convenio):
         return valor, CONVENIO_A_DEFINIR
     categoria = categoria_particular(valor)
     if categoria == convenio:  # evita "Particular — Particular"
@@ -142,29 +139,48 @@ def categoria_particular(valor):
     return CATEGORIA_VALOR_ZERO
 
 
+def faixas_do_particular():
+    """As faixas de FAIXAS_PARTICULAR para mostrar na tela, da menor contribuição para a maior:
+    [(categoria como aparece nas telas, valor em texto)] — 'até R$ 400,00', 'acima de R$ 400,00 até R$ 700,00',
+    'acima de R$ 1.500,00'. A faixa de baixo também vale para o valor 0,00 (CATEGORIA_VALOR_ZERO é a mesma categoria)."""
+    faixas = sorted(FAIXAS_PARTICULAR)
+    resultado = []
+    for i, (minimo, nome) in enumerate(faixas):
+        maximo = faixas[i + 1][0] if i + 1 < len(faixas) else None
+        if minimo <= 0:
+            texto = f"até {fmt_reais(maximo)}" if maximo is not None else "qualquer valor"
+        elif maximo is None:
+            texto = f"acima de {fmt_reais(minimo)}"
+        else:
+            texto = f"acima de {fmt_reais(minimo)} até {fmt_reais(maximo)}"
+        resultado.append((NOME_CURTO.get(nome, nome), texto))
+    return resultado
+
+
 def categoria_efetiva(convenio, valor):
     """A categoria que a pessoa realmente é para a casa, como aparece nas telas:
          Caps AD, Prefeitura Tarumã, Social, Social I, Social II ou Particular
     (quem paga valor é "Particular" só na faixa mais alta; as faixas menores são Social).
     Sem convênio definido: "A definir". O documento Word segue com o texto completo
     de classificar() ("Particular — Social Parcial II")."""
-    if convenio in CONVENIOS_GRATUITOS:
-        return NOME_NA_TELA.get(convenio, convenio)
-    if convenio not in CONVENIOS:
+    cadastro = catalogo.atual()
+    if cadastro.e_gratuito(convenio):
+        return cadastro.nome_na_tela(convenio)
+    if not cadastro.existe(convenio):
         return CONVENIO_A_DEFINIR
     categoria = categoria_particular(valor)
     return NOME_CURTO.get(categoria, categoria)
 
 
 def tipo_da_categoria(categoria):
-    """Classe de cor da categoria (caps, taruma, social, social-1, social-2, particular) ou "outro"."""
-    return TIPO_DA_CATEGORIA.get(categoria, "outro")
+    """Classe de cor da categoria (a do convênio, social, social-1, social-2, particular) ou "outro"."""
+    return catalogo.atual().tipo_da_categoria(categoria)
 
 
 def categoria_vaga(convenio, valor):
     """Categoria em que a pessoa ocupa vaga (a mesma categoria efetiva). Sem convênio
     definido não ocupa vaga de nenhuma categoria -> None."""
-    return categoria_efetiva(convenio, valor) if convenio in CONVENIOS else None
+    return categoria_efetiva(convenio, valor) if catalogo.atual().existe(convenio) else None
 
 
 def marca(escolhido, opcao):

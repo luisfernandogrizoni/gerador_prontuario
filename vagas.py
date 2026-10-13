@@ -1,7 +1,8 @@
 """
 Quadro de vagas da home.
 
-Cada categoria tem um limite de vagas e só quem está com status "ativo" ocupa vaga.
+Cada categoria tem um limite de vagas e só quem está com status "ativo" ocupa vaga. O limite de cada convênio
+fica no cadastro de convênios (catalogo.py); as categorias do Particular (Social e Particular) têm limite fixo aqui.
 Como os avisos, a ocupação não fica gravada: é contada a cada vez a partir dos dados.
 
 Situação de cada categoria:
@@ -13,14 +14,13 @@ Situação de cada categoria:
 
 from collections import Counter
 
+import catalogo
 from modelos import Internacao, db
 from prontuario import categoria_vaga, tipo_da_categoria
 
-# Limite de vagas de cada categoria, na ordem em que aparecem na home (30 vagas no total).
+# Limite de vagas das categorias de quem paga (Particular), depois dos convênios na home.
 # None = limite ainda não definido. Para mudar um limite, é só trocar o número.
-LIMITES = {
-    "Caps AD": 9,
-    "Prefeitura Tarumã": 10,
+LIMITES_FIXOS = {
     "Social": 5,
     "Social I": 2,
     "Social II": 3,
@@ -57,7 +57,10 @@ def gerar_vagas():
         for convenio, valor in db.session.execute(
             db.select(Internacao.convenio, Internacao.contribuicao_valor)
             .filter(Internacao.status == "ativo")))
-    return [_vaga(categoria, ocupadas[categoria], limite) for categoria, limite in LIMITES.items()]
+    # primeiro os convênios (na ordem do cadastro): os ativos e os desativados que ainda têm gente internada
+    linhas = [(c.nome_tela, c.vagas) for c in catalogo.atual().com_relatorio if c.ativo or ocupadas[c.nome_tela]]
+    linhas += LIMITES_FIXOS.items()
+    return [_vaga(categoria, ocupadas[categoria], limite) for categoria, limite in linhas]
 
 
 def totais(vagas):

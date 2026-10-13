@@ -24,14 +24,18 @@ import os
 from pathlib import Path
 
 import click
-from sqlalchemy import create_engine, func, select, text
+from sqlalchemy import create_engine, func, inspect, select, text
 
 import banco
 from modelos import db
 
 RAIZ = Path(__file__).parent
-TABELAS_COPIADAS = ("pessoas", "internacoes", "parcelas", "avisos_dispensados")   # ordem das chaves
+TABELAS_COPIADAS = ("pessoas", "internacoes", "parcelas", "avisos_dispensados", "convenios", "niveis_acesso", "funcionarios")   # ordem das chaves
 SEM_ID_SEQUENCIAL = {"avisos_dispensados"}   # a chave é um texto, não há sequência para acertar
+# Cadastros de fábrica: o sistema os cria sozinho ao subir, então um destino "vazio" já os tem. Não contam como dados
+# do destino, e a cópia sempre os substitui pelos da origem (se a origem for um banco antigo, sem eles, ficam os de fábrica
+# do destino).
+CADASTROS = {"convenios", "niveis_acesso", "funcionarios"}
 
 
 def _tabelas():
@@ -77,7 +81,10 @@ def copiar(origem, substituir):
     try:
         db.metadata.create_all(para)                 # cria o que faltar (inclusive usuarios)
         with de.connect() as o, para.begin() as d:   # destino numa transação: erro = nada muda
-            existentes = {t.name: d.execute(select(func.count()).select_from(t)).scalar() for t in tabelas}
+            # os cadastros andam juntos (funcionários apontam para níveis): só copia se a origem tiver todos
+            if not all(inspect(o).has_table(nome) for nome in CADASTROS):
+                tabelas = [t for t in tabelas if t.name not in CADASTROS]
+            existentes = {t.name: d.execute(select(func.count()).select_from(t)).scalar() for t in tabelas if t.name not in CADASTROS}
             if any(existentes.values()):
                 resumo = ", ".join(f"{n}: {q}" for n, q in existentes.items())
                 if not substituir:
@@ -88,6 +95,9 @@ def copiar(origem, substituir):
                 for t in reversed(tabelas):
                     d.execute(t.delete())
 
+            for t in reversed(tabelas):
+                if t.name in CADASTROS:
+                    d.execute(t.delete())
             for t in tabelas:
                 linhas = o.execute(select(t)).mappings().all()
                 if linhas:

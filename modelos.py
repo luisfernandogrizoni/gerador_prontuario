@@ -324,6 +324,52 @@ class AvisoDispensado(db.Model):
 
 
 # =========================================================================
+class Convenio(db.Model):
+    """Convênios do cadastro (Cadastros > Convênios). Veja catalogo.py: é de lá que o resto do sistema os lê."""
+    __tablename__ = "convenios"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nome: Mapped[str] = mapped_column(String(50), unique=True)     # o texto guardado em cada internação: não muda
+    nome_tela: Mapped[str] = mapped_column(String(50))            # como aparece nas telas
+    slug: Mapped[str] = mapped_column(String(60), unique=True)    # endereço do relatório do convênio
+    gratuito: Mapped[bool] = mapped_column(default=True)          # contribuição sempre R$ 0,00 (o Particular não é)
+    vagas: Mapped[int | None] = mapped_column()                   # limite de vagas; vazio = não definido
+    cor: Mapped[str] = mapped_column(String(20), default="outro")
+    ativo: Mapped[bool] = mapped_column(default=True)             # desativado: não aparece para escolher, o histórico fica
+    ordem: Mapped[int] = mapped_column(default=0)
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class NivelAcesso(db.Model):
+    """Níveis de acesso (Cadastros > Níveis de acesso), em cascata: o de `ordem` menor tem mais acesso e, na regra que
+    ainda será configurada, inclui o que os de baixo têm. Por enquanto o nível só é registrado em cada funcionário."""
+    __tablename__ = "niveis_acesso"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nome: Mapped[str] = mapped_column(String(50), unique=True)
+    descricao: Mapped[str] = mapped_column(String(200), default="")
+    ordem: Mapped[int] = mapped_column(default=0)                 # 1 = o que tem mais acesso
+    ativo: Mapped[bool] = mapped_column(default=True)
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class Funcionario(db.Model):
+    """Quem trabalha no escritório (Cadastros > Funcionários): assina como responsável pela emissão dos documentos."""
+    __tablename__ = "funcionarios"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nome: Mapped[str] = mapped_column(String(200))
+    cargo: Mapped[str] = mapped_column(String(100), default="")
+    ativo: Mapped[bool] = mapped_column(default=True)
+    padrao: Mapped[bool] = mapped_column(default=False)           # assina quando ninguém escolhe (só um por vez)
+    usuario: Mapped[str] = mapped_column(String(50), default="")  # login desta pessoa: os documentos que ela emite saem no nome dela
+    nivel_id: Mapped[int | None] = mapped_column(ForeignKey("niveis_acesso.id"), index=True)
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+    nivel: Mapped[NivelAcesso | None] = relationship()
+
+
+# =========================================================================
 class Usuario(db.Model):
     """Quem pode entrar no sistema. A senha nunca é gravada: só o hash dela."""
     __tablename__ = "usuarios"

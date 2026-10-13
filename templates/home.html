@@ -6,7 +6,6 @@
   .painel-topo .titulo { margin-right: auto; }
   .painel-topo .data { margin: 0; color: var(--suave); }
   .painel-topo .data::first-letter { text-transform: uppercase; }
-  .painel-topo .acoes { display: flex; gap: 10px; flex-wrap: wrap; }
 
   /* ---- indicadores ---- */
   .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 20px; }
@@ -32,8 +31,6 @@
     .kpi-numero { font-size: 1.55rem; }
     .kpi-rotulo { font-size: .8rem; }
     .kpi-sub { font-size: .72rem; }
-    .painel-topo .acoes { width: 100%; }
-    .painel-topo .acoes .botao { flex: 1 1 0; padding-left: 8px; padding-right: 8px; white-space: nowrap; }
     .bloco-topo { flex-wrap: wrap; }
     .bloco-topo, .bloco-corpo, .fim-lista, .dia { padding-left: 14px; padding-right: 14px; }
     .fim-rodape { padding-left: 14px; padding-right: 14px; }
@@ -173,10 +170,6 @@
     <div class="titulo">
       <h1>Início</h1>
       <p class="data">{{ hoje_por_extenso }}</p>
-    </div>
-    <div class="acoes">
-      <a class="botao secundario" href="{{ url_for('nova_triagem') }}"><svg class="icone"><use href="#i-mais"/></svg>Nova triagem</a>
-      <a class="botao" href="{{ url_for('formulario') }}"><svg class="icone"><use href="#i-mais"/></svg>Novo prontuário</a>
     </div>
   </div>
 
@@ -352,10 +345,6 @@
       <section class="bloco atalhos-bloco" aria-labelledby="t-atalhos">
         <div class="bloco-topo"><h2 id="t-atalhos">Atalhos</h2></div>
         <ul class="atalhos">
-          <li><a href="{{ url_for('nova_triagem') }}"><span class="ico"><svg class="icone"><use href="#i-mais"/></svg></span>
-            <span><strong>Nova triagem</strong></span><svg class="icone seta"><use href="#i-seta"/></svg></a></li>
-          <li><a href="{{ url_for('formulario') }}"><span class="ico"><svg class="icone"><use href="#i-prancheta"/></svg></span>
-            <span><strong>Novo prontuário</strong></span><svg class="icone seta"><use href="#i-seta"/></svg></a></li>
           <li><a href="{{ url_for('lista_triagens') }}"><span class="ico"><svg class="icone"><use href="#i-relogio"/></svg></span>
             <span><strong>Triagens</strong></span><svg class="icone seta"><use href="#i-seta"/></svg></a></li>
           <li><a href="{{ url_for('lista_internos') }}"><span class="ico"><svg class="icone"><use href="#i-usuarios"/></svg></span>

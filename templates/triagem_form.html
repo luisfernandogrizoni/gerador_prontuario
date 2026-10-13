@@ -1,10 +1,12 @@
 {% extends "base.html" %}
 {% import "_campos.html" as f with context %}
+{% from "_voltar.html" import linha_voltar with context %}
 
 {% block titulo %}{{ 'Editar triagem' if editando else 'Nova triagem' }}{% endblock %}
 
 {% block conteudo %}
 <main>
+  {{ linha_voltar(url_for('ficha', id=editando.id) if editando else url_for('lista_triagens')) }}
   <h1>{{ 'Editar triagem' if editando else 'Nova triagem' }}</h1>
 
   <form method="post" action="{{ url_for('salvar_triagem') }}">
