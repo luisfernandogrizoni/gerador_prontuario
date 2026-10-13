@@ -9,7 +9,9 @@ O que este módulo garante:
   - trocar a senha derruba as outras sessões abertas desse usuário;
   - as páginas não ficam guardadas no cache do navegador (botão "voltar" após sair).
 
-Não existe tela de cadastro, de propósito: quem cria usuários é quem administra.
+Não existe tela pública de cadastro, de propósito: quem cria usuários e define senhas é o administrador, em
+Cadastros > Funcionários (veja cadastros.pode_gerenciar_acessos). O terminal continua servindo para o primeiro
+usuário e para quem ficar sem nenhum administrador:
 
     flask --app app criar-usuario maria           pede a senha e cria
     flask --app app redefinir-senha maria         pede a senha nova (e desbloqueia)
@@ -69,36 +71,49 @@ def _buscar(nome):
     return db.session.execute(db.select(Usuario).filter_by(nome=nome)).scalar_one_or_none()
 
 
+buscar_usuario = _buscar
+
+
 def validar_senha(senha):
     if len(senha or "") < SENHA_MINIMA:
         return f"A senha precisa ter pelo menos {SENHA_MINIMA} caracteres."
     return None
 
 
-def criar_usuario(nome, senha):
-    """Devolve (usuario, erro)."""
+def validar_nome_de_usuario(nome):
+    """Devolve o erro, se houver (o nome é sempre guardado em minúsculas)."""
     nome = (nome or "").strip().lower()
     if not nome:
-        return None, "Informe o nome do usuário."
+        return "Informe o nome do usuário."
     if len(nome) > 50:
-        return None, "O nome do usuário pode ter até 50 caracteres."
+        return "O nome do usuário pode ter até 50 caracteres."
     if _buscar(nome):
-        return None, f"O usuário {nome} já existe."
+        return f"O usuário {nome} já existe."
+    return None
+
+
+def criar_usuario(nome, senha, confirmar=True):
+    """Devolve (usuario, erro). `confirmar=False` deixa a gravação para quem chamou (cadastro de funcionário:
+    o usuário e o funcionário são gravados juntos, ou nenhum dos dois)."""
+    if erro := validar_nome_de_usuario(nome):
+        return None, erro
     if erro := validar_senha(senha):
         return None, erro
-    usuario = Usuario(nome=nome, senha_hash=generate_password_hash(senha))
+    usuario = Usuario(nome=(nome or "").strip().lower(), senha_hash=generate_password_hash(senha))
     db.session.add(usuario)
-    db.session.commit()
+    if confirmar:
+        db.session.commit()
     return usuario, None
 
 
-def definir_senha(usuario, senha):
+def definir_senha(usuario, senha, confirmar=True):
     """Troca a senha, desbloqueia o usuário e derruba as sessões antigas. Devolve o erro, se houver."""
     if erro := validar_senha(senha):
         return erro
     usuario.senha_hash = generate_password_hash(senha)
     usuario.falhas, usuario.bloqueado_ate, usuario.ativo = 0, None, True
-    db.session.commit()
+    if confirmar:
+        db.session.commit()
     return None
 
 

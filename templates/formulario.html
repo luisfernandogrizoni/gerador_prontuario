@@ -1,10 +1,12 @@
 {% extends "base.html" %}
 {% import "_campos.html" as f with context %}
+{% from "_voltar.html" import linha_voltar with context %}
 
 {% block titulo %}{{ 'Editar prontuário' if editando else 'Novo prontuário' }}{% endblock %}
 
 {% block conteudo %}
 <main>
+  {{ linha_voltar(url_for('ficha', id=editando.id) if editando else url_for('lista_internos')) }}
   <h1>{{ 'Editar prontuário' if editando else 'Novo prontuário' }}</h1>
 
   <form method="post" action="{{ url_for('gerar') }}">

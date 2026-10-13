@@ -7,6 +7,7 @@ que roda uma vez só (confere se a coluna já existe antes de mexer).
 """
 
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import IntegrityError
 
 
 def _colunas(db, tabela):
@@ -33,3 +34,31 @@ def migrar(db):
         db.session.execute(text("ALTER TABLE internacoes ADD COLUMN envelope VARCHAR(10) NOT NULL DEFAULT ''"))
         db.session.execute(text("ALTER TABLE internacoes ADD COLUMN envelope_recebido_em DATE"))
         db.session.commit()
+
+    # 3) cadastros: na primeira subida trazem os convênios e o funcionário com que o sistema sempre trabalhou
+    semear(db)
+
+
+def semear(db):
+    """Cria os convênios, os níveis de acesso e o funcionário de fábrica se os cadastros estão vazios.
+    Pode rodar quantas vezes quiser."""
+    from catalogo import CONVENIOS_DE_FABRICA, NIVEIS_DE_FABRICA
+    from documentos import EMISSOR_CARGO, EMISSOR_NOME
+    from modelos import Convenio, Funcionario, NivelAcesso
+
+    try:
+        if not db.session.execute(db.select(db.func.count(Convenio.id))).scalar():
+            for ordem, (nome, tela, slug, gratuito, vagas, cor) in enumerate(CONVENIOS_DE_FABRICA, 1):
+                db.session.add(Convenio(nome=nome, nome_tela=tela, slug=slug, gratuito=gratuito, vagas=vagas, cor=cor,
+                                        ativo=True, ordem=ordem))
+        if not db.session.execute(db.select(db.func.count(NivelAcesso.id))).scalar():
+            for ordem, nome in enumerate(NIVEIS_DE_FABRICA, 1):
+                db.session.add(NivelAcesso(nome=nome, ordem=ordem, ativo=True))
+            db.session.flush()
+        if not db.session.execute(db.select(db.func.count(Funcionario.id))).scalar():
+            topo = db.session.execute(db.select(NivelAcesso).order_by(NivelAcesso.ordem, NivelAcesso.id)).scalars().first()
+            db.session.add(Funcionario(nome=EMISSOR_NOME, cargo=EMISSOR_CARGO, ativo=True, padrao=True,
+                                       nivel_id=topo.id if topo else None))
+        db.session.commit()
+    except IntegrityError:          # outro processo do servidor semeou ao mesmo tempo
+        db.session.rollback()

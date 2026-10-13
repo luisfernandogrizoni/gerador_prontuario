@@ -54,7 +54,15 @@
     .topo .usuario button { font: inherit; font-size: .88rem; font-weight: 600; background: none; border: 0; padding: 6px 8px;
                             border-radius: 8px; color: var(--suave); cursor: pointer; }
     .topo .usuario button:hover { background: #f2f4f7; color: var(--vermelho); }
-    @media (max-width: 1120px) { .topo .item.novo { display: none; } }          /* os mesmos botões existem nas páginas */
+    .topo .menu { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+    /* até ~1180 px o cabeçalho não cabe numa linha só: marca e usuário em cima, o menu (com os atalhos "+ Triagem" e
+       "+ Prontuário", que só existem aqui) embaixo, com os dois atalhos à direita */
+    @media (max-width: 1180px) {
+      .marca { order: 0; flex: 1 1 auto; }
+      .topo .usuario { order: 1; margin-left: auto; }
+      .topo .menu { order: 2; flex: 1 1 100%; padding-bottom: 8px; }
+      .topo .item:not(.novo) + .item.novo { margin-left: auto; }
+    }
     @media (max-width: 900px) { .topo .usuario .nome { display: none; } }
     @media (max-width: 760px) { .marca small { display: none; } }
     @media (max-width: 400px) { .topo .item { padding: 7px 6px; font-size: .82rem; } .topo .usuario .inicial { display: none; } }
@@ -113,6 +121,13 @@
     .chip.social-2, .tipo-social-2 { background: #d3dce7; color: #2b3a4b; --cor: #d3dce7; }
     .chip.particular, .tipo-particular { background: #cfe8fb; color: #14659f; --cor: #7cc0ef; }
     .chip.outro, .tipo-outro { background: #f2f4f7; color: #475467; --cor: #cfd4dc; }
+    /* cores extras para os convênios cadastrados (catalogo.CORES); texto com contraste de pelo menos 6:1 */
+    .chip.verde, .tipo-verde { background: #d4efdc; color: #17592c; --cor: #4caf6a; }
+    .chip.roxo, .tipo-roxo { background: #e6defa; color: #4a2a96; --cor: #8a63e0; }
+    .chip.rosa, .tipo-rosa { background: #fbdcea; color: #9a1457; --cor: #e45a9a; }
+    .chip.turquesa, .tipo-turquesa { background: #cdeff2; color: #0a5a66; --cor: #2aa6b8; }
+    .chip.amarelo, .tipo-amarelo { background: #fdf0bd; color: #6b5000; --cor: #e0b000; }
+    .chip.marrom, .tipo-marrom { background: #ecdccf; color: #693b1c; --cor: #a8714a; }
 
     /* ---- listas (internos e triagens) ---- */
     /* ---- cabeçalho e ferramentas das listas (internos, triagens) ---- */
@@ -121,12 +136,16 @@
     .pagina-topo p { margin: 0; }
     .ferramentas { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
     .segmentado { display: inline-flex; gap: 2px; padding: 4px; background: #eceff3; border-radius: 12px; }
-    .segmentado button { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: .88rem; font-weight: 600; padding: 7px 14px;
+    .segmentado button, .segmentado a { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: .88rem; font-weight: 600; padding: 7px 14px;
                          border: 0; border-radius: 9px; background: transparent; color: var(--suave); cursor: pointer; transition: background .12s, color .12s; }
-    .segmentado button:hover { color: var(--texto); }
-    .segmentado button.ativo { background: #fff; color: var(--texto); box-shadow: 0 1px 3px rgba(16,24,40,.14); }
+    .segmentado button:hover, .segmentado a:hover { color: var(--texto); }
+    .segmentado button.ativo, .segmentado a.ativo { background: #fff; color: var(--texto); box-shadow: 0 1px 3px rgba(16,24,40,.14); }
+    .segmentado a { text-decoration: none; }
+    /* caixa de marcar (ativo, assina por padrão...) */
+    label.caixa { flex-direction: row; align-items: center; gap: 9px; font-size: .92rem; cursor: pointer; }
+    label.caixa input { width: auto; margin: 0; accent-color: var(--vermelho); }
     .segmentado .n { font-size: .74rem; padding: 1px 8px; border-radius: 999px; background: rgba(16,24,40,.08); font-variant-numeric: tabular-nums; }
-    .segmentado button.ativo .n { background: var(--vermelho-claro); color: var(--vermelho); }
+    .segmentado button.ativo .n, .segmentado a.ativo .n { background: var(--vermelho-claro); color: var(--vermelho); }
     .busca { position: relative; flex: 1 1 300px; max-width: 440px; }
     .busca .icone { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--mais-suave); pointer-events: none; }
     .busca #busca { width: 100%; padding: 10px 14px 10px 40px; border-radius: 11px; background: #fff; box-shadow: var(--sombra); }
@@ -184,16 +203,23 @@
     .botoes-form { display: flex; gap: 10px; flex-wrap: wrap; }
     .segmentado { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
     .segmentado::-webkit-scrollbar { display: none; }
-    .segmentado button { white-space: nowrap; flex: none; }
+    .segmentado button, .segmentado a { white-space: nowrap; flex: none; }
     .cabecalho-impressao { display: none; }
+    .voltar { display: inline-flex; align-items: center; gap: 6px; color: var(--suave); font-weight: 600; font-size: .9rem; text-decoration: none;
+              padding: 4px 8px 4px 0; border-radius: 8px; }
+    .voltar:hover { color: var(--vermelho); }
+    .voltar:focus-visible { outline: 3px solid rgba(179,38,30,.3); outline-offset: 2px; }
+    .voltar .icone { transform: rotate(180deg); }
+    .voltar-linha { margin: 0 0 10px; }
 
     /* ============================ celular e tablet pequeno ============================ */
     @media (max-width: 760px) {
       main { margin: 18px auto; padding: 0 14px; }
       h1 { font-size: 1.35rem; }
-      .topo nav { padding: 0 10px 8px; }
-      .marca { flex: 1 1 100%; padding: 10px 4px 6px; }
+      .topo nav { padding: 0 10px; }
+      .marca { padding: 10px 4px 6px; }
       .topo .item { padding: 7px 8px; font-size: .86rem; }
+      .topo .item.novo { flex: 1 1 auto; justify-content: center; margin-left: 0 !important; padding: 7px 8px; }
       .topo .usuario { margin-left: auto; padding-left: 0; border-left: 0; gap: 4px; }
       .topo .usuario button { padding: 6px 4px; }
       .topo .usuario .nome { display: none; }
@@ -240,7 +266,7 @@
       body { color: #000; font-size: 10pt; }
       * { box-shadow: none !important; animation: none !important; transition: none !important;
           -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .topo, .botao, dialog, .mensagens, .aviso, .busca, .busca-paciente, .botoes-form, .acoes, .acoes-aviso, .faixa-alerta,
+      .topo, .voltar-linha, .botao, dialog, .mensagens, .aviso, .busca, .busca-paciente, .botoes-form, .acoes, .acoes-aviso, .faixa-alerta,
       .atalhos-bloco, .agenda-rodape, .seta, .grupo-avisos summary .icone { display: none !important; }
       .cabecalho-impressao { display: flex; justify-content: space-between; gap: 12px; margin: 0 0 12px; padding-bottom: 5px;
                              border-bottom: 1px solid #888; font-size: 8.5pt; color: #444; }
@@ -313,12 +339,15 @@
         <span><strong>Casa de Acolhida Restauração</strong><small>SISTEMA DE PRONTUÁRIOS</small></span>
       </a>
       {% if usuario_atual %}
+      <div class="menu">
       <a class="item {{ 'atual' if request.path == '/' }}" href="{{ url_for('home') }}">Início</a>
       <a class="item {{ 'atual' if request.path.startswith('/triagens') }}" href="{{ url_for('lista_triagens') }}">Triagens</a>
       <a class="item {{ 'atual' if request.path.startswith('/internos') }}" href="{{ url_for('lista_internos') }}">Internos</a>
       <a class="item {{ 'atual' if request.path.startswith('/relatorios') }}" href="{{ url_for('pagina_relatorios') }}">Relatórios</a>
+      <a class="item {{ 'atual' if request.path.startswith('/cadastros') }}" href="{{ url_for('cadastros') }}">Cadastros</a>
       <a class="item novo" href="{{ url_for('nova_triagem') }}"><svg class="icone"><use href="#i-mais"/></svg>Triagem</a>
       <a class="item novo" href="{{ url_for('formulario') }}"><svg class="icone"><use href="#i-mais"/></svg>Prontuário</a>
+      </div>
       <span class="usuario">
         <a class="eu" href="{{ url_for('alterar_senha') }}" title="Alterar minha senha">
           <span class="inicial">{{ usuario_atual.nome[:1] }}</span><span class="nome">{{ usuario_atual.nome }}</span></a>
@@ -335,6 +364,19 @@
   </div>
   {% endif %}
   {% block conteudo %}{% endblock %}
+  <script>
+    // "Voltar" volta uma página no histórico (a lista continua como estava); sem histórico, segue o endereço do botão.
+    // Os botões marcados com data-substituir (colunas e quem assina nos relatórios) trocam a página em vez de empilhar histórico.
+    document.addEventListener("click", function (e) {
+      var a = e.target.closest ? e.target.closest("a.voltar, a[data-substituir]") : null;
+      if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      if (a.hasAttribute("data-substituir")) { e.preventDefault(); location.replace(a.href); return; }
+      if (a.hasAttribute("data-direto")) return;
+      try {
+        if (history.length > 1 && document.referrer && new URL(document.referrer).origin === location.origin) { e.preventDefault(); history.back(); }
+      } catch (erro) { /* sem referência: segue o endereço */ }
+    });
+  </script>
   <script>
     // na impressão: abre os grupos recolhidos (senão o conteúdo some do papel) e carimba quando e quem imprimiu
     (function () {

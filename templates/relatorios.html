@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_acoes_documento.html" import acoes_documento %}
+{% from "_voltar.html" import linha_voltar with context %}
 
 {% block titulo %}Relatórios{% endblock %}
 
@@ -46,6 +47,7 @@
 
 {% block conteudo %}
 <main class="largo">
+  {{ linha_voltar(url_for('home')) }}
   <div class="pagina-topo">
     <div class="titulo">
       <h1>Relatórios</h1>

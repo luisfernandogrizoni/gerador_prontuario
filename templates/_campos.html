@@ -33,8 +33,7 @@
     <div class="caixa-erros"><strong>Confira os campos marcados em vermelho.</strong></div>
   {% endif %}
   {% if editando %}
-    <p class="ajuda">Editando o registro nº {{ editando.id }} de <strong>{{ pessoa.nome }}</strong>.
-       <a href="{{ url_for('ficha', id=editando.id) }}">Voltar para a ficha</a></p>
+    <p class="ajuda">Editando o registro nº {{ editando.id }} de <strong>{{ pessoa.nome }}</strong>.</p>
   {% elif pessoa %}
     <div class="paciente-escolhido">
       Paciente já cadastrado: <strong>{{ pessoa.nome }}</strong> (cadastro nº {{ pessoa.id }}).

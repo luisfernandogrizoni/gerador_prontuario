@@ -50,12 +50,18 @@ registros (`logs`) ficam com acesso só do SISTEMA, dos administradores e de que
    "IP fixo") para este computador.
 2. **Windows Update.** Configurações > Windows Update > Opções avançadas > *Horário ativo*: marque o horário do
    expediente, para o computador não reiniciar no meio do dia. Reiniciar de madrugada é seguro: o sistema volta sozinho.
-3. **Usuários.** Cada pessoa tem o seu, com senha própria de no mínimo 10 caracteres (o comando pede a senha):
+3. **Usuários.** Cada pessoa tem o seu, com senha própria de no mínimo 10 caracteres. Só o primeiro usuário (o seu) é
+   criado pelo terminal; o resto é feito dentro do sistema:
 
    ```powershell
    cd C:\prontuario
-   .\.venv\Scripts\python.exe -m flask --app app criar-usuario maria
+   .\.venv\Scripts\python.exe -m flask --app app criar-usuario luis
    ```
+
+   Entre com ele, abra *Cadastros > Funcionários*, edite o seu cadastro e, em *Acesso ao sistema*, escolha o seu usuário
+   em *Usuário de login* (o seu cadastro é o do nível Administrador). Daí em diante só o administrador cria usuários:
+   em *Novo funcionário* (ou editando a pessoa), preencha *Criar um usuário novo* e a senha. Cada pessoa troca a própria
+   senha depois, em *Alterar senha*.
 4. **Testar** a partir de outro computador: abra o endereço que o instalador mostrou e entre. Salve como favorito.
 5. **Aposente o banco antigo.** Depois de conferir que os dados estão no servidor, renomeie o `instance\internos.db` do
    projeto de desenvolvimento (por exemplo para `internos_ANTIGO_nao_usar.db`). Dois bancos em uso ao mesmo tempo
@@ -99,7 +105,7 @@ O banco se atualiza sozinho na subida. Se algo falhar, o sistema volta a ligar n
 | Sintoma | O que ver |
 | --- | --- |
 | Outro computador não abre a página | O servidor está ligado? O IP mudou (`ipconfig`)? Ambos na mesma rede/roteador? Tente pelo IP, não pelo nome. |
-| A página abre, mas alguém não consegue entrar | 5 senhas erradas seguidas bloqueiam o usuário por 10 minutos. Para dar uma senha nova e desbloquear: `.\.venv\Scripts\python.exe -m flask --app app redefinir-senha maria`. |
+| A página abre, mas alguém não consegue entrar | 5 senhas erradas seguidas bloqueiam o usuário por 10 minutos. Para dar uma senha nova e desbloquear, o administrador preenche *Nova senha* no cadastro da pessoa (*Cadastros > Funcionários*). Se não houver nenhum administrador que consiga entrar: `.\.venv\Scripts\python.exe -m flask --app app redefinir-senha maria`. |
 | O sistema parou | `C:\prontuario\logs\servidor.log` mostra o erro. No Agendador de Tarefas, a tarefa *Prontuario - servidor* mostra o último resultado. |
 | Aviso de backup na página inicial | `C:\prontuario\logs\backup.log`; o HD externo está ligado? |
 | Quer ligar à mão, para ver o erro na tela | `cd C:\prontuario` e `.\.venv\Scripts\python.exe servidor.py` (pare a tarefa antes, para não dividir a porta). |

@@ -1,0 +1,10 @@
+{# Abas da área de Cadastros. `atual` = 'convenios', 'funcionarios' ou 'niveis'. #}
+{% macro abas(atual) -%}
+<div class="ferramentas">
+  <div class="segmentado" role="group" aria-label="Cadastros">
+    <a href="{{ url_for('lista_convenios') }}" class="{{ 'ativo' if atual == 'convenios' }}">Convênios</a>
+    <a href="{{ url_for('lista_funcionarios') }}" class="{{ 'ativo' if atual == 'funcionarios' }}">Funcionários</a>
+    <a href="{{ url_for('lista_niveis') }}" class="{{ 'ativo' if atual == 'niveis' }}">Níveis de acesso</a>
+  </div>
+</div>
+{%- endmacro %}

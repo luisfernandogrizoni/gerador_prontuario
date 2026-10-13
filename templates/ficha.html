@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_acoes_documento.html" import acoes_documento %}
+{% from "_voltar.html" import linha_voltar with context %}
 {% set p = i.pessoa %}
 
 {% block titulo %}{{ p.nome }}{% endblock %}
@@ -49,6 +50,7 @@
 
 {% block conteudo %}
 <main>
+  {{ linha_voltar(url_for('lista_triagens') if i.e_triagem else url_for('lista_internos')) }}
   {% with msgs = get_flashed_messages() %}
     {% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
   {% endwith %}

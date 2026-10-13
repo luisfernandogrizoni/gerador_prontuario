@@ -203,6 +203,11 @@ class Documento:
     def largura_util(self):
         return LARGURA_PAGINA - 2 * self.margem_lateral
 
+    @property
+    def tem_tabela_larga(self):
+        """Tabela com 4 colunas ou mais: no celular a folha rola de lado em vez de espremer as colunas."""
+        return any(getattr(bloco, "tipo", "") == "tabela" and len(bloco.colunas) >= 4 for bloco in self.blocos)
+
     def paginas(self):
         """Os blocos separados em páginas: uma nova a cada bloco com quebra_antes."""
         paginas = []
@@ -223,9 +228,19 @@ def data_por_extenso(d):
     return f"{d.day:02d} de {meses[d.month - 1]} de {d.year}"
 
 
-def fecho(hoje):
-    """'Assis, 09 de outubro de 2026.' alinhado à direita, seguido da assinatura de quem emite."""
-    return [Paragrafo([f"{CIDADE}, {data_por_extenso(hoje)}."], "direita", antes=26, unido_ao_proximo=True), Assinatura()]
+@dataclass(frozen=True)
+class Emissor:
+    """Quem assina como responsável pela emissão (vem do cadastro de funcionários)."""
+    nome: str = EMISSOR_NOME
+    cargo: str = EMISSOR_CARGO
+
+
+def fecho(hoje, emissor=None):
+    """'Assis, 09 de outubro de 2026.' alinhado à direita, seguido da assinatura de quem emite
+    (`emissor`; sem ele, o de fábrica)."""
+    emissor = emissor or Emissor()
+    return [Paragrafo([f"{CIDADE}, {data_por_extenso(hoje)}."], "direita", antes=26, unido_ao_proximo=True),
+            Assinatura(nome=emissor.nome, cargo=emissor.cargo)]
 
 
 # ============================================================ gerador do Word

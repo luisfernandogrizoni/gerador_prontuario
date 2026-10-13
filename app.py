@@ -12,6 +12,14 @@ Telas:
     /internacoes/<id>               ficha: dados, parcelas, outras internações, ações
     /internacoes/<id>/editar        abre o formulário certo (triagem ou prontuário) já preenchido
     /internacoes/<id>/envelope      marca se o prontuário em papel de quem recebeu baixa já voltou ao escritório
+    /relatorios                     relatórios (internos ativos por convênio; passaram pela casa no ano, com colunas
+                                    opcionais por convênio e quem assina escolhido na própria tela)
+    /cadastros/convenios            cadastro de convênios (nome, vagas, cor): um convênio novo aparece sozinho em
+                                    formulários, vagas e relatórios
+    /cadastros/funcionarios         cadastro de funcionários: quem assina como responsável pela emissão dos documentos;
+                                    o administrador também cria o usuário e a senha de cada um e escolhe o nível de acesso
+    /cadastros/niveis               níveis de acesso, em cascata (do que tem mais acesso para o que tem menos); o
+                                    primeiro é o do administrador, e só ele altera os níveis
     /internacoes/<id>/prontuario    baixa o .docx
 
 Organização:
@@ -20,6 +28,8 @@ Organização:
     modelos.py     tabelas (pessoas, internacoes, parcelas)
     servicos.py    regras de negócio: validar, gravar, mudar status, parcelas
     avisos.py      quadro de avisos
+    catalogo.py    o que o sistema sabe de cada convênio (lido do cadastro, uma vez por requisição)
+    cadastros.py   cadastros de convênios e de funcionários
     vagas.py       ocupação das vagas por categoria
     painel.py      números e agenda dos próximos dias da página inicial
     autenticacao.py  login: usuários, senhas, sessão e proteção das rotas
@@ -30,8 +40,8 @@ Organização:
 
 ATENÇÃO: o banco guarda dados pessoais sensíveis e NUNCA vai para o git (instance/ está
 no .gitignore; na hospedagem o banco é externo, via DATABASE_URL — veja banco.py).
-Toda tela e todo dado exigem login (veja autenticacao.py para criar usuários e para
-as variáveis de ambiente da hospedagem). Em produção use HTTPS e um servidor de
+Toda tela e todo dado exigem login (o administrador cria os usuários em Cadastros > Funcionários;
+veja autenticacao.py para o primeiro usuário e para as variáveis de ambiente da hospedagem). Em produção use HTTPS e um servidor de
 verdade (gunicorn app:app) — `python app.py` é só para uso local.
 """
 
@@ -43,16 +53,18 @@ from flask import (Flask, abort, flash, g, jsonify, redirect, render_template, r
 
 import autenticacao
 import banco
+import cadastros as cadastros_
+import catalogo
 import declaracoes
 import documentos
 import painel
 import relatorios
 import servicos
 from avisos import dias_de_espera, gerar_avisos, tempo_decorrido
-from modelos import (ENVELOPE_RECEBIDO, STATUS_INTERNACAO, STATUS_TRIAGEM, AvisoDispensado, Internacao,
-                     Parcela, Pessoa, db)
+from modelos import (ENVELOPE_RECEBIDO, STATUS_INTERNACAO, STATUS_TRIAGEM, AvisoDispensado, Convenio, Funcionario,
+                     Internacao, NivelAcesso, Parcela, Pessoa, db)
 from migracoes import migrar
-from prontuario import fmt_data, fmt_reais, gerar_docx, montar_documento
+from prontuario import faixas_do_particular, fmt_data, fmt_reais, gerar_docx, montar_documento
 from validacao import fmt_cep, fmt_cpf, fmt_hora, fmt_rg
 from vagas import gerar_vagas, totais
 
@@ -196,7 +208,7 @@ def salvar_triagem():
     if erros:
         pessoa = db.session.get(Pessoa, request.form.get("pessoa_id", type=int) or 0)
         return render_template("triagem_form.html", d=request.form, erros=erros, pessoa=pessoa,
-                               **servicos.opcoes_formulario()), 400
+                               **servicos.opcoes_formulario(request.form.get("convenio", ""))), 400
     return redirect(url_for("lista_triagens", novo=internacao.id))
 
 
@@ -267,7 +279,7 @@ def gerar():
     if erros:
         pessoa = db.session.get(Pessoa, request.form.get("pessoa_id", type=int) or 0)
         return render_template("formulario.html", d=request.form, erros=erros, pessoa=pessoa,
-                               anterior=None, **servicos.opcoes_formulario()), 400
+                               anterior=None, **servicos.opcoes_formulario(request.form.get("convenio", ""))), 400
     # Post/Redirect/Get: a lista destaca a linha e, se foi "Salvar e baixar", baixa o .docx
     baixar = 1 if request.form.get("acao") == "baixar" else None
     return redirect(url_for("lista_internos", novo=internacao.id, baixar=baixar))
@@ -290,7 +302,7 @@ def editar_internacao(id):
                                             "status": internacao.status}
     modelo = "triagem_form.html" if internacao.e_triagem else "formulario.html"
     return render_template(modelo, d=dados, erros={}, pessoa=internacao.pessoa, anterior=None,
-                           editando=internacao, **servicos.opcoes_formulario())
+                           editando=internacao, **servicos.opcoes_formulario(internacao.convenio))
 
 
 @app.get("/internacoes/<int:id>/prontuario")
@@ -319,21 +331,42 @@ def excluir_parcela(id):
 # ============================================================== documentos
 # Cada documento tem três saídas: ver no navegador (com botão de imprimir), imprimir direto (?imprimir=1)
 # e baixar o .docx. Todos nascem do mesmo motor (documentos.py), com o mesmo timbre.
-def _mostrar(doc, docx, voltar, avisos=()):
+def _emissor():
+    """Quem assina o documento: ?emissor=<id> na página, senão o funcionário do usuário logado, senão o padrão.
+    Devolve (Emissor, id do funcionário)."""
+    return cadastros_.emissor_para(g.get("usuario"), request.args.get("emissor", type=int))
+
+
+def _escolha_de_emissor():
+    """O ?emissor= que a pessoa escolheu na tela (None se não escolheu): é o que os botões e o download repetem."""
+    return request.args.get("emissor", type=int)
+
+
+def _barra(emissor_id, colunas=()):
+    """Opções que aparecem acima do documento (só na tela): quem assina, se houver mais de um funcionário ativo,
+    e os botões de colunas do relatório anual. `colunas` = [(convênio, ativa, endereço de quem clicar), ...]."""
+    ativos = [f for f in cadastros_.funcionarios() if f.ativo]
+    return {"emissor_id": emissor_id,
+            "emissores": [(f.id, f"{f.nome} — {f.cargo}") for f in ativos] if len(ativos) > 1 else [],
+            "colunas": [{"nome": c.nome_tela, "tipo": c.cor, "ativa": ativa, "url": url} for c, ativa, url in colunas],
+            "manter": {k: v for k, v in request.args.items() if k == "colunas"}}
+
+
+def _mostrar(doc, docx, voltar, avisos=(), barra=None):
     doc.voltar = voltar
     return render_template("documento.html", doc=doc, docx=docx, avisos=avisos, cabecalho=documentos.CABECALHO,
-                           rodape=documentos.RODAPE)
+                           rodape=documentos.RODAPE, barra=barra or {})
 
 
 def _baixar(doc):
     return send_file(documentos.para_docx(doc), as_attachment=True, download_name=doc.nome_arquivo + ".docx")
 
 
-def _declaracao(id):
+def _declaracao(id, emissor):
     internacao = _buscar(Internacao, id)
     if declaracoes.tipo_da_declaracao(internacao) is None:      # triagem ainda não é interno: não há o que declarar
         abort(404)
-    return declaracoes.documento(internacao, relatorios.hoje_no_brasil())
+    return declaracoes.documento(internacao, relatorios.hoje_no_brasil(), emissor)
 
 
 @app.get("/internacoes/<int:id>/prontuario/visualizar")
@@ -344,12 +377,14 @@ def ver_prontuario(id):
 
 @app.get("/internacoes/<int:id>/declaracao")
 def ver_declaracao(id):
-    return _mostrar(_declaracao(id), url_for("baixar_declaracao", id=id), url_for("ficha", id=id))
+    emissor, emissor_id = _emissor()
+    return _mostrar(_declaracao(id, emissor), url_for("baixar_declaracao", id=id, emissor=_escolha_de_emissor()),
+                    url_for("ficha", id=id), barra=_barra(emissor_id))
 
 
 @app.get("/internacoes/<int:id>/declaracao.docx")
 def baixar_declaracao(id):
-    return _baixar(_declaracao(id))
+    return _baixar(_declaracao(id, _emissor()[0]))
 
 
 # ================================================================ relatórios
@@ -361,32 +396,207 @@ def pagina_relatorios():
                            aviso_anual=relatorios.aviso_do_resumo(anual))
 
 
-def _relatorio_do_convenio(slug):
-    if slug not in relatorios.CONVENIOS:
+def _relatorio_do_convenio(slug, emissor):
+    if relatorios.convenio_do_relatorio(slug) is None:
         abort(404)
-    return relatorios.documento_convenio(slug, relatorios.hoje_no_brasil())
+    return relatorios.documento_convenio(slug, relatorios.hoje_no_brasil(), emissor)
 
 
 @app.get("/relatorios/internos-ativos/<slug>")
 def ver_relatorio(slug):
-    return _mostrar(_relatorio_do_convenio(slug), url_for("baixar_relatorio", slug=slug), url_for("pagina_relatorios"))
+    emissor, emissor_id = _emissor()
+    return _mostrar(_relatorio_do_convenio(slug, emissor), url_for("baixar_relatorio", slug=slug, emissor=_escolha_de_emissor()),
+                    url_for("pagina_relatorios"), barra=_barra(emissor_id))
 
 
 @app.get("/relatorios/internos-ativos/<slug>.docx")
 def baixar_relatorio(slug):
-    return _baixar(_relatorio_do_convenio(slug))
+    return _baixar(_relatorio_do_convenio(slug, _emissor()[0]))
+
+
+def _colunas_do_relatorio_anual(hoje):
+    """Os convênios pedidos em ?colunas=caps-ad,taruma (só os que existem, na ordem do cadastro) e todos os que
+    podem ser pedidos. Um convênio novo cadastrado aparece aqui sozinho."""
+    disponiveis = relatorios.colunas_disponiveis(hoje)
+    pedidos = set(request.args.get("colunas", "").split(","))
+    return [c for c in disponiveis if c.slug in pedidos], disponiveis
 
 
 @app.get("/relatorios/passaram-pela-casa")
 def ver_relatorio_anual():
     hoje = relatorios.hoje_no_brasil()
-    return _mostrar(relatorios.documento_anual(hoje), url_for("baixar_relatorio_anual"), url_for("pagina_relatorios"),
+    emissor, emissor_id = _emissor()
+    escolhidas, disponiveis = _colunas_do_relatorio_anual(hoje)
+    ativas = {c.slug for c in escolhidas}
+
+    def endereco(slugs, endpoint="ver_relatorio_anual"):
+        # a ordem das colunas é sempre a do cadastro, qualquer que seja a ordem dos cliques
+        ordenados = [c.slug for c in disponiveis if c.slug in slugs]
+        return url_for(endpoint, colunas=",".join(ordenados) or None, emissor=_escolha_de_emissor())
+
+    botoes = [(c, c.slug in ativas, endereco(ativas - {c.slug} if c.slug in ativas else ativas | {c.slug}))
+              for c in disponiveis]
+    return _mostrar(relatorios.documento_anual(hoje, escolhidas, emissor), endereco(ativas, "baixar_relatorio_anual"),
+                    url_for("pagina_relatorios"), barra=_barra(emissor_id, botoes),
                     avisos=[t for t in (relatorios.aviso_do_resumo(relatorios.resumo_anual(hoje)),) if t])
 
 
 @app.get("/relatorios/passaram-pela-casa.docx")
 def baixar_relatorio_anual():
-    return _baixar(relatorios.documento_anual(relatorios.hoje_no_brasil()))
+    hoje = relatorios.hoje_no_brasil()
+    return _baixar(relatorios.documento_anual(hoje, _colunas_do_relatorio_anual(hoje)[0], _emissor()[0]))
+
+
+# ================================================================= cadastros
+@app.get("/cadastros")
+def cadastros():
+    return redirect(url_for("lista_convenios"))
+
+
+@app.get("/cadastros/convenios")
+def lista_convenios():
+    ativos = {nome: n for nome, n in db.session.execute(
+        db.select(Internacao.convenio, db.func.count()).filter(Internacao.status == "ativo").group_by(Internacao.convenio))}
+    por_categoria = {v["categoria"]: v for v in gerar_vagas()}      # vagas e internos ativos de cada faixa do Particular
+    faixas = [{"categoria": categoria, "valor": valor, **{k: por_categoria[categoria][k] for k in ("tipo", "limite", "ocupadas")}}
+              for categoria, valor in faixas_do_particular()]
+    return render_template("cadastro_convenios.html", convenios=cadastros_.convenios(), internos_ativos=ativos, faixas=faixas)
+
+
+def _convenio_editavel(id):
+    convenio = _buscar(Convenio, id)
+    if not convenio.gratuito:       # o Particular é definido pelo valor da contribuição: não tem o que editar
+        abort(404)
+    return convenio
+
+
+@app.route("/cadastros/convenios/novo", methods=["GET", "POST"])
+def novo_convenio():
+    if request.method == "POST":
+        convenio, erros = cadastros_.salvar_convenio(request.form)
+        if not erros:
+            flash(f"Convênio {convenio.nome_tela} cadastrado. Ele já aparece nos formulários, nas vagas e nos relatórios.")
+            return redirect(url_for("lista_convenios"))
+        return render_template("cadastro_convenio_form.html", d=request.form, erros=erros, convenio=None,
+                               cores=catalogo.CORES), 400
+    return render_template("cadastro_convenio_form.html", d={"cor": cadastros_.cor_automatica(), "vagas": ""},
+                           erros={}, convenio=None, cores=catalogo.CORES)
+
+
+@app.route("/cadastros/convenios/<int:id>/editar", methods=["GET", "POST"])
+def editar_convenio(id):
+    convenio = _convenio_editavel(id)
+    if request.method == "POST":
+        _, erros = cadastros_.salvar_convenio(request.form, convenio)
+        if not erros:
+            flash(f"Convênio {convenio.nome_tela} atualizado.")
+            return redirect(url_for("lista_convenios"))
+        return render_template("cadastro_convenio_form.html", d=request.form, erros=erros, convenio=convenio,
+                               cores=catalogo.CORES), 400
+    dados = {"nome_tela": convenio.nome_tela, "vagas": "" if convenio.vagas is None else convenio.vagas,
+             "cor": convenio.cor, "ativo": "1" if convenio.ativo else ""}
+    return render_template("cadastro_convenio_form.html", d=dados, erros={}, convenio=convenio, cores=catalogo.CORES)
+
+
+@app.get("/cadastros/funcionarios")
+def lista_funcionarios():
+    return render_template("cadastro_funcionarios.html", funcionarios=cadastros_.funcionarios())
+
+
+def _tela_funcionario(funcionario, dados, erros, status=200):
+    """Formulário de funcionário. Nunca devolve a senha digitada (um erro em outro campo não a mostra de volta)."""
+    login = funcionario.usuario if funcionario is not None and autenticacao.buscar_usuario(funcionario.usuario) else ""
+    nivel = funcionario.nivel.nome if funcionario is not None and funcionario.nivel else ""
+    if funcionario is None:
+        nivel = next((n for i, n in cadastros_.niveis_para_escolher() if i == cadastros_.nivel_para_novo_funcionario()), "")
+    dados = {k: v for k, v in dados.items() if k not in ("senha", "confirmacao")}
+    return render_template("cadastro_funcionario_form.html", d=dados, erros=erros, funcionario=funcionario,
+                           usuarios=cadastros_.usuarios_para_vincular(funcionario), niveis=cadastros_.niveis_para_escolher(funcionario),
+                           pode_acessos=cadastros_.pode_gerenciar_acessos(g.usuario), login_atual=login, nivel_atual=nivel), status
+
+
+@app.route("/cadastros/funcionarios/novo", methods=["GET", "POST"])
+def novo_funcionario():
+    if request.method == "POST":
+        pode = cadastros_.pode_gerenciar_acessos(g.usuario)
+        funcionario, erros = cadastros_.salvar_funcionario(request.form, por=g.usuario)
+        if not erros:
+            flash(f"{funcionario.nome} cadastrado(a)." + cadastros_.frase_do_acesso(request.form, pode, funcionario.usuario))
+            return redirect(url_for("lista_funcionarios"))
+        return _tela_funcionario(None, request.form, erros, 400)
+    return _tela_funcionario(None, {"ativo": "1", "nivel_id": cadastros_.nivel_para_novo_funcionario()}, {})
+
+
+@app.route("/cadastros/funcionarios/<int:id>/editar", methods=["GET", "POST"])
+def editar_funcionario(id):
+    funcionario = _buscar(Funcionario, id)
+    if request.method == "POST":
+        pode = cadastros_.pode_gerenciar_acessos(g.usuario)
+        _, erros = cadastros_.salvar_funcionario(request.form, funcionario, por=g.usuario)
+        if not erros:
+            if pode and request.form.get("senha") and funcionario.usuario == g.usuario.nome:
+                autenticacao.abrir_sessao(g.usuario)    # trocou a própria senha: a sessão de agora continua valendo
+            flash(f"{funcionario.nome} atualizado(a)." + cadastros_.frase_do_acesso(request.form, pode, funcionario.usuario))
+            return redirect(url_for("lista_funcionarios"))
+        return _tela_funcionario(funcionario, request.form, erros, 400)
+    dados = {"nome": funcionario.nome, "cargo": funcionario.cargo, "usuario": funcionario.usuario,
+             "nivel_id": str(funcionario.nivel_id or ""), "ativo": "1" if funcionario.ativo else "",
+             "padrao": "1" if funcionario.padrao else ""}
+    return _tela_funcionario(funcionario, dados, {})
+
+
+@app.get("/cadastros/niveis")
+def lista_niveis():
+    em_uso = {nivel_id: n for nivel_id, n in db.session.execute(
+        db.select(Funcionario.nivel_id, db.func.count()).filter(Funcionario.ativo.is_(True)).group_by(Funcionario.nivel_id))}
+    return render_template("cadastro_niveis.html", niveis=cadastros_.niveis(), funcionarios_por_nivel=em_uso,
+                           pode_acessos=cadastros_.pode_gerenciar_acessos(g.usuario))
+
+
+def _so_administrador(destino):
+    """None se quem está logado pode mexer nos acessos; senão avisa e devolve o redirecionamento para `destino`."""
+    if cadastros_.pode_gerenciar_acessos(g.usuario):
+        return None
+    flash("Só o administrador pode alterar os níveis de acesso.")
+    return redirect(url_for(destino))
+
+
+@app.route("/cadastros/niveis/novo", methods=["GET", "POST"])
+def novo_nivel():
+    if negado := _so_administrador("lista_niveis"):
+        return negado
+    if request.method == "POST":
+        nivel, erros = cadastros_.salvar_nivel(request.form)
+        if not erros:
+            flash(f"Nível {nivel.nome} cadastrado, no fim da cascata (o de menos acesso).")
+            return redirect(url_for("lista_niveis"))
+        return render_template("cadastro_nivel_form.html", d=request.form, erros=erros, nivel=None), 400
+    return render_template("cadastro_nivel_form.html", d={}, erros={}, nivel=None)
+
+
+@app.route("/cadastros/niveis/<int:id>/editar", methods=["GET", "POST"])
+def editar_nivel(id):
+    nivel = _buscar(NivelAcesso, id)
+    if negado := _so_administrador("lista_niveis"):
+        return negado
+    if request.method == "POST":
+        _, erros = cadastros_.salvar_nivel(request.form, nivel)
+        if not erros:
+            flash(f"Nível {nivel.nome} atualizado.")
+            return redirect(url_for("lista_niveis"))
+        return render_template("cadastro_nivel_form.html", d=request.form, erros=erros, nivel=nivel), 400
+    dados = {"nome": nivel.nome, "descricao": nivel.descricao, "ativo": "1" if nivel.ativo else ""}
+    return render_template("cadastro_nivel_form.html", d=dados, erros={}, nivel=nivel)
+
+
+@app.post("/cadastros/niveis/<int:id>/mover")
+def mover_nivel(id):
+    nivel = _buscar(NivelAcesso, id)
+    if negado := _so_administrador("lista_niveis"):
+        return negado
+    if cadastros_.mover_nivel(nivel, request.form.get("sentido", "")):
+        flash(f"{nivel.nome} {'subiu' if request.form['sentido'] == 'cima' else 'desceu'} na cascata.")
+    return redirect(url_for("lista_niveis"))
 
 
 if __name__ == "__main__":

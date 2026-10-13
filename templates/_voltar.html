@@ -1,0 +1,12 @@
+{#
+  O "Voltar" das telas: leva à página anterior (o histórico do navegador, que ainda traz a lista como estava, com a
+  busca e a rolagem); numa aba nova, sem histórico, vai para `destino`. Depois de um envio com erro (POST) vai direto
+  para `destino`, senão voltaria ao formulário em branco. Importar com:  {% from "_voltar.html" import linha_voltar with context %}
+#}
+{% macro voltar(destino) -%}
+<a class="voltar" href="{{ destino }}"{{ ' data-direto' if request.method == 'POST' }}><svg class="icone"><use href="#i-seta"/></svg>Voltar</a>
+{%- endmacro %}
+
+{% macro linha_voltar(destino) -%}
+<div class="voltar-linha">{{ voltar(destino) }}</div>
+{%- endmacro %}

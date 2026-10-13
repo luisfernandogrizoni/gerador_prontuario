@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% from "_abas_cadastros.html" import abas %}
+{% from "_voltar.html" import linha_voltar with context %}
+
+{% block titulo %}Cadastros · Níveis de acesso{% endblock %}
+
+{% block estilo %}
+  .lista .selo.desativado { background: #f2f4f7; color: #667085; }
+  .posicao { display: inline-grid; place-items: center; width: 26px; height: 26px; margin-right: 10px; border-radius: 50%; flex: none;
+             background: var(--vermelho-claro); color: var(--vermelho); font-size: .8rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .nivel-nome { display: flex; align-items: center; }
+  .nivel-nome small { display: block; color: var(--suave); font-size: .76rem; font-weight: 400; margin-top: 1px; }
+  .acoes-linha { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+  .acoes-linha form { margin: 0; }
+  .acoes-linha .botao[disabled] { opacity: .35; }
+  @media (max-width: 1279px) { .acoes-linha { justify-content: stretch; } .acoes-linha form, .acoes-linha > a { flex: 1 1 0; } .acoes-linha .botao { width: 100%; } }
+{% endblock %}
+
+{% block conteudo %}
+<main class="largo">
+  {{ linha_voltar(url_for('home')) }}
+  <div class="pagina-topo">
+    <div class="titulo">
+      <h1>Cadastros</h1>
+      <p class="ajuda">Do que tem mais acesso (em cima) para o que tem menos. O que cada nível pode fazer ainda será configurado.</p>
+    </div>
+    {% if pode_acessos %}<a class="botao" href="{{ url_for('novo_nivel') }}"><svg class="icone"><use href="#i-mais"/></svg>Novo nível</a>{% endif %}
+  </div>
+
+  {% with msgs = get_flashed_messages() %}
+    {% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
+  {% endwith %}
+
+  {{ abas('niveis') }}
+
+  <div class="moldura">
+    <table class="lista">
+      <thead>
+        <tr>
+          <th>Nível</th>
+          <th>Funcionários ativos</th>
+          <th>Situação</th>
+          <th class="sem-ordem"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for n in niveis %}
+        <tr>
+          <td><span class="nivel-nome"><span class="posicao" title="Posição na cascata">{{ loop.index }}</span><span><strong>{{ n.nome }}</strong>{% if n.descricao %}<small>{{ n.descricao }}</small>{% endif %}</span></span></td>
+          <td class="fixo" data-rotulo="Funcionários ativos">{{ funcionarios_por_nivel.get(n.id, 0) }}</td>
+          <td class="fixo" data-rotulo="Situação"><span class="selo {{ 'ativo' if n.ativo else 'desativado' }}">{{ 'Ativo' if n.ativo else 'Desativado' }}</span></td>
+          <td class="fixo acao">
+            {% if pode_acessos %}
+            <div class="acoes-linha">
+              <form method="post" action="{{ url_for('mover_nivel', id=n.id) }}"><input type="hidden" name="sentido" value="cima">
+                <button class="botao pequeno secundario" title="Dar mais acesso (subir na cascata)" aria-label="Subir {{ n.nome }}"{{ ' disabled' if loop.index <= 2 }}>↑</button></form>
+              <form method="post" action="{{ url_for('mover_nivel', id=n.id) }}"><input type="hidden" name="sentido" value="baixo">
+                <button class="botao pequeno secundario" title="Dar menos acesso (descer na cascata)" aria-label="Descer {{ n.nome }}"{{ ' disabled' if loop.first or loop.last }}>↓</button></form>
+              <a class="botao pequeno secundario" href="{{ url_for('editar_nivel', id=n.id) }}">Editar</a>
+            </div>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</main>
+{% endblock %}
