@@ -106,3 +106,16 @@ def normalizar_nome(t):
     """'  José  da SILVA' -> 'jose da silva' (para comparar e buscar sem acento)."""
     t = unicodedata.normalize("NFD", t or "")
     return " ".join("".join(c for c in t if unicodedata.category(c) != "Mn").lower().split())
+
+
+# ------------------------------------------------------------------ avatar
+PARTICULAS = ("de", "da", "do", "das", "dos", "e")
+
+
+def avatar_da_pessoa(nome):
+    """(iniciais, cor de 0 a 7) da bolinha da pessoa: o mesmo cálculo de static/tabela.js (avatar), para a ficha e as listas
+    mostrarem a mesma bolinha: primeira e última letras do nome (sem de, da, do...) e uma cor sempre igual para o mesmo nome."""
+    palavras = [w for w in (nome or "?").split() if w.lower() not in PARTICULAS] or ["?"]
+    iniciais = (palavras[0][0] + (palavras[-1][0] if len(palavras) > 1 else "")).upper()
+    sem_acento = "".join(c for c in unicodedata.normalize("NFD", nome or "") if unicodedata.category(c) != "Mn").lower()
+    return iniciais, sum(ord(c) for c in sem_acento) % 8

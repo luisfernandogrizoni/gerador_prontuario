@@ -81,8 +81,9 @@ from avisos import dias_de_espera, gerar_avisos, tempo_decorrido
 from modelos import (ENVELOPE_RECEBIDO, STATUS_INTERNACAO, STATUS_TRIAGEM, AvisoDispensado, Convenio, Funcionario,
                      Internacao, NivelAcesso, Parcela, Pessoa, db)
 from migracoes import migrar
-from prontuario import faixas_do_particular, fmt_data, fmt_reais, gerar_docx, montar_documento
-from validacao import fmt_cep, fmt_cpf, fmt_hora, fmt_rg
+from prontuario import (calcular_idade, faixas_do_particular, fmt_data, fmt_reais, gerar_docx, montar_documento,
+                        previsao_termino)
+from validacao import avatar_da_pessoa, fmt_cep, fmt_cpf, fmt_hora, fmt_rg
 from vagas import gerar_vagas, totais
 
 app = Flask(__name__)
@@ -337,9 +338,27 @@ def gerar():
 def ficha(id):
     internacao = _buscar(Internacao, id)
     dias, atrasado = dias_de_espera(internacao)
+    p, hoje = internacao.pessoa, relatorios.hoje_no_brasil()
+    permanencia = ((hoje if internacao.status == "ativo" else internacao.termino) - internacao.inicio).days \
+        if internacao.inicio and (internacao.status == "ativo" or internacao.termino) else None
     return render_template("ficha.html", i=internacao, envelope_atrasado=atrasado,
                            envelope_tempo=tempo_decorrido(dias) if dias is not None else "",
-                           acolhimento=_resumo_do_acolhimento(internacao))
+                           acolhimento=_resumo_do_acolhimento(internacao),
+                           idade=calcular_idade(p.nascimento, hoje),
+                           previsao=previsao_termino(internacao.inicio, internacao.tratamento_ate) if internacao.inicio else None,
+                           permanencia=_duracao(permanencia) if permanencia is not None and permanencia >= 0 else "",
+                           avatar=avatar_da_pessoa(p.nome))
+
+
+def _duracao(dias):
+    """Quanto tempo, em palavras: '12 dias', '8 meses', '1 ano e 3 meses' (o cabeçalho da ficha mostra quanto ficou ou está internado)."""
+    if dias < 60:
+        return f"{dias} dia{'' if dias == 1 else 's'}"
+    meses = round(dias / 30.44)
+    if meses < 24:
+        return f"{meses} meses"
+    anos, resto = divmod(meses, 12)
+    return f"{anos} anos" + (f" e {resto} mese{'s' if resto > 1 else ''}" if resto else "")
 
 
 def _resumo_do_acolhimento(internacao):

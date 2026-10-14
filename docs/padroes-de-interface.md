@@ -1,7 +1,7 @@
 # Padrões de interface
 
 Como o sistema deve parecer e se comportar. Vale para toda tela nova e para o que for mexido em tela antiga. Foi definido
-com o usuário em 2026-10-14; o que está marcado **(fase 2)** ou **(fase 3)** ainda não foi aplicado em todas as telas.
+com o usuário em 2026-10-14; o que está marcado **(fase 3)** ainda não foi aplicado em todas as telas.
 
 ## Ideia central
 
@@ -62,7 +62,8 @@ Um botão **cheio** (primário) por tela, para a ação principal. Os outros sã
 
 ## Avisos
 
-- Confirmação de uma ação (flash): cartão discreto no canto, com botão de fechar, que some sozinho (`.mensagens`).
+- Confirmação de uma ação (flash): cartão discreto no canto inferior direito, com botão de fechar, que some sozinho
+  (`.mensagens`). No canto de baixo para nunca cobrir as ações do topo.
   Já vem pronto: basta `flash("...")`.
 - Pendências e alertas: no quadro de avisos do Início, nunca como faixa no meio da página.
 - Erro de formulário: ao lado do campo (`small.erro`) e a caixa `.caixa-erros` no topo.
@@ -75,10 +76,19 @@ Um botão **cheio** (primário) por tela, para a ação principal. Os outros sã
 - Foco, erro e obrigatório sempre visíveis. Erro ao lado do campo, e a tela volta sem perder o digitado.
 - **(fase 3)** Índice de seções fixo à esquerda e barra de salvar sempre visível; no celular o índice vira uma barra de seções.
 
-## Ficha do paciente **(fase 2)**
+## Telas de leitura (a ficha do paciente é o modelo)
 
-Cabeçalho de identidade (avatar, nome, situação, dados-chave) com as ações principais e um menu **Mais** para as raras
-(Nova internação, Nova triagem, Excluir). Embaixo, cartões em duas colunas com ícone pastel; campos vazios agrupados.
+- **Cabeçalho de identidade**: faixa pastel na cor da situação (`tom-*`), com avatar (o mesmo das listas: `avatar_da_pessoa`),
+  nome, selo, o que se **deduz** (há quanto tempo, previsão, idade, categoria) e as ações: **uma** primária, as de uso comum em
+  pastel e as raras num menu **Mais** (`details.mais`/`.menu-mais`; destrutiva por último, em `.item-perigo`).
+- **Cartões** de seção com ícone pastel: `{% call cartao('Título', 'icone', 'tom') %}` (`templates/_cartao.html`).
+  Duas colunas em telas largas (`.ficha-grade`): o principal à esquerda e, à direita, o que se consulta toda hora; no celular a
+  coluna lateral vem primeiro. Tela de leitura com duas colunas usa `main.largo`, para ficar alinhada às listas.
+- **Sem redundância**: um dado aparece num lugar só. O cabeçalho mostra só o que se deduz; as datas ficam no cartão. A idade
+  está no cabeçalho, não no cadastro.
+- **Vazio não ocupa lugar**: `dados([(rótulo, valor), ...])` mostra só o que tem valor e junta o resto numa linha,
+  "Não informado: ...".
+- Impressão: botões e menus saem, uma coluna só, cartões sem cortar.
 
 ## Antes de entregar uma tela
 
