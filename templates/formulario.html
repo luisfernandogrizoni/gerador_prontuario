@@ -1,22 +1,24 @@
 {% extends "base.html" %}
 {% import "_campos.html" as f with context %}
 {% from "_voltar.html" import linha_voltar with context %}
+{% from "_cartao.html" import legenda %}
 
 {% block titulo %}{{ 'Editar prontuário' if editando else 'Novo prontuário' }}{% endblock %}
 
 {% block conteudo %}
-<main>
+<main class="largo">
   {{ linha_voltar(url_for('ficha', id=editando.id) if editando else url_for('lista_internos')) }}
   <h1>{{ 'Editar prontuário' if editando else 'Novo prontuário' }}</h1>
 
-  <form method="post" action="{{ url_for('gerar') }}">
+  <div class="form-grade">
+  <form method="post" action="{{ url_for('gerar') }}" data-indice>
     {{ f.topo(url_for('formulario')) }}
     {{ f.identificacao() }}
     {{ f.endereco() }}
     {{ f.responsavel(anterior) }}
 
-    <fieldset>
-      <legend>Internação</legend>
+    <fieldset class="tom-rosa">
+      {{ legenda('Internação', 'casa') }}
       <div class="grade">
         {{ f.entrada('inicio', 'Internado em (data efetiva)', 'c2', 'date', obrig=true) }}
         {{ f.entrada('hora_internacao', 'Horário', 'c1', 'time') }}
@@ -30,7 +32,7 @@
     {{ f.convenio() }}
 
     <fieldset>
-      <legend>Documentos entregues</legend>
+      {{ legenda('Documentos entregues', 'documento') }}
       <div class="grade">
         {% for chave, rotulo in documentos.items() %}
           {{ f.escolha('doc_' ~ chave, rotulo, ['Sim', 'Não'] + (['Original', 'Cópia'] if 'Cópia' in rotulo else []), 'c2') }}
@@ -39,17 +41,20 @@
       </div>
     </fieldset>
 
-    <details>
-      <summary style="cursor:pointer;margin-bottom:12px">Dados da triagem (opcional)</summary>
+    <details class="opcional">
+      <summary>Dados da triagem (opcional)</summary>
       {{ f.triagem() }}
     </details>
 
     <!-- o 1º botão é o que o Enter aciona: Salvar, sem download -->
-    <div class="botoes-form">
+    <div class="barra-salvar">
       <button class="botao" type="submit" name="acao" value="salvar">Salvar</button>
       <button class="botao secundario" type="submit" name="acao" value="baixar">Salvar e baixar prontuário</button>
+      <span class="estado-form" hidden>Alterações não salvas</span>
     </div>
   </form>
+  </div>
 </main>
 <script src="{{ url_for('static', filename='formularios.js') }}"></script>
+<script src="{{ url_for('static', filename='secoes.js') }}"></script>
 {% endblock %}

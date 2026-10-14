@@ -15,6 +15,14 @@
 </section>
 {%- endmacro %}
 
+{#
+  legenda(titulo, icone): o título de uma seção de formulário (<fieldset class="tom-azul">), com o ícone pastel. A cor do
+  ícone vem da classe tom-* do fieldset. static/secoes.js monta o índice lateral a partir destas legendas.
+#}
+{% macro legenda(titulo, icone) -%}
+<legend><span class="icone-secao" aria-hidden="true"><svg class="icone"><use href="#i-{{ icone }}"/></svg></span>{{ titulo }}</legend>
+{%- endmacro %}
+
 {% macro dados(itens) -%}
   {%- set cheios = itens | selectattr(1) | list -%}
   {%- set vazios = itens | rejectattr(1) | list -%}

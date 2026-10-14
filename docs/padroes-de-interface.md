@@ -1,7 +1,7 @@
 # Padrões de interface
 
 Como o sistema deve parecer e se comportar. Vale para toda tela nova e para o que for mexido em tela antiga. Foi definido
-com o usuário em 2026-10-14; o que está marcado **(fase 3)** ainda não foi aplicado em todas as telas.
+com o usuário em 2026-10-14. Ainda faltam, na fase 4, as telas Relatórios, Cadastros (listas), entrada, senha, documento e janelas.
 
 ## Ideia central
 
@@ -55,7 +55,7 @@ Um botão **cheio** (primário) por tela, para a ação principal. Os outros sã
 
 ## Páginas
 
-- **Duas larguras**: leitura e formulário em 960 px (`main`); listas e painéis em 1320 px (`main.largo`).
+- **Duas larguras**: leitura e formulário curto em 960 px (`main`); listas, painéis, ficha e formulário com índice em 1320 px (`main.largo`), para o título e o Voltar ficarem no mesmo lugar em todas.
 - Ordem do topo: **Voltar** (`linha_voltar`), título, subtítulo, ações à direita. Toda tela, menos Início e Entrada, tem Voltar.
 - `+ Triagem` e `+ Prontuário` só no cabeçalho.
 - **Sem textos de instrução ou ajuda** nas telas: só estado e erros.
@@ -70,11 +70,20 @@ Um botão **cheio** (primário) por tela, para a ação principal. Os outros sã
 
 ## Formulários
 
-- **Seção = cartão**: o `legend` é o cabeçalho do cartão (já é assim em todo `fieldset`). **(fase 3)** com ícone pastel.
+- **Seção = cartão com ícone**: `<fieldset class="tom-azul">{{ legenda('Acolhido', 'usuario') }} ...` (`templates/_cartao.html`).
+  A legenda é o cabeçalho do cartão; o `tom-*` escolhe a cor do ícone. Cada seção, um assunto.
+- **Formulário longo** (mais de 3 seções): `<main class="largo">` + `<div class="form-grade"><form data-indice>` e
+  `<script src="secoes.js">`. O script monta o **índice lateral** (acompanha a rolagem, marca a seção com erro, abre a
+  seção opcional recolhida; no celular vira uma barra de seções presa no topo) e leva ao primeiro erro ao voltar.
+  Formulário curto (cadastros): só a coluna única de 960 px, sem índice.
+- **Barra de salvar fixa** (`.barra-salvar`, no fim do `<form>`): o primeiro botão de envio é o que o Enter aciona, então
+  vem primeiro; só um é primário. Leva o `span.estado-form` ("Alterações não salvas", aparece quando o formulário difere
+  do que abriu). Sem botão "Cancelar": o Voltar do topo já faz isso.
+- Seção que a pessoa pode pular fica em `<details class="opcional">`.
 - Rótulo **acima** do campo, nunca placeholder no lugar de rótulo.
 - Campos lado a lado só quando formam uma coisa só (CEP, rua e número; data e hora). O resto, em sequência.
 - Foco, erro e obrigatório sempre visíveis. Erro ao lado do campo, e a tela volta sem perder o digitado.
-- **(fase 3)** Índice de seções fixo à esquerda e barra de salvar sempre visível; no celular o índice vira uma barra de seções.
+- Opção marcada leva a cor da seção; escala de risco e parecer usam o semáforo (`.opcao.ok`, `.atencao`, `.grave`).
 
 ## Telas de leitura (a ficha do paciente é o modelo)
 

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% import "_campos.html" as f with context %}
 {% from "_voltar.html" import linha_voltar with context %}
+{% from "_cartao.html" import legenda %}
 
 {% block titulo %}{{ 'Editar funcionário' if funcionario else 'Novo funcionário' }}{% endblock %}
 
@@ -16,16 +17,16 @@
 
   <form method="post" autocomplete="off">
     {% if erros %}<div class="caixa-erros"><strong>Confira os campos marcados em vermelho.</strong></div>{% endif %}
-    <fieldset>
-      <legend>Funcionário</legend>
+    <fieldset class="tom-azul">
+      {{ legenda('Funcionário', 'usuario') }}
       <div class="grade">
         {{ f.entrada('nome', 'Nome', 'c4', obrig=true, attrs={'maxlength': 200, 'autofocus': true}) }}
         {{ f.entrada('cargo', 'Cargo', 'c2', obrig=true, attrs={'maxlength': 100}) }}
       </div>
     </fieldset>
 
-    <fieldset>
-      <legend>Acesso ao sistema</legend>
+    <fieldset class="tom-roxo">
+      {{ legenda('Acesso ao sistema', 'cadeado') }}
       {% if pode_acessos %}
       <div class="grade">
         {{ f.escolha('nivel_id', 'Nível de acesso', niveis, 'c2', obrig=true, vazio=none) }}
@@ -44,8 +45,8 @@
       {% endif %}
     </fieldset>
 
-    <fieldset>
-      <legend>Serviço Social</legend>
+    <fieldset class="tom-rosa">
+      {{ legenda('Serviço Social', 'coracao') }}
       <div class="grade">
         {{ f.entrada('registro_profissional', 'Registro profissional (CRESS)', 'c3', attrs={'maxlength': 30, 'placeholder': 'ex.: CRESS 12345 · 6ª Região'}) }}
       </div>
@@ -58,8 +59,8 @@
       </div>
     </fieldset>
 
-    <fieldset>
-      <legend>Assinatura dos documentos</legend>
+    <fieldset class="tom-turquesa">
+      {{ legenda('Assinatura dos documentos', 'documento') }}
       <div class="caixas">
         <label class="caixa"><input type="checkbox" name="ativo" value="1"{{ ' checked' if d.get('ativo') == '1' }}>Ativo</label>
         <label class="caixa{{ ' com-erro' if erros.get('padrao') }}"><input type="checkbox" name="padrao" value="1"{{ ' checked' if d.get('padrao') == '1' }}>Assina por padrão, quando ninguém escolhe outra pessoa</label>

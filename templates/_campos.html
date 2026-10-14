@@ -4,6 +4,8 @@
   ("with context" deixa as macros enxergarem `d` = dados e `erros`).
 #}
 
+{% from "_cartao.html" import legenda %}
+
 {# ---------------------------------------------------------------- campos #}
 {% macro entrada(nome, rotulo, classe='c2', tipo='text', ajuda='', obrig=false, attrs={}) -%}
 <label class="{{ classe }}{{ ' com-erro' if erros.get(nome) }}">{{ rotulo }}{{ ' *' if obrig }}
@@ -51,8 +53,8 @@
 
 {# --------------------------------------------------------------- blocos #}
 {% macro identificacao(completo=true) -%}
-<fieldset>
-  <legend>Acolhido</legend>
+<fieldset class="tom-azul">
+  {{ legenda('Acolhido', 'usuario') }}
   <div class="grade">
     {{ entrada('nome', 'Nome completo', 'c6', obrig=true) }}
     {{ entrada('nascimento', 'Data de nascimento', 'c2', 'date') }}
@@ -75,8 +77,8 @@
 {%- endmacro %}
 
 {% macro endereco() -%}
-<fieldset>
-  <legend>Endereço e contatos</legend>
+<fieldset class="tom-verde">
+  {{ legenda('Endereço e contatos', 'pin') }}
   <div class="grade">
     {{ entrada('cep', 'CEP', 'c2', attrs={'data-mascara': 'cep', 'inputmode': 'numeric', 'placeholder': '00000-000'}) }}
     {{ entrada('endereco', 'Rua', 'c3') }}
@@ -92,8 +94,8 @@
 {%- endmacro %}
 
 {% macro responsavel(anterior=none) -%}
-<fieldset>
-  <legend>Responsável pela internação</legend>
+<fieldset class="tom-roxo">
+  {{ legenda('Responsável pela internação', 'usuarios') }}
   {% if anterior and anterior.resp_nome %}
     <p class="ajuda">Responsável na internação anterior: <strong>{{ anterior.resp_nome }}</strong>
       {% if anterior.parentesco %}({{ anterior.parentesco }}){% endif %}.
@@ -111,8 +113,8 @@
 {%- endmacro %}
 
 {% macro triagem() -%}
-<fieldset>
-  <legend>Contato e triagem</legend>
+<fieldset class="tom-turquesa">
+  {{ legenda('Contato e triagem', 'calendario') }}
   <div class="grade">
     {{ entrada('primeiro_contato', '1º contato', 'c2', 'date') }}
     {{ entrada('hora_primeiro_contato', 'Horário', 'c1', 'time') }}
@@ -126,8 +128,8 @@
 {%- endmacro %}
 
 {% macro convenio(com_a_definir=false) -%}
-<fieldset>
-  <legend>Convênio e contribuição voluntária</legend>
+<fieldset class="tom-amarelo">
+  {{ legenda('Convênio e contribuição voluntária', 'moeda') }}
   <div class="grade">
     {{ escolha('convenio', 'Convênio', convenios + ([a_definir] if com_a_definir else []), 'c2', obrig=true) }}
     <label class="c2{{ ' com-erro' if erros.get('contribuicao_valor') }}">Valor (R$)

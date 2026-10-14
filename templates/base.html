@@ -126,8 +126,9 @@
 
     /* ---- formulários (triagem e prontuário) ---- */
     /* cada seção é um cartão: o título (legend) vira o cabeçalho do cartão, não o título riscando a borda */
-    fieldset { background: #fff; border: 1px solid var(--borda); border-radius: var(--r-lg); margin: 0 0 var(--e4); padding: 0 0 var(--e5); box-shadow: var(--sombra); min-width: 0; }
-    legend { float: left; width: 100%; padding: 14px 20px; margin: 0 0 var(--e4); font-weight: 700; font-size: var(--t-secao); letter-spacing: -.005em;
+    fieldset { --tom: var(--neutro); --tom-suave: var(--neutro-suave); --tom-borda: var(--neutro-borda);
+               background: #fff; border: 1px solid var(--borda); border-radius: var(--r-lg); margin: 0 0 var(--e4); padding: 0 0 var(--e5); box-shadow: var(--sombra); min-width: 0; }
+    legend { float: left; width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px 20px; margin: 0 0 var(--e4); font-weight: 700; font-size: var(--t-secao); letter-spacing: -.005em;
              background: #fbfcfd; border-bottom: 1px solid #f0f2f5; border-radius: var(--r-lg) var(--r-lg) 0 0; }
     legend + * { clear: both; }
     fieldset > :not(legend) { margin-left: 20px; margin-right: 20px; max-width: calc(100% - 40px); }
@@ -294,6 +295,50 @@
     .menu-mais hr { border: 0; border-top: 1px solid #f0f2f5; margin: 4px 2px; }
     .avatar.grande { width: 64px; height: 64px; font-size: 1.3rem; }
 
+    /* ---- formulários longos: índice das seções ao lado e barra de salvar sempre à vista (static/secoes.js monta o índice) ---- */
+    .form-grade { display: grid; grid-template-columns: 230px minmax(0, 900px); gap: 0 var(--e5); align-items: start; margin-top: var(--e4); }
+    .form-grade > form, .form-grade > .corpo-form { grid-column: 2; }
+    .indice { grid-column: 1; grid-row: 1 / span 20; position: sticky; top: calc(var(--topo-h, 60px) + 12px); display: grid; gap: 2px; padding: 8px;
+              background: #fff; border: 1px solid var(--borda); border-radius: var(--r-lg); box-shadow: var(--sombra); max-height: calc(100dvh - var(--topo-h, 60px) - 28px); overflow: auto; }
+    .indice a { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 10px; color: var(--neutro); font-size: .9rem; font-weight: 600;
+                text-decoration: none; transition: background .12s, color .12s; }
+    .indice a:hover { background: var(--neutro-suave); }
+    .indice a .icone-secao { width: 26px; height: 26px; border-radius: 8px; }
+    .indice a .icone-secao .icone { width: 1em; height: 1em; }
+    .indice a.ativo { background: var(--tom-suave); color: var(--texto); }
+    .indice a.com-erro { color: var(--primaria); }
+    .indice a.com-erro::after { content: ""; width: 8px; height: 8px; margin-left: auto; border-radius: 50%; background: var(--primaria); flex: none; }
+    fieldset[id^="secao-"] { scroll-margin-top: calc(var(--topo-h, 60px) + 16px); }
+    .legenda-icone, legend .icone-secao { --tom: var(--neutro); }
+    legend .icone-secao { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--tom-suave); color: var(--tom); }
+    /* barra de salvar: fica colada no fim da tela enquanto o formulário rola */
+    .barra-salvar { position: sticky; bottom: 0; z-index: 15; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 16px; margin: 4px 0 0;
+                    background: rgba(255,255,255,.94); backdrop-filter: blur(8px); border: 1px solid var(--borda); border-radius: var(--r-lg) var(--r-lg) 0 0;
+                    box-shadow: 0 -6px 20px rgba(16,24,40,.06); }
+    .barra-salvar .estado-form { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; font-size: .84rem; color: var(--atencao); font-weight: 600; }
+    .barra-salvar .estado-form::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--atencao); }
+    .barra-salvar .estado-form[hidden] { display: none; }
+    body:has(.barra-salvar) .mensagens { bottom: 84px; }
+    /* seção opcional recolhida */
+    details.opcional { margin: 0 0 var(--e4); }
+    details.opcional > summary { cursor: pointer; padding: 12px 16px; background: #fff; border: 1px dashed var(--borda-forte); border-radius: var(--r-md); color: var(--suave); font-weight: 600; list-style: none; }
+    details.opcional > summary::-webkit-details-marker { display: none; }
+    details.opcional > summary::before { content: "+"; display: inline-block; width: 1.3em; font-weight: 700; }
+    details.opcional[open] > summary { margin-bottom: var(--e4); color: var(--texto); }
+    details.opcional[open] > summary::before { content: "−"; }
+    @media (max-width: 1000px) {
+      .form-grade { grid-template-columns: minmax(0, 1fr); }
+      .form-grade > form, .form-grade > .corpo-form { grid-column: 1; }
+      /* o índice vira uma barra de seções que desliza de lado, presa no topo */
+      .indice { grid-column: 1; grid-row: auto; position: sticky; top: var(--topo-h, 0px); z-index: 14; display: flex; overflow-x: auto; max-height: none; margin: 0 -20px 14px; padding: 8px 20px;
+                border-radius: 0; border-width: 0 0 1px; scrollbar-width: none; }
+      .indice::-webkit-scrollbar { display: none; }
+      .indice a { flex: none; white-space: nowrap; border: 1px solid var(--borda); background: #fff; }
+      .indice a.ativo { border-color: var(--tom-borda); }
+      fieldset[id^="secao-"] { scroll-margin-top: calc(var(--topo-h, 0px) + 64px); }
+    }
+    @media (max-width: 760px) { .barra-salvar { border-radius: 0; margin: 4px -14px 0; padding: 10px 14px; } .barra-salvar .botao { flex: 1 1 auto; } .barra-salvar .estado-form { flex: 1 1 100%; margin-left: 0; } }
+
     /* ============================ celular e tablet pequeno ============================ */
     @media (max-width: 760px) {
       main { margin: 18px auto; padding: 0 14px; }
@@ -350,7 +395,7 @@
       body { color: #000; font-size: 10pt; }
       * { box-shadow: none !important; animation: none !important; transition: none !important;
           -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .topo, .voltar-linha, .botao, dialog, .mensagens, .aviso, .busca, .busca-paciente, .botoes-form, .acoes, .acoes-aviso, .faixa-alerta,
+      .topo, .voltar-linha, .botao, dialog, .mensagens, .aviso, .busca, .busca-paciente, .botoes-form, .barra-salvar, .indice, .acoes, .acoes-aviso, .faixa-alerta,
       .atalhos-bloco, .agenda-rodape, .seta, .grupo-avisos summary .icone { display: none !important; }
       .cabecalho-impressao { display: flex; justify-content: space-between; gap: 12px; margin: 0 0 12px; padding-bottom: 5px;
                              border-bottom: 1px solid #888; font-size: 8.5pt; color: #444; }
@@ -421,7 +466,8 @@
       <symbol id="i-envelope" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></symbol>
       <symbol id="i-coracao" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></symbol>
       <symbol id="i-pontos" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
-      <symbol id="i-fechar"viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+      <symbol id="i-cadeado" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+      <symbol id="i-fechar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
       <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
     </defs>
   </svg>

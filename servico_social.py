@@ -179,6 +179,14 @@ SECOES = (
 )
 CAMPOS = [campo for secao in SECOES for campo in secao.campos]
 POR_CHAVE = {campo.chave: campo for campo in CAMPOS}
+# como cada seção aparece na tela (ícone do base.html e cor do cartão); no papel ela não tem nada disso
+VISUAL = {"Identificação individual": ("usuario", "azul"), "Responsável pelo acompanhamento do residente": ("usuarios", "roxo"),
+          "Histórico comportamental": ("relogio", "amarelo"), "Histórico profissional / ocupacional": ("prancheta", "turquesa"),
+          "Investigação de espiritualidade": ("coracao", "rosa"), "Histórico familiar": ("casa", "verde"),
+          "Investigação sobre perdas": ("alerta", "neutro"), "Voluntariedade e motivação": ("ok", "verde"),
+          "Documentos e benefícios": ("documento", "azul"), "Situação jurídica": ("bandeira", "amarelo"),
+          "Rede de apoio e serviços": ("usuarios", "turquesa"), "Relatório social": ("documento", "rosa"),
+          "Classificação de risco e vulnerabilidade": ("alerta", "amarelo"), "Parecer social": ("ok", "rosa")}
 
 
 def secoes_para(internacao):

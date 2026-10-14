@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% import "_campos.html" as f with context %}
 {% from "_voltar.html" import linha_voltar with context %}
+{% from "_cartao.html" import legenda %}
 
 {% block titulo %}{{ 'Editar convênio' if convenio else 'Novo convênio' }}{% endblock %}
 
@@ -22,8 +23,8 @@
 
   <form method="post">
     {% if erros %}<div class="caixa-erros"><strong>Confira os campos marcados em vermelho.</strong></div>{% endif %}
-    <fieldset>
-      <legend>Convênio</legend>
+    <fieldset class="tom-azul">
+      {{ legenda('Convênio', 'casa') }}
       <div class="grade">
         {% if convenio %}
           <label class="c3">Guardado como<input value="{{ convenio.nome }}" readonly></label>
@@ -35,8 +36,8 @@
       </div>
     </fieldset>
 
-    <fieldset>
-      <legend>Cor</legend>
+    <fieldset class="tom-rosa">
+      {{ legenda('Cor', 'bandeira') }}
       <div class="cores" role="radiogroup" aria-label="Cor do convênio">
         {% for chave, rotulo in cores %}
           <label class="opcao-cor"><input type="radio" name="cor" value="{{ chave }}"{{ ' checked' if d.get('cor') == chave }}><span class="chip {{ chave }}">{{ rotulo }}</span></label>
@@ -46,8 +47,8 @@
     </fieldset>
 
     {% if convenio %}
-    <fieldset>
-      <legend>Situação</legend>
+    <fieldset class="tom-verde">
+      {{ legenda('Situação', 'ok') }}
       <label class="caixa"><input type="checkbox" name="ativo" value="1"{{ ' checked' if d.get('ativo') == '1' }}>Ativo</label>
     </fieldset>
     {% endif %}

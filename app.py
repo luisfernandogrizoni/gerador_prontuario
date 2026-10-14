@@ -518,7 +518,7 @@ def _tela_relatorio(internacao, form, erros, status=200):
     valores = servico_social.valores_do_formulario(form, servico_social.campos_para(internacao)) if form is not None \
         else servico_social.valores(internacao, relatorio, servico_social.campos_para(internacao))
     anterior = servico_social.anterior(internacao) if relatorio is None and form is None else None      # readmissão: de onde vieram as respostas
-    return render_template("servico_social_form.html", i=internacao, secoes=servico_social.secoes_para(internacao), v=valores, erros=erros,
+    return render_template("servico_social_form.html", i=internacao, secoes=servico_social.secoes_para(internacao), visual=servico_social.VISUAL, v=valores, erros=erros,
                            relatorio=relatorio, acolhido=acolhido, responsavel=responsavel, anterior=anterior), status
 
 
