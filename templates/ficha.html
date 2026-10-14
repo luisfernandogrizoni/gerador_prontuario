@@ -315,9 +315,9 @@
       <button type="button" class="botao secundario" id="cancelar-exclusao">Cancelar</button>
       {% if e_administrador %}
         <button class="botao secundario" name="acao" value="lixeira">Mover para a lixeira</button>
-        <button class="botao perigo" name="acao" value="apagar" onclick="return confirm('Apagar {{ p.nome | replace("'", "") }} do banco de dados? Não tem volta.')">Excluir de vez</button>
+        <button class="botao perigo solido" name="acao" value="apagar" onclick="return confirm('Apagar {{ p.nome | replace("'", "") }} do banco de dados? Não tem volta.')">Excluir de vez</button>
       {% else %}
-        <button class="botao perigo" name="acao" value="lixeira">Excluir</button>
+        <button class="botao perigo solido" name="acao" value="lixeira">Excluir</button>
       {% endif %}
     </div>
   </form>

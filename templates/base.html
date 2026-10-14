@@ -18,7 +18,22 @@
             --azul: #1d4f9c; --azul-claro: #e7f0ff;
             --amarelo: #fff6d6; --ambar: #7a5a00;
             --raio: 12px; --sombra: 0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.06);
-            --sombra-alta: 0 12px 32px rgba(16,24,40,.16); --altura-topo: 60px; }
+            --sombra-alta: 0 12px 32px rgba(16,24,40,.16); --altura-topo: 60px;
+
+            /* ---- padrões de interface (docs/padroes-de-interface.md) ----
+               Cores por PAPEL, não por tela: cada papel tem o tom forte (barras, ícones, bordas de destaque), o suave (fundo
+               pastel) e o texto que vai sobre o suave (contraste de pelo menos 4,5:1). Nunca só a cor: sempre texto ou ícone junto. */
+            --primaria: var(--vermelho); --primaria-forte: var(--vermelho-escuro); --primaria-suave: var(--vermelho-claro); --primaria-borda: #f4c7c3;
+            --perigo: #7a1712; --perigo-suave: #fbe9e7; --perigo-borda: #eebdb8;
+            --sucesso: var(--verde); --sucesso-suave: var(--verde-claro); --sucesso-borda: var(--verde-borda);
+            --atencao: var(--ambar); --atencao-suave: var(--amarelo); --atencao-borda: #ecd98a;
+            --info: var(--azul); --info-suave: var(--azul-claro); --info-borda: #bcd2f5;
+            --neutro: #344054; --neutro-suave: #eef1f6; --neutro-borda: #dfe4ec;
+            --foco: #5b8def;                         /* o anel de foco é azul: o vermelho já quer dizer marca, erro e perigo */
+            /* espaços (4, 8, 12, 16, 24, 32), cantos e tamanhos de texto */
+            --e1: 4px; --e2: 8px; --e3: 12px; --e4: 16px; --e5: 24px; --e6: 32px;
+            --r-sm: 8px; --r-md: 12px; --r-lg: 16px;
+            --t-titulo: 1.6rem; --t-secao: 1.05rem; --t-corpo: .95rem; --t-rotulo: .82rem; }
     * { box-sizing: border-box; }
     body { font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", sans-serif;
            font-size: 15px; line-height: 1.45; background: var(--fundo); margin: 0; color: var(--texto);
@@ -27,7 +42,7 @@
     h2 { font-size: 1.05rem; letter-spacing: -.005em; }
     p.ajuda { margin-top: 0; color: var(--suave); font-size: .9rem; }
     a { color: var(--vermelho); }
-    main { max-width: 900px; margin: 28px auto; padding: 0 20px; }
+    main { max-width: 960px; margin: 28px auto; padding: 0 20px; }
     main.largo { max-width: 1320px; }
     .icone { width: 1.15em; height: 1.15em; flex: none; vertical-align: -.2em; }
 
@@ -68,21 +83,37 @@
     @media (max-width: 400px) { .topo .item { padding: 7px 6px; font-size: .82rem; } .topo .usuario .inicial { display: none; } }
 
     /* ---- botões e etiquetas ---- */
+    /* Hierarquia: UM botão cheio (primário) por tela, para a ação principal; os demais são pastel. O vermelho sólido é da marca
+       e do primário; perigo tem o tom vinho; sólido de perigo só dentro da confirmação (.perigo.solido). */
     .botao { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font: inherit; font-weight: 600; padding: 9px 16px;
-             border: 1px solid var(--vermelho); border-radius: 10px; background: var(--vermelho); color: #fff; cursor: pointer;
-             text-decoration: none; font-size: .92rem; width: auto; box-shadow: var(--sombra); transition: background .12s, border-color .12s, box-shadow .12s; }
-    .botao:hover { background: var(--vermelho-escuro); border-color: var(--vermelho-escuro); }
-    .botao:focus-visible, .topo .item:focus-visible { outline: 3px solid rgba(179,38,30,.3); outline-offset: 2px; }
-    .botao.secundario { background: #fff; color: var(--vermelho); border-color: var(--borda-forte); box-shadow: none; }
-    .botao.perigo { background: #7a1712; border-color: #7a1712; color: #fff; }                    /* excluir: mais escuro que o botão comum */
-    .botao.perigo:hover { background: #5c100d; border-color: #5c100d; }
-    .botao.secundario.perigo { background: #fff; color: #7a1712; border-color: #e3b5b2; }
-    .botao.secundario.perigo:hover { background: #fff5f5; border-color: #7a1712; }
-    .botao.secundario:hover { background: var(--vermelho-claro); border-color: var(--vermelho); }
+             border: 1px solid var(--primaria); border-radius: 10px; background: var(--primaria); color: #fff; cursor: pointer;
+             text-decoration: none; font-size: .92rem; width: auto; box-shadow: var(--sombra); transition: background .12s, border-color .12s, box-shadow .12s, color .12s; }
+    .botao:hover { background: var(--primaria-forte); border-color: var(--primaria-forte); }
+    .botao:focus-visible, .topo .item:focus-visible { outline: 3px solid rgba(91,141,239,.45); outline-offset: 2px; }
+    .botao.secundario { background: var(--neutro-suave); color: var(--texto); border-color: var(--neutro-borda); box-shadow: none; }       /* pastel neutro: o padrão dos demais botões */
+    .botao.secundario:hover { background: #e3e8f0; border-color: #cfd6e2; }
+    .botao.suave { background: var(--primaria-suave); color: var(--primaria); border-color: var(--primaria-borda); box-shadow: none; }        /* pastel da cor primária: o "principal" de um grupo repetido (documentos) */
+    .botao.suave:hover { background: #fadbd8; border-color: #eab0ab; }
+    .botao.fantasma { background: transparent; color: var(--suave); border-color: transparent; box-shadow: none; }
+    .botao.fantasma:hover { background: var(--neutro-suave); color: var(--texto); }
+    .botao.perigo { background: var(--perigo-suave); color: var(--perigo); border-color: var(--perigo-borda); box-shadow: none; }               /* excluir: vinho suave */
+    .botao.perigo:hover { background: #f6d6d2; border-color: #e3a49d; }
+    .botao.perigo.solido { background: var(--perigo); border-color: var(--perigo); color: #fff; box-shadow: var(--sombra); }                     /* só na confirmação */
+    .botao.perigo.solido:hover { background: #5c100d; border-color: #5c100d; }
+    .botao.secundario.perigo { background: var(--perigo-suave); color: var(--perigo); border-color: var(--perigo-borda); }
     .botao.pequeno { padding: 5px 11px; font-size: .82rem; border-radius: 8px; gap: 6px; }
     .botao[disabled] { opacity: .6; cursor: default; }
-    .mensagens { list-style: none; padding: 0; margin: 0 0 16px; }
-    .mensagens li { background: var(--verde-claro); border: 1px solid var(--verde-borda); border-radius: 10px; padding: 11px 15px; margin-bottom: 6px; color: #17501f; }
+    /* avisos de confirmação: cartão discreto no canto, que some sozinho (base.html, no fim) */
+    .mensagens { list-style: none; padding: 0; margin: 0; position: fixed; top: calc(var(--altura-topo) + 12px); right: 20px; z-index: 60;
+                 display: grid; gap: 8px; width: min(380px, calc(100vw - 28px)); pointer-events: none; }
+    .mensagens li { pointer-events: auto; display: flex; align-items: flex-start; gap: 10px; background: #fff; border: 1px solid var(--sucesso-borda);
+                    border-left: 4px solid var(--sucesso); border-radius: var(--r-md); padding: 11px 12px 11px 14px; color: var(--texto); font-size: .9rem;
+                    box-shadow: var(--sombra-alta); animation: aviso-entra .22s ease-out; transition: opacity .3s, transform .3s; }
+    .mensagens li.saindo { opacity: 0; transform: translateX(16px); }
+    .mensagens li .fechar-aviso { margin-left: auto; flex: none; border: 0; background: none; color: var(--suave); cursor: pointer; padding: 0 2px; font-size: 1.1rem; line-height: 1; }
+    .mensagens li .fechar-aviso:hover { color: var(--texto); }
+    @keyframes aviso-entra { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { .mensagens li { animation: none; } }
     .selo { display: inline-flex; align-items: center; gap: 6px; font-size: .76rem; font-weight: 600; padding: 3px 10px; border-radius: 999px;
             background: #f2f4f7; color: #475467; white-space: nowrap; }
     .selo::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
@@ -94,19 +125,26 @@
     .selo.rejeitado { background: #e4e7ec; color: #344054; }
 
     /* ---- formulários (triagem e prontuário) ---- */
-    fieldset { background: #fff; border: 1px solid var(--borda); border-radius: var(--raio); margin-bottom: 16px; padding: 12px 18px 18px; box-shadow: var(--sombra); }
-    legend { font-weight: 600; padding: 0 6px; }
-    .grade { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px 12px; }
+    /* cada seção é um cartão: o título (legend) vira o cabeçalho do cartão, não o título riscando a borda */
+    fieldset { background: #fff; border: 1px solid var(--borda); border-radius: var(--r-lg); margin: 0 0 var(--e4); padding: 0 0 var(--e5); box-shadow: var(--sombra); min-width: 0; }
+    legend { float: left; width: 100%; padding: 14px 20px; margin: 0 0 var(--e4); font-weight: 700; font-size: var(--t-secao); letter-spacing: -.005em;
+             background: #fbfcfd; border-bottom: 1px solid #f0f2f5; border-radius: var(--r-lg) var(--r-lg) 0 0; }
+    legend + * { clear: both; }
+    fieldset > :not(legend) { margin-left: 20px; margin-right: 20px; max-width: calc(100% - 40px); }
+    .grade { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px 14px; }
     .c1 { grid-column: span 1; } .c2 { grid-column: span 2; } .c3 { grid-column: span 3; }
     .c4 { grid-column: span 4; } .c5 { grid-column: span 5; } .c6 { grid-column: span 6; }
-    label { display: flex; flex-direction: column; font-size: .85rem; gap: 3px; }
-    input, select, textarea { font: inherit; padding: 7px 9px; border: 1px solid var(--borda-forte); border-radius: 8px; width: 100%; background: #fff; color: var(--texto); }
-    input:focus, select:focus, textarea:focus { outline: 3px solid rgba(179,38,30,.18); border-color: var(--vermelho); }
+    label { display: flex; flex-direction: column; font-size: var(--t-rotulo); font-weight: 600; color: #344054; gap: 6px; }
+    input, select, textarea { font: inherit; font-weight: 400; font-size: var(--t-corpo); padding: 9px 12px; border: 1px solid #d5dae3; border-radius: 10px; width: 100%;
+                              background: #fff; color: var(--texto); transition: border-color .12s, box-shadow .12s; }
+    input:hover, select:hover, textarea:hover { border-color: #b9c1ce; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--foco); box-shadow: 0 0 0 3px rgba(91,141,239,.22); }
     input[readonly] { background: #f3f4f6; }
     small { color: #777; }
-    small.erro, .erro { color: var(--vermelho); }
-    label.com-erro input, label.com-erro select { border-color: var(--vermelho); background: #fff5f5; }
-    .caixa-erros { background: #fff5f5; border: 1px solid #f0b4b0; border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
+    small.erro, .erro { color: var(--primaria); font-weight: 500; }
+    label.com-erro input, label.com-erro select, label.com-erro textarea { border-color: var(--primaria); background: #fff8f7; }
+    label.com-erro input:focus, label.com-erro select:focus, label.com-erro textarea:focus { box-shadow: 0 0 0 3px rgba(179,38,30,.16); }
+    .caixa-erros { background: var(--perigo-suave); border: 1px solid var(--perigo-borda); border-radius: var(--r-md); padding: 10px 14px; margin-bottom: 14px; color: var(--perigo); }
     @media (max-width: 640px) { .grade > * { grid-column: span 6; } }
     .paciente-escolhido { background: var(--verde-claro); border: 1px solid var(--verde-borda); border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; font-size: .92rem; }
     .resultado-pessoas { list-style: none; margin: 6px 0 0; padding: 0; border: 1px solid var(--borda); border-radius: 8px; max-height: 260px; overflow: auto; background: #fff; }
@@ -231,7 +269,9 @@
       .topo .usuario .nome { display: none; }
       .ferramentas { gap: 10px; }
       .busca { flex: 1 1 100%; max-width: none; }
-      fieldset { padding: 10px 14px 14px; }
+      fieldset { padding-bottom: 16px; }
+      fieldset > :not(legend) { margin-left: 14px; margin-right: 14px; max-width: calc(100% - 28px); }
+      legend { padding: 12px 14px; }
       input, select, textarea { font-size: 16px; }        /* evita o zoom automático ao tocar num campo, no iPhone */
       .botao { min-height: 42px; }
       .botao.pequeno { min-height: 34px; }
@@ -336,7 +376,7 @@
       <symbol id="i-impressora" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></symbol>
       <symbol id="i-baixar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/></symbol>
       <symbol id="i-fechar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
-      <symbol id="i-chevron"viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
+      <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
     </defs>
   </svg>
 
@@ -384,6 +424,22 @@
         if (history.length > 1 && document.referrer && new URL(document.referrer).origin === location.origin) { e.preventDefault(); history.back(); }
       } catch (erro) { /* sem referência: segue o endereço */ }
     });
+  </script>
+  <script>
+    // avisos de confirmação (flash): cartão no canto, com botão de fechar, que some sozinho depois de alguns segundos
+    (function () {
+      var lista = document.querySelector(".mensagens");
+      if (!lista) return;
+      lista.setAttribute("role", "status");
+      Array.prototype.forEach.call(lista.children, function (li, i) {
+        var fechar = document.createElement("button");
+        fechar.type = "button"; fechar.className = "fechar-aviso"; fechar.setAttribute("aria-label", "Fechar aviso"); fechar.textContent = "×";
+        li.appendChild(fechar);
+        function sair() { li.classList.add("saindo"); setTimeout(function () { li.remove(); }, 320); }
+        fechar.addEventListener("click", sair);
+        setTimeout(sair, 7000 + i * 900);
+      });
+    })();
   </script>
   <script>
     // na impressão: abre os grupos recolhidos (senão o conteúdo some do papel) e carimba quando e quem imprimiu
