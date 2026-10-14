@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{#
+  Página de erro (404, 403, 405, 500...): a mesma linguagem do resto do sistema, em vez da tela crua do servidor.
+  Variáveis: codigo, titulo, texto.
+#}
+{% block titulo %}{{ titulo }} — Casa de Acolhida Restauração{% endblock %}
+
+{% block estilo %}
+  .erro-pagina { max-width: 520px; margin: 64px auto; text-align: center; }
+  .erro-pagina .icone-grande { width: 72px; height: 72px; margin: 0 auto 18px; display: grid; place-items: center; border-radius: 22px;
+                               background: var(--atencao-suave); color: var(--atencao); }
+  .erro-pagina .icone-grande .icone { width: 34px; height: 34px; }
+  .erro-pagina .codigo { margin: 0 0 4px; font-size: .85rem; font-weight: 700; letter-spacing: .08em; color: var(--suave); }
+  .erro-pagina h1 { margin: 0 0 8px; }
+  .erro-pagina p.texto { margin: 0 0 22px; color: var(--suave); }
+  .erro-pagina .botoes-form { justify-content: center; }
+{% endblock %}
+
+{% block conteudo %}
+<main class="erro-pagina">
+  <div class="icone-grande"><svg class="icone"><use href="#i-alerta"/></svg></div>
+  <p class="codigo">ERRO {{ codigo }}</p>
+  <h1>{{ titulo }}</h1>
+  <p class="texto">{{ texto }}</p>
+  <div class="botoes-form">
+    {% if usuario_atual %}<a class="botao" href="{{ url_for('home') }}">Ir para o início</a>{% else %}<a class="botao" href="{{ url_for('login') }}">Entrar</a>{% endif %}
+  </div>
+</main>
+{% endblock %}

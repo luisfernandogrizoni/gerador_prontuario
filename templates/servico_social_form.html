@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_voltar.html" import linha_voltar with context %}
+{% from "_cartao.html" import legenda %}
 {#
   O acolhimento social, escrito direto no sistema: ficha, relatório, classificação de risco e parecer
   (servico_social.py descreve as perguntas).
@@ -15,7 +16,7 @@
   .cabecalho-rel { display: flex; align-items: flex-end; gap: 8px 16px; flex-wrap: wrap; margin-bottom: 4px; }
   .cabecalho-rel h1 { margin: 0 auto 0 0; }
   .cabecalho-rel .estado { font-size: .85rem; color: var(--suave); }
-  .cadastro-resumo { margin-bottom: 16px; background: var(--superficie); border: 1px solid var(--borda); border-radius: 10px; padding: 14px 18px; }
+  .cadastro-resumo { margin-bottom: 16px; background: linear-gradient(115deg, var(--info-suave), #fff 70%); border: 1px solid var(--info-borda); border-radius: var(--r-lg); padding: 14px 18px; }
   .cadastro-resumo dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px 18px; margin: 0; }
   .cadastro-resumo dt { font-size: .76rem; color: var(--suave); }
   .cadastro-resumo dd { margin: 1px 0 0; font-size: .93rem; overflow-wrap: anywhere; }
@@ -23,27 +24,27 @@
   .cadastro-resumo h3 { margin: 12px 0 8px; font-size: .8rem; color: var(--suave); text-transform: uppercase; letter-spacing: .05em; }
   .cadastro-resumo h3:first-child { margin-top: 0; }
   .cadastro-resumo .corrigir { font-size: .85rem; }
-  fieldset legend { font-weight: 700; padding: 0 6px; }
-  .subtitulo-secao { margin: -2px 0 12px; color: var(--suave); font-size: .85rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
   .rotulo-campo { display: block; font-size: .9rem; margin-bottom: 4px; }
   textarea { resize: vertical; line-height: 1.4; min-height: 4.4em; }
   .escolhas { display: flex; flex-wrap: wrap; gap: 6px 8px; }
-  .escolhas label.opcao { display: inline-flex; flex-direction: row; align-items: center; gap: 7px; cursor: pointer; padding: 6px 13px; margin: 0;
+  .escolhas label.opcao { display: inline-flex; flex-direction: row; align-items: center; gap: 7px; cursor: pointer; padding: 6px 13px; margin: 0; font-weight: 500;
                           border: 1px solid var(--borda-forte); border-radius: 999px; font-size: .9rem; background: #fff; user-select: none; }
   .escolhas label.opcao input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-  .escolhas label.opcao:hover { border-color: var(--vermelho); }
-  .escolhas label.opcao:has(input:checked) { background: var(--vermelho-claro); border-color: var(--vermelho); color: var(--vermelho); font-weight: 600; }
-  .escolhas label.opcao:has(input:focus-visible) { outline: 3px solid rgba(179,38,30,.3); outline-offset: 2px; }
+  /* a opção marcada leva a cor da seção (cada seção tem a sua: tom-*) */
+  .escolhas label.opcao:hover { border-color: var(--tom); }
+  .escolhas label.opcao:has(input:checked) { background: var(--tom-suave); border-color: var(--tom); color: var(--tom); font-weight: 700; }
+  .escolhas label.opcao.ok { --tom: var(--sucesso); --tom-suave: var(--sucesso-suave); }
+  .escolhas label.opcao.atencao { --tom: var(--atencao); --tom-suave: var(--atencao-suave); }
+  .escolhas label.opcao.grave { --tom: var(--perigo); --tom-suave: var(--perigo-suave); }
+  .escolhas label.opcao:has(input:focus-visible) { outline: 3px solid rgba(91,141,239,.45); outline-offset: 2px; }
   .sim-nao { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 12px; align-items: center; }
   .sim-nao .escolhas { flex-wrap: nowrap; }
   @media (max-width: 640px) { .sim-nao { grid-template-columns: 1fr; } }
   [data-so-se][hidden] { display: none; }
-  .barra-salvar { position: sticky; bottom: 0; z-index: 3; display: flex; gap: 10px; flex-wrap: wrap; padding: 12px 0; margin-top: 4px;
-                  background: linear-gradient(to top, var(--fundo) 70%, transparent); }
-  @media (max-width: 640px) { .barra-salvar .botao { flex: 1 1 100%; } }
-  @media print { .barra-salvar { display: none; } }
 {% endblock %}
 
+{# a classificação e o parecer têm cor de semáforo (verde, amarelo, vermelho suave) em vez da cor da seção #}
+{% set gravidade = {'Baixo': 'ok', 'Médio': 'atencao', 'Alto': 'grave', 'Favorável à admissão': 'ok', 'Favorável, com ressalvas': 'atencao', 'Não condizente com o tratamento da casa': 'grave'} %}
 {% macro controle(c) -%}
   {% set nome = c.chave %}
   {% if c.tipo == 'longo' %}
@@ -53,7 +54,7 @@
   {% elif c.tipo == 'escolha' %}
     <div class="{{ c.colunas }}{{ ' com-erro' if erros.get(nome) }}" role="radiogroup" aria-label="{{ c.rotulo }}"{% if c.so_se %} data-so-se="{{ c.so_se[0] }}" data-valor="{{ c.so_se[1] }}"{{ ' hidden' if v.get(c.so_se[0]) != c.so_se[1] }}{% endif %}><span class="rotulo-campo">{{ c.rotulo }}</span>
       <div class="escolhas">
-        {% for o in c.opcoes %}<label class="opcao"><input type="radio" name="{{ nome }}" value="{{ o }}"{{ ' checked' if v.get(nome) == o }} data-desmarca>{{ o }}</label>{% endfor %}
+        {% for o in c.opcoes %}<label class="opcao {{ gravidade.get(o, '') }}"><input type="radio" name="{{ nome }}" value="{{ o }}"{{ ' checked' if v.get(nome) == o }} data-desmarca>{{ o }}</label>{% endfor %}
       </div>
       {% if erros.get(nome) %}<small class="erro">{{ erros[nome] }}</small>{% endif %}</div>
   {% elif c.tipo == 'sim_nao' %}
@@ -73,7 +74,7 @@
 {%- endmacro %}
 
 {% block conteudo %}
-<main>
+<main class="largo">
   {{ linha_voltar(url_for('ficha', id=i.id)) }}
   {% with msgs = get_flashed_messages() %}
     {% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
@@ -102,12 +103,13 @@
     <p class="corrigir"><a href="{{ url_for('editar_internacao', id=i.id) }}">Corrigir no cadastro</a></p>
   </section>
 
-  <form method="post" id="form-relatorio">
+  <div class="form-grade">
+  <form method="post" id="form-relatorio" data-indice>
     {% if erros %}<div class="caixa-erros"><strong>{{ erros['_'] if erros.get('_') else 'Confira os campos marcados em vermelho.' }}</strong></div>{% endif %}
     {% for secao in secoes %}
-    <fieldset>
-      <legend>{{ loop.index }}) {{ secao.titulo }}</legend>
-      {% if secao.subtitulo %}<p class="subtitulo-secao">{{ secao.subtitulo }}</p>{% endif %}
+    {% set vis = visual.get(secao.titulo, ('documento', 'neutro')) %}
+    <fieldset class="tom-{{ vis[1] }}">
+      {{ legenda(secao.titulo, vis[0]) }}
       <div class="grade">
         {% for campo in secao.campos %}{{ controle(campo) }}{% endfor %}
       </div>
@@ -115,13 +117,15 @@
     {% endfor %}
 
     <div class="barra-salvar">
-      <button class="botao" type="submit" name="acao" value="salvar">Salvar rascunho</button>
+      <button class="botao secundario" type="submit" name="acao" value="salvar">Salvar rascunho</button>
       <button class="botao secundario" type="submit" name="acao" value="imprimir"><svg class="icone"><use href="#i-impressora"/></svg>Salvar e imprimir</button>
-      <button class="botao secundario" type="submit" name="acao" value="finalizar" id="finalizar">Finalizar e assinar</button>
-      <a class="botao secundario" href="{{ url_for('ficha', id=i.id) }}">Cancelar</a>
+      <button class="botao" type="submit" name="acao" value="finalizar" id="finalizar">Finalizar e assinar</button>
+      <span class="estado-form" hidden>Alterações não salvas</span>
     </div>
   </form>
+  </div>
 </main>
+<script src="{{ url_for('static', filename='secoes.js') }}"></script>
 
 <script>
   // o campo de texto cresce enquanto se escreve (sem barra de rolagem dentro dele)

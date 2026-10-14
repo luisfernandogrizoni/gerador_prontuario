@@ -1,0 +1,35 @@
+{#
+  Componentes de leitura (padrões de interface: docs/padroes-de-interface.md).
+
+  cartao(titulo, icone, tom, id): cartão de seção, com o ícone pastel no cabeçalho. O conteúdo vai no {% call %}:
+      {% call cartao('Dados pessoais', 'usuario', 'azul', id='dados') %} ... {% endcall %}
+      icone: nome de um símbolo do base.html (sem o "i-"); tom: azul | verde | amarelo | rosa | roxo | turquesa | neutro.
+
+  dados(itens): lista de (rótulo, valor). Só o que tem valor ocupa lugar (em grade de duas colunas); o que está vazio vai
+  numa linha só, "Não informado: ...", em vez de uma pilha de traços.
+#}
+{% macro cartao(titulo, icone, tom='neutro', id='') -%}
+<section class="cartao-secao tom-{{ tom }}"{% if id %} id="{{ id }}"{% endif %}>
+  <header><span class="icone-secao"><svg class="icone"><use href="#i-{{ icone }}"/></svg></span><h2>{{ titulo }}</h2></header>
+  <div class="corpo">{{ caller() }}</div>
+</section>
+{%- endmacro %}
+
+{#
+  legenda(titulo, icone): o título de uma seção de formulário (<fieldset class="tom-azul">), com o ícone pastel. A cor do
+  ícone vem da classe tom-* do fieldset. static/secoes.js monta o índice lateral a partir destas legendas.
+#}
+{% macro legenda(titulo, icone) -%}
+<legend><span class="icone-secao" aria-hidden="true"><svg class="icone"><use href="#i-{{ icone }}"/></svg></span>{{ titulo }}</legend>
+{%- endmacro %}
+
+{% macro dados(itens) -%}
+  {%- set cheios = itens | selectattr(1) | list -%}
+  {%- set vazios = itens | rejectattr(1) | list -%}
+  {%- if cheios -%}
+  <dl class="dados">{% for rotulo, valor in cheios %}<div{{ ' class="largo"' | safe if valor | string | length > 38 }}><dt>{{ rotulo }}</dt><dd>{{ valor }}</dd></div>{% endfor %}</dl>
+  {%- endif -%}
+  {%- if vazios %}
+  <p class="nao-informado">Não informado: {{ vazios | map(attribute=0) | join(', ') }}</p>
+  {%- endif -%}
+{%- endmacro %}

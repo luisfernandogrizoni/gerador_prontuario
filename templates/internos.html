@@ -7,8 +7,9 @@
     @media print { @page { size: A4 landscape; margin: 10mm; } }
 
     /* pergunta da janela "Dar baixa": o prontuário em papel já voltou ao escritório? */
-    .pergunta { box-shadow: none; margin: 0 0 14px; padding: 8px 14px 14px; }
-    .pergunta legend { font-size: .85rem; }
+    .pergunta { box-shadow: none; margin: 0 0 14px; padding: 0 0 14px; border: 0; background: none; }
+    .pergunta legend { float: none; width: auto; padding: 0 0 8px; margin: 0; font-size: .88rem; background: none; border: 0; border-radius: 0; }
+    .pergunta > :not(legend) { margin-left: 0; margin-right: 0; max-width: none; }
     .opcao { flex-direction: row; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--borda); border-radius: 10px;
              font-size: .92rem; cursor: pointer; }
     .opcao + .opcao { margin-top: 8px; }

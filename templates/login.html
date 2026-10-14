@@ -2,12 +2,15 @@
 {% block titulo %}Entrar — Casa de Acolhida Restauração{% endblock %}
 
 {% block estilo %}
-  .entrar { max-width: 380px; margin: 56px auto; background: #fff; border: 1px solid var(--borda); border-radius: 12px; padding: 24px 24px 26px; }
-  .entrar { text-align: center; }
+  /* a entrada tem o fundo em pastel (rosa da marca e azul), para receber bem sem perder a sobriedade */
+  body { background: radial-gradient(900px 480px at 12% -8%, var(--primaria-suave), transparent 70%),
+                     radial-gradient(800px 460px at 100% 105%, var(--info-suave), transparent 70%), var(--fundo); background-attachment: fixed; }
+  .entrar { max-width: 400px; margin: 56px auto; background: #fff; border: 1px solid var(--borda); border-radius: var(--r-lg); padding: 28px 28px 30px;
+            box-shadow: var(--sombra-alta); text-align: center; }
   .entrar-logo { display: block; width: 84px; height: 84px; margin: 0 auto 12px; }
   .entrar h1 { margin-top: 0; }
   .entrar form { display: grid; gap: 14px; margin-top: 18px; text-align: left; }
-  .entrar .botao { width: 100%; padding: 10px; }
+  .entrar .botao { width: 100%; padding: 11px; }
 {% endblock %}
 
 {% block conteudo %}

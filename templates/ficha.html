@@ -1,19 +1,42 @@
 {% extends "base.html" %}
 {% from "_acoes_documento.html" import acoes_documento %}
 {% from "_voltar.html" import linha_voltar with context %}
+{% from "_cartao.html" import cartao, dados %}
 {% set p = i.pessoa %}
+{# cor do cabeçalho de identidade, pela situação #}
+{% set tom = {'ativo': 'verde', 'em_admissao': 'azul', 'lista_espera': 'amarelo', 'desistiu': 'rosa', 'rejeitado': 'neutro', 'inativo': 'neutro'}[i.status] | default('neutro') %}
 
 {% block titulo %}{{ p.nome }}{% endblock %}
 
 {% block estilo %}
-  .cabecalho { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-  .cabecalho h1 { margin: 0; margin-right: auto; }
-  .acoes { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0 18px; }
-  .cartao { background: #fff; border: 1px solid var(--borda); border-radius: 10px; padding: 4px 18px 14px; margin-bottom: 16px; }
-  dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px 18px; margin: 0; }
-  dt { font-size: .78rem; color: var(--suave); }
-  dd { margin: 2px 0 0; font-size: .95rem; }
-  dd:empty::after { content: "—"; color: #bbb; }
+  /* ---- cabeçalho de identidade ---- */
+  .ficha-topo { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 20px 22px; margin-bottom: var(--e4);
+                background: linear-gradient(115deg, var(--tom-suave), #fff 75%); border: 1px solid var(--tom-borda); border-radius: var(--r-lg); box-shadow: var(--sombra); }
+  .ficha-topo .identidade { flex: 1 1 230px; min-width: 0; }
+  .ficha-topo .linha-nome { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; }
+  .ficha-topo h1 { margin: 0; font-size: var(--t-titulo); overflow-wrap: anywhere; }
+  .fatos { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin: 8px 0 0; font-size: .9rem; color: var(--neutro); }
+  .fato { display: inline-flex; align-items: center; gap: 6px; }
+  .fato .icone { color: var(--tom); }
+  .ficha-topo .ids { margin: 6px 0 0; font-size: .8rem; color: var(--suave); }
+  .ficha-topo .acoes { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  /* ---- duas colunas: o principal e, ao lado, o que se consulta toda hora ---- */
+  .ficha-grade { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 0 var(--e4); align-items: start; }
+  @media (max-width: 1000px) { .ficha-grade { grid-template-columns: minmax(0, 1fr); } .coluna-lateral { order: -1; } }
+  /* ---- linha do tempo da triagem / internação ---- */
+  .etapas { list-style: none; margin: 0 0 14px; padding: 0; position: relative; }
+  .etapas li { position: relative; padding: 0 0 14px 22px; }
+  .etapas li:last-child { padding-bottom: 0; }
+  .etapas li::before { content: ""; position: absolute; left: 4px; top: 5px; width: 9px; height: 9px; border-radius: 50%; background: var(--tom); box-shadow: 0 0 0 3px var(--tom-suave); }
+  .etapas li::after { content: ""; position: absolute; left: 8px; top: 18px; bottom: 0; width: 1px; background: var(--tom-borda); }
+  .etapas li:last-child::after { display: none; }
+  .etapas span { display: block; font-size: var(--t-rotulo); color: var(--suave); }
+  .etapas strong { font-weight: 600; }
+  .contatos { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 8px; }
+  .contatos li { display: flex; align-items: center; gap: 8px; }
+  .contatos .icone { color: var(--tom); }
+  .contatos small { color: var(--suave); }
+  .endereco { margin: 0 0 14px; line-height: 1.5; }
   table.simples { border-collapse: collapse; width: 100%; font-size: .88rem; }
   .simples th { padding: 10px 12px; text-align: left; background: #f9fafb; color: var(--suave); font-size: .7rem; font-weight: 700;
                 text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--borda); white-space: nowrap; }
@@ -22,6 +45,7 @@
   .simples tbody tr:hover { background: #fafbfc; }
   .simples td.num { text-align: right; white-space: nowrap; }
   .simples form { margin: 0; }
+  .tabela-rolavel { overflow-x: auto; margin: 0 -18px; padding: 0 18px; }
   /* Documentos: painel lateral translúcido, aberto pelo botão da barra de ações */
   dialog.gaveta { position: fixed; inset: 76px 16px auto auto; margin: 0; padding: 0; width: min(420px, calc(100vw - 32px)); max-width: none;
                   max-height: calc(100dvh - 92px); overflow: auto; border: 1px solid rgba(255,255,255,.8); border-radius: 22px;
@@ -54,208 +78,250 @@
     dialog.gaveta { inset: auto 8px 8px 8px; width: auto; max-height: calc(100dvh - 16px); }
     .docs .acoes-doc { flex-wrap: wrap; }
   }
-  @media print { dialog.gaveta, #abrir-documentos { display: none; } }
-  .acoes-doc.espaco { margin-top: 12px; }
+  .acoes-doc.espaco { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .acoes-doc.espaco .botao { padding: 6px 11px; font-size: .84rem; }
   .adendos { list-style: none; margin: 14px 0 0; padding: 0; border-top: 1px solid #f0f2f5; }
   .adendos li { padding: 10px 0; border-bottom: 1px solid #f0f2f5; font-size: .9rem; color: var(--suave); }
   .adendos li:last-child { border-bottom: 0; padding-bottom: 0; }
   .adendos li strong { color: var(--texto); }
   .adendos p { margin: 4px 0 0; color: var(--texto); white-space: pre-wrap; overflow-wrap: anywhere; }
   #adendo textarea { width: 100%; min-height: 9em; margin-bottom: 14px; }
-  .envelope { display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; padding: 6px 0 0; }
-  .envelope .situacao { margin-right: auto; display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
+  /* situação + ação de um cartão (acolhimento social, prontuário em papel) */
+  .envelope { display: grid; gap: 12px; }
+  .envelope .situacao { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
   .envelope form { display: flex; gap: 8px; flex-wrap: wrap; margin: 0; }
-  @media (max-width: 640px) { .envelope form, .envelope .botao { width: 100%; } }
-  form.nova-parcela { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-top: 12px; }
+  .envelope .botao { width: 100%; }
+  form.nova-parcela { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--borda); }
   form.nova-parcela label { width: 150px; }
   @media (max-width: 640px) {
-    .cartao { padding: 2px 14px 14px; overflow-x: auto; }
-    dl { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
-    dd { overflow-wrap: anywhere; }
-    .acoes .botao { flex: 1 1 100%; }
+    .ficha-topo { padding: 16px; gap: 14px; }
+    .ficha-topo .avatar.grande { width: 52px; height: 52px; font-size: 1.1rem; }
+    .ficha-topo .acoes { width: 100%; }
+    .ficha-topo .acoes .botao, .ficha-topo details.mais { flex: 1 1 auto; }
+    .ficha-topo details.mais > summary { width: 100%; }
+    .dados { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
     form.nova-parcela label { width: calc(50% - 5px); }
     form.nova-parcela .botao { flex: 1 1 100%; }
     .simples th, .simples td { padding-left: 6px; padding-right: 6px; }
     .simples.larga { min-width: 560px; }
   }
-  @media print { .cartao { overflow: visible; padding-bottom: 8px; } .simples.larga { min-width: 0; } form.nova-parcela { display: none; } }
+  @media print {
+    dialog.gaveta, #abrir-documentos, .ficha-topo .acoes, details.mais { display: none !important; }
+    .ficha-topo { background: none; border-color: #aaa; padding: 10px 12px; }
+    .ficha-grade { display: block; }
+    .cartao-secao { overflow: visible; border-color: #aaa; }
+    .tabela-rolavel { overflow: visible; }
+    .simples.larga { min-width: 0; }
+    form.nova-parcela { display: none; }
+  }
 {% endblock %}
 
 {% block conteudo %}
-<main>
+<main class="largo">
   {{ linha_voltar(url_for('lista_triagens') if i.e_triagem else url_for('lista_internos')) }}
   {% with msgs = get_flashed_messages() %}
     {% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
   {% endwith %}
 
-  <div class="cabecalho">
-    <h1>{{ p.nome }}</h1>
-    <span class="selo {{ i.status }}">{{ i.status_txt }}</span>
-  </div>
-  <p class="ajuda">Cadastro nº {{ p.id }} · registro nº {{ i.id }} · {{ i.categoria }}</p>
-
-  <div class="acoes">
-    <a class="botao" href="{{ url_for('editar_internacao', id=i.id) }}">Editar</a>
-    <button type="button" class="botao secundario" id="abrir-documentos"><svg class="icone"><use href="#i-documento"/></svg>Documentos</button>
-    <a class="botao secundario" href="{{ url_for('formulario', pessoa=p.id) }}">Nova internação desta pessoa</a>
-    <a class="botao secundario" href="{{ url_for('nova_triagem', pessoa=p.id) }}">Nova triagem desta pessoa</a>
-    <button type="button" class="botao perigo" id="abrir-exclusao"><svg class="icone"><use href="#i-lixeira"/></svg>Excluir registro</button>
-  </div>
-
-  <section class="cartao" id="acolhimento">
-    <h2>Acolhimento social</h2>
-    <div class="envelope">
-      <div class="situacao">
-        {% if acolhimento.estado == 'finalizado' %}
-          <span class="selo ativo">Finalizado</span>
-          <span>{{ acolhimento.em.strftime('%d/%m/%Y às %H:%M') }}{{ ' · ' ~ acolhimento.por if pode_servico_social and acolhimento.por }}</span>
-          {% if pode_servico_social %}
-            {% if acolhimento.risco %}<span class="selo {{ {'Baixo': 'ativo', 'Médio': 'lista_espera', 'Alto': 'desistiu'}[acolhimento.risco] }}">Risco {{ acolhimento.risco | lower }}</span>{% endif %}
-            {% if acolhimento.parecer %}<span class="selo {{ 'rejeitado' if acolhimento.parecer.startswith('Não') else 'lista_espera' if 'ressalvas' in acolhimento.parecer else 'ativo' }}">{{ acolhimento.parecer }}</span>{% endif %}
-          {% endif %}
-        {% elif acolhimento.estado == 'rascunho' %}
-          <span class="selo lista_espera">Em andamento</span>
-          <span>salvo em {{ acolhimento.em.strftime('%d/%m/%Y às %H:%M') }}{{ ' · ' ~ acolhimento.por if pode_servico_social and acolhimento.por }}</span>
-        {% else %}
-          <span class="selo{{ ' desistiu' if i.status == 'rejeitado' }}">Não iniciado</span>
-        {% endif %}
+  <header class="ficha-topo tom-{{ tom }}">
+    <span class="avatar grande av{{ avatar[1] }}" aria-hidden="true">{{ avatar[0] }}</span>
+    <div class="identidade">
+      <div class="linha-nome">
+        <h1>{{ p.nome }}</h1>
+        <span class="selo {{ i.status }}">{{ i.status_txt }}</span>
       </div>
-      {% if pode_servico_social and acolhimento.estado != 'finalizado' %}
-        <a class="botao" href="{{ url_for('relatorio_social', id=i.id) }}">{{ 'Continuar' if acolhimento.estado == 'rascunho' else 'Preencher a ficha' }}</a>
-      {% elif pode_servico_social %}
-        <button type="button" class="botao secundario" id="abrir-adendo">Adendo</button>
+      <p class="fatos">
+        {% if idade is not none %}<span class="fato">{{ idade }} anos</span>{% endif %}
+        <span class="chip {{ i.categoria_tipo }}">{{ i.categoria }}</span>
+        {# o cabeçalho só traz o que se deduz (há quanto tempo, previsão); as datas em si ficam no cartão da internação #}
+        {% if permanencia %}
+          <span class="fato"><svg class="icone"><use href="#i-calendario"/></svg>{{ 'Internado há ' ~ permanencia if i.status == 'ativo' else 'Ficou ' ~ permanencia ~ ' internado' }}</span>
+        {% endif %}
+        {% if i.status == 'ativo' and previsao %}<span class="fato"><svg class="icone"><use href="#i-relogio"/></svg>Previsão de saída {{ previsao | data }}</span>{% endif %}
+        {% if i.resp_nome %}<span class="fato"><svg class="icone"><use href="#i-usuario"/></svg>{{ i.resp_nome }}{{ ' (' ~ i.parentesco ~ ')' if i.parentesco }}</span>{% endif %}
+      </p>
+      <p class="ids">Cadastro nº {{ p.id }} · registro nº {{ i.id }}</p>
+    </div>
+    <div class="acoes">
+      <a class="botao" href="{{ url_for('editar_internacao', id=i.id) }}">Editar</a>
+      <button type="button" class="botao secundario" id="abrir-documentos"><svg class="icone"><use href="#i-documento"/></svg>Documentos</button>
+      <details class="mais">
+        <summary class="botao secundario"><svg class="icone"><use href="#i-pontos"/></svg>Mais</summary>
+        <div class="menu-mais">
+          <a href="{{ url_for('formulario', pessoa=p.id) }}"><svg class="icone"><use href="#i-casa"/></svg>Nova internação desta pessoa</a>
+          <a href="{{ url_for('nova_triagem', pessoa=p.id) }}"><svg class="icone"><use href="#i-prancheta"/></svg>Nova triagem desta pessoa</a>
+          <hr>
+          <button type="button" class="item-perigo" id="abrir-exclusao"><svg class="icone"><use href="#i-lixeira"/></svg>Excluir registro</button>
+        </div>
+      </details>
+    </div>
+  </header>
+
+  <div class="ficha-grade">
+    <div class="coluna-principal">
+      {% call cartao('Dados pessoais', 'usuario', 'azul') %}
+        {{ dados([('CPF', p.cpf | cpf), ('RG', p.rg | rg),
+                  ('Nascimento', p.nascimento | data),
+                  ('Cartão SUS', p.cartao_sus),
+                  ('Estado civil', (p.estado_civil ~ (' — ' ~ p.estado_civil_outro if p.estado_civil_outro else '')) if p.estado_civil else ''),
+                  ('Cônjuge', p.conjuge), ('Mãe', p.mae), ('Escolaridade', p.escolaridade), ('Profissão', p.profissao), ('Religião', p.religiao)]) }}
+      {% endcall %}
+
+      {% call cartao('Endereço e contatos', 'pin', 'verde') %}
+        {% set rua = [p.endereco, p.numero] | select | join(', ') %}
+        {% set local = [p.bairro, [p.cidade, p.estado] | select | join('/')] | select | join(' · ') %}
+        {% set telefones = [(p.contato1, 'família'), (p.contato2, 'contato 2'), (p.contato3, 'do acolhido')] | selectattr(0) | list %}
+        {% if rua or local or p.cep %}
+          <p class="endereco">{% if rua %}<strong>{{ rua }}</strong><br>{% endif %}{{ local }}{{ (' · CEP ' ~ (p.cep | cep)) if p.cep }}</p>
+        {% endif %}
+        {% if telefones %}
+          <ul class="contatos">{% for numero, quem in telefones %}<li><svg class="icone"><use href="#i-telefone"/></svg>{{ numero }} <small>{{ quem }}</small></li>{% endfor %}</ul>
+        {% endif %}
+        {% if not (rua or local or p.cep) or not telefones %}
+          <p class="nao-informado">Não informado: {{ [('endereço' if not (rua or local or p.cep)), ('contatos' if not telefones)] | select | join(', ') }}</p>
+        {% endif %}
+      {% endcall %}
+
+      {% call cartao('Responsável', 'usuarios', 'roxo') %}
+        {{ dados([('Nome', (i.resp_nome ~ (' (' ~ i.parentesco ~ ')' if i.parentesco else '')) if i.resp_nome else ''),
+                  ('CPF', i.resp_cpf | cpf), ('RG', i.resp_rg | rg)]) }}
+      {% endcall %}
+
+      {% call cartao('Parcelas', 'moeda', 'amarelo', id='parcelas') %}
+        {% if i.parcelas %}
+          <div class="tabela-rolavel">
+          <table class="simples">
+            <thead><tr><th>Nº</th><th>Data</th><th>Valor</th><th></th></tr></thead>
+            <tbody>
+              {% for parc in i.parcelas %}
+              <tr>
+                <td>{{ parc.numero }}ª</td>
+                <td>{{ parc.data | data }}</td>
+                <td class="num">{{ parc.valor | reais if parc.valor is not none else '—' }}</td>
+                <td><form method="post" action="{{ url_for('excluir_parcela', id=parc.id) }}"
+                          onsubmit="return confirm('Excluir a {{ parc.numero }}ª parcela?')">
+                      <button class="botao pequeno secundario">Excluir</button></form></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          </div>
+        {% else %}
+          <p class="nao-informado">Nenhuma parcela lançada.</p>
+        {% endif %}
+        <form class="nova-parcela" method="post" action="{{ url_for('lancar_parcela', id=i.id) }}">
+          <label>Nº<input type="number" name="numero" min="1"
+                 value="{{ (i.parcelas | map(attribute='numero') | max) + 1 if i.parcelas else 1 }}"></label>
+          <label>Data *<input type="date" name="data" required></label>
+          <label>Valor (R$)<input type="number" step="0.01" min="0" name="valor"
+                 value="{{ '%.2f' % i.contribuicao_valor if i.contribuicao_valor else '' }}"></label>
+          <button class="botao suave">Lançar parcela</button>
+        </form>
+      {% endcall %}
+
+      {% set outras = p.internacoes | rejectattr('id', 'equalto', i.id) | list %}
+      {% if outras %}
+      {% call cartao('Outros registros desta pessoa', 'calendario', 'neutro') %}
+        <div class="tabela-rolavel">
+        <table class="simples larga">
+          <thead><tr><th>Registro</th><th>Situação</th><th>1º contato</th><th>Agendada</th><th>Internado em</th><th>Saída</th><th>Responsável</th></tr></thead>
+          <tbody>
+            {% for o in outras %}
+            <tr>
+              <td><a href="{{ url_for('ficha', id=o.id) }}">nº {{ o.id }}</a></td>
+              <td><span class="selo {{ o.status }}">{{ o.status_txt }}</span></td>
+              <td>{{ o.primeiro_contato | data }}</td>
+              <td>{{ o.internacao_agendada | data }}</td>
+              <td>{{ o.inicio | data }}</td>
+              <td>{{ o.termino | data }}</td>
+              <td>{{ o.resp_nome }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      {% endcall %}
       {% endif %}
     </div>
-    {% if acolhimento.estado == 'finalizado' %}
-      {% set item = 'relatorio-social' if pode_servico_social else 'resumo-social' %}
-      {{ acoes_documento(url_for('ver_impressos', id=i.id, itens=item), url_for('baixar_impressos', id=i.id, itens=item), 'espaco') }}
-    {% endif %}
-    {% if pode_servico_social and acolhimento.get('adendos') %}
-      <ul class="adendos">
-        {% for a in acolhimento.adendos %}
-        <li><strong>{{ a.criado_em.strftime('%d/%m/%Y às %H:%M') }}</strong> · {{ a.criado_por }}<p>{{ a.texto }}</p></li>
-        {% endfor %}
-      </ul>
-    {% endif %}
-  </section>
 
-  {% if i.status == 'inativo' %}
-  <section class="cartao" id="envelope">
-    <h2>Prontuário em papel</h2>
-    <div class="envelope">
-      <div class="situacao">
-        {% if i.envelope == 'recebido' %}
-          <span class="selo ativo">No escritório</span>
-          {% if i.envelope_recebido_em %}<span>desde {{ i.envelope_recebido_em | data }}</span>{% endif %}
-        {% elif i.envelope == 'pendente' %}
-          <span class="selo {{ 'desistiu' if envelope_atrasado else 'lista_espera' }}">Na casa de acolhida</span>
-          {% if envelope_tempo %}<span>saiu {{ envelope_tempo }}{{ ' · cobrar a casa de acolhida' if envelope_atrasado }}</span>{% endif %}
-        {% else %}
-          <span class="selo">Sem registro</span><span>O prontuário voltou ao escritório?</span>
+    <aside class="coluna-lateral">
+      {% call cartao('Acolhimento social', 'coracao', 'rosa', id='acolhimento') %}
+        <div class="envelope">
+          <div class="situacao">
+            {% if acolhimento.estado == 'finalizado' %}
+              <span class="selo ativo">Finalizado</span>
+              <span>{{ acolhimento.em.strftime('%d/%m/%Y às %H:%M') }}{{ ' · ' ~ acolhimento.por if pode_servico_social and acolhimento.por }}</span>
+              {% if pode_servico_social %}
+                {% if acolhimento.risco %}<span class="selo {{ {'Baixo': 'ativo', 'Médio': 'lista_espera', 'Alto': 'desistiu'}[acolhimento.risco] }}">Risco {{ acolhimento.risco | lower }}</span>{% endif %}
+                {% if acolhimento.parecer %}<span class="selo {{ 'rejeitado' if acolhimento.parecer.startswith('Não') else 'lista_espera' if 'ressalvas' in acolhimento.parecer else 'ativo' }}">{{ acolhimento.parecer }}</span>{% endif %}
+              {% endif %}
+            {% elif acolhimento.estado == 'rascunho' %}
+              <span class="selo lista_espera">Em andamento</span>
+              <span>salvo em {{ acolhimento.em.strftime('%d/%m/%Y às %H:%M') }}{{ ' · ' ~ acolhimento.por if pode_servico_social and acolhimento.por }}</span>
+            {% else %}
+              <span class="selo{{ ' desistiu' if i.status == 'rejeitado' }}">Não iniciado</span>
+            {% endif %}
+          </div>
+          {% if pode_servico_social and acolhimento.estado != 'finalizado' %}
+            <a class="botao suave" href="{{ url_for('relatorio_social', id=i.id) }}">{{ 'Continuar' if acolhimento.estado == 'rascunho' else 'Preencher a ficha' }}</a>
+          {% elif pode_servico_social %}
+            <button type="button" class="botao secundario" id="abrir-adendo">Adendo</button>
+          {% endif %}
+        </div>
+        {% if acolhimento.estado == 'finalizado' %}
+          {% set item = 'relatorio-social' if pode_servico_social else 'resumo-social' %}
+          {{ acoes_documento(url_for('ver_impressos', id=i.id, itens=item), url_for('baixar_impressos', id=i.id, itens=item), 'espaco') }}
         {% endif %}
-      </div>
-      <form method="post" action="{{ url_for('registrar_envelope', id=i.id) }}">
-        {% if i.envelope == 'recebido' %}
-          <button class="botao secundario" name="situacao" value="pendente">Desfazer</button>
-        {% elif i.envelope == 'pendente' %}
-          <button class="botao" name="situacao" value="recebido">Chegou ao escritório</button>
-        {% else %}
-          <button class="botao" name="situacao" value="recebido">Sim, voltou</button>
-          <button class="botao secundario" name="situacao" value="pendente">Não, está na casa de acolhida</button>
+        {% if pode_servico_social and acolhimento.get('adendos') %}
+          <ul class="adendos">
+            {% for a in acolhimento.adendos %}
+            <li><strong>{{ a.criado_em.strftime('%d/%m/%Y às %H:%M') }}</strong> · {{ a.criado_por }}<p>{{ a.texto }}</p></li>
+            {% endfor %}
+          </ul>
         {% endif %}
-      </form>
-    </div>
-  </section>
-  {% endif %}
+      {% endcall %}
 
-  <section class="cartao">
-    <h2>Dados pessoais</h2>
-    <dl>
-      <div><dt>CPF</dt><dd>{{ p.cpf | cpf }}</dd></div>
-      <div><dt>RG</dt><dd>{{ p.rg | rg }}</dd></div>
-      <div><dt>Nascimento</dt><dd>{{ p.nascimento | data }}</dd></div>
-      <div><dt>Cartão SUS</dt><dd>{{ p.cartao_sus }}</dd></div>
-      <div><dt>Estado civil</dt><dd>{{ p.estado_civil }}{{ ' — ' ~ p.estado_civil_outro if p.estado_civil_outro }}</dd></div>
-      <div><dt>Cônjuge</dt><dd>{{ p.conjuge }}</dd></div>
-      <div><dt>Mãe</dt><dd>{{ p.mae }}</dd></div>
-      <div><dt>Escolaridade</dt><dd>{{ p.escolaridade }}</dd></div>
-      <div><dt>Profissão</dt><dd>{{ p.profissao }}</dd></div>
-      <div><dt>Religião</dt><dd>{{ p.religiao }}</dd></div>
-      <div><dt>Endereço</dt><dd>{{ [p.endereco, p.numero] | select | join(', ') }}{{ ' — ' ~ p.bairro if p.bairro }}</dd></div>
-      <div><dt>Cidade / UF</dt><dd>{{ [p.cidade, p.estado] | select | join('/') }}</dd></div>
-      <div><dt>CEP</dt><dd>{{ p.cep | cep }}</dd></div>
-      <div><dt>Contatos</dt><dd>{{ [p.contato1, p.contato2, p.contato3] | select | join(' · ') }}</dd></div>
-    </dl>
-  </section>
+      {% call cartao('Triagem' if i.e_triagem else 'Internação', 'calendario', 'azul') %}
+        {% set etapas = [('1º contato', [i.primeiro_contato | data, i.hora_primeiro_contato | hora] | select | join(' ')),
+                         ('Triagem', ([i.data_triagem | data, i.hora_triagem | hora] | select | join(' ')) ~ (' · ' ~ i.modalidade if i.modalidade and i.data_triagem else '')),
+                         ('Internação agendada', [i.internacao_agendada | data, i.hora_agendada | hora] | select | join(' ')),
+                         ('Internado em (efetiva)', [i.inicio | data, i.hora_internacao | hora] | select | join(' ')),
+                         ('Saída', ((i.termino | data) ~ (' · ' ~ i.motivo if i.motivo else '')) if i.termino else '')] | selectattr(1) | list %}
+        {% if etapas %}
+          <ol class="etapas">{% for rotulo, valor in etapas %}<li><span>{{ rotulo }}</span><strong>{{ valor }}</strong></li>{% endfor %}</ol>
+        {% endif %}
+        {{ dados([('Categoria', i.categoria), ('Contribuição', (i.contribuicao_valor | reais) ~ (' — ' ~ i.contribuicao_condicoes if i.contribuicao_condicoes else ''))]) }}
+      {% endcall %}
 
-  <section class="cartao">
-    <h2>{{ 'Triagem' if i.e_triagem else 'Internação' }}</h2>
-    <dl>
-      <div><dt>1º contato</dt><dd>{{ [i.primeiro_contato | data, i.hora_primeiro_contato | hora] | select | join(' ') }}</dd></div>
-      <div><dt>Triagem</dt><dd>{{ ([i.data_triagem | data, i.hora_triagem | hora] | select | join(' ')) ~ (' · ' ~ i.modalidade if i.modalidade else '') }}</dd></div>
-      <div><dt>Internação agendada</dt><dd>{{ [i.internacao_agendada | data, i.hora_agendada | hora] | select | join(' ') }}</dd></div>
-      <div><dt>Internado em (efetiva)</dt><dd>{{ [i.inicio | data, i.hora_internacao | hora] | select | join(' ') }}</dd></div>
-      <div><dt>Saída</dt><dd>{{ i.termino | data }}{{ ' · ' ~ i.motivo if i.motivo }}</dd></div>
-      <div><dt>Responsável</dt><dd>{{ i.resp_nome }}{{ ' (' ~ i.parentesco ~ ')' if i.parentesco }}</dd></div>
-      <div><dt>CPF / RG do responsável</dt><dd>{{ [i.resp_cpf | cpf, i.resp_rg | rg] | select | join(' · ') }}</dd></div>
-      <div><dt>Categoria</dt><dd>{{ i.categoria }}</dd></div>
-      <div><dt>Contribuição</dt><dd>{{ i.contribuicao_valor | reais }}{{ ' — ' ~ i.contribuicao_condicoes if i.contribuicao_condicoes }}</dd></div>
-    </dl>
-  </section>
-
-  <section class="cartao" id="parcelas">
-    <h2>Parcelas</h2>
-    {% if i.parcelas %}
-      <table class="simples">
-        <thead><tr><th>Nº</th><th>Data</th><th>Valor</th><th></th></tr></thead>
-        <tbody>
-          {% for parc in i.parcelas %}
-          <tr>
-            <td>{{ parc.numero }}ª</td>
-            <td>{{ parc.data | data }}</td>
-            <td class="num">{{ parc.valor | reais if parc.valor is not none else '—' }}</td>
-            <td><form method="post" action="{{ url_for('excluir_parcela', id=parc.id) }}"
-                      onsubmit="return confirm('Excluir a {{ parc.numero }}ª parcela?')">
-                  <button class="botao pequeno secundario">Excluir</button></form></td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p class="ajuda">Nenhuma parcela lançada.</p>
-    {% endif %}
-    <form class="nova-parcela" method="post" action="{{ url_for('lancar_parcela', id=i.id) }}">
-      <label>Nº<input type="number" name="numero" min="1"
-             value="{{ (i.parcelas | map(attribute='numero') | max) + 1 if i.parcelas else 1 }}"></label>
-      <label>Data *<input type="date" name="data" required></label>
-      <label>Valor (R$)<input type="number" step="0.01" min="0" name="valor"
-             value="{{ '%.2f' % i.contribuicao_valor if i.contribuicao_valor else '' }}"></label>
-      <button class="botao">Lançar parcela</button>
-    </form>
-  </section>
-
-  {% set outras = p.internacoes | rejectattr('id', 'equalto', i.id) | list %}
-  {% if outras %}
-  <section class="cartao">
-    <h2>Outros registros desta pessoa</h2>
-    <table class="simples larga">
-      <thead><tr><th>Registro</th><th>Situação</th><th>1º contato</th><th>Agendada</th><th>Internado em</th><th>Saída</th><th>Responsável</th></tr></thead>
-      <tbody>
-        {% for o in outras %}
-        <tr>
-          <td><a href="{{ url_for('ficha', id=o.id) }}">nº {{ o.id }}</a></td>
-          <td><span class="selo {{ o.status }}">{{ o.status_txt }}</span></td>
-          <td>{{ o.primeiro_contato | data }}</td>
-          <td>{{ o.internacao_agendada | data }}</td>
-          <td>{{ o.inicio | data }}</td>
-          <td>{{ o.termino | data }}</td>
-          <td>{{ o.resp_nome }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </section>
-  {% endif %}
+      {% if i.status == 'inativo' %}
+      {% call cartao('Prontuário em papel', 'envelope', 'verde' if i.envelope == 'recebido' else 'amarelo' if i.envelope == 'pendente' else 'neutro', id='envelope') %}
+        <div class="envelope">
+          <div class="situacao">
+            {% if i.envelope == 'recebido' %}
+              <span class="selo ativo">No escritório</span>
+              {% if i.envelope_recebido_em %}<span>desde {{ i.envelope_recebido_em | data }}</span>{% endif %}
+            {% elif i.envelope == 'pendente' %}
+              <span class="selo {{ 'desistiu' if envelope_atrasado else 'lista_espera' }}">Na casa de acolhida</span>
+              {% if envelope_tempo %}<span>saiu {{ envelope_tempo }}{{ ' · cobrar a casa de acolhida' if envelope_atrasado }}</span>{% endif %}
+            {% else %}
+              <span class="selo">Sem registro</span><span>O prontuário voltou ao escritório?</span>
+            {% endif %}
+          </div>
+          <form method="post" action="{{ url_for('registrar_envelope', id=i.id) }}">
+            {% if i.envelope == 'recebido' %}
+              <button class="botao secundario" name="situacao" value="pendente">Desfazer</button>
+            {% elif i.envelope == 'pendente' %}
+              <button class="botao suave" name="situacao" value="recebido">Chegou ao escritório</button>
+            {% else %}
+              <button class="botao suave" name="situacao" value="recebido">Sim, voltou</button>
+              <button class="botao secundario" name="situacao" value="pendente">Não, está na casa de acolhida</button>
+            {% endif %}
+          </form>
+        </div>
+      {% endcall %}
+      {% endif %}
+    </aside>
+  </div>
 </main>
 
 <dialog id="documentos" class="gaveta" aria-labelledby="titulo-documentos">
@@ -315,9 +381,9 @@
       <button type="button" class="botao secundario" id="cancelar-exclusao">Cancelar</button>
       {% if e_administrador %}
         <button class="botao secundario" name="acao" value="lixeira">Mover para a lixeira</button>
-        <button class="botao perigo" name="acao" value="apagar" onclick="return confirm('Apagar {{ p.nome | replace("'", "") }} do banco de dados? Não tem volta.')">Excluir de vez</button>
+        <button class="botao perigo solido" name="acao" value="apagar" onclick="return confirm('Apagar {{ p.nome | replace("'", "") }} do banco de dados? Não tem volta.')">Excluir de vez</button>
       {% else %}
-        <button class="botao perigo" name="acao" value="lixeira">Excluir</button>
+        <button class="botao perigo solido" name="acao" value="lixeira">Excluir</button>
       {% endif %}
     </div>
   </form>
@@ -334,9 +400,12 @@
       document.getElementById("abrir-adendo").addEventListener("click", function () { adendo.showModal(); });
       document.getElementById("cancelar-adendo").addEventListener("click", function () { adendo.close(); });
     }
-    var dialogo = document.getElementById("excluir");
-    document.getElementById("abrir-exclusao").addEventListener("click", function () { dialogo.showModal(); });
+    var dialogo = document.getElementById("excluir"), mais = document.querySelector("details.mais");
+    document.getElementById("abrir-exclusao").addEventListener("click", function () { mais.open = false; dialogo.showModal(); });
     document.getElementById("cancelar-exclusao").addEventListener("click", function () { dialogo.close(); });
+    // o menu "Mais" fecha ao clicar fora ou com Esc
+    document.addEventListener("click", function (e) { if (mais.open && !mais.contains(e.target)) mais.open = false; });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") mais.open = false; });
   })();
 </script>
 {% endblock %}

@@ -64,6 +64,7 @@ from datetime import date
 
 from flask import (Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file,
                    session, url_for)
+from werkzeug.exceptions import HTTPException
 
 import autenticacao
 import banco
@@ -81,8 +82,9 @@ from avisos import dias_de_espera, gerar_avisos, tempo_decorrido
 from modelos import (ENVELOPE_RECEBIDO, STATUS_INTERNACAO, STATUS_TRIAGEM, AvisoDispensado, Convenio, Funcionario,
                      Internacao, NivelAcesso, Parcela, Pessoa, db)
 from migracoes import migrar
-from prontuario import faixas_do_particular, fmt_data, fmt_reais, gerar_docx, montar_documento
-from validacao import fmt_cep, fmt_cpf, fmt_hora, fmt_rg
+from prontuario import (calcular_idade, faixas_do_particular, fmt_data, fmt_reais, gerar_docx, montar_documento,
+                        previsao_termino)
+from validacao import avatar_da_pessoa, fmt_cep, fmt_cpf, fmt_hora, fmt_rg
 from vagas import gerar_vagas, totais
 
 app = Flask(__name__)
@@ -135,6 +137,34 @@ app.jinja_env.filters.update(cpf=fmt_cpf, rg=fmt_rg, cep=fmt_cep, data=fmt_data,
 
 def _buscar(modelo, id):
     return db.session.get(modelo, id) or abort(404)
+
+
+# Páginas de erro na mesma linguagem do resto do sistema (templates/erro.html). O que é de API (JSON) segue com a resposta padrão.
+MENSAGENS_DE_ERRO = {
+    400: ("Pedido inválido", "O sistema não entendeu o que foi enviado. Volte e tente de novo."),
+    403: ("Sem permissão", "Você não tem permissão para abrir esta página."),
+    404: ("Página não encontrada", "O endereço não existe, ou o registro foi excluído."),
+    405: ("Ação não permitida", "Esta página não aceita essa ação."),
+    500: ("Algo deu errado", "O sistema não conseguiu concluir. Tente de novo e, se continuar, avise o administrador."),
+}
+
+
+@app.errorhandler(HTTPException)
+def pagina_de_erro(erro):
+    if erro.code is None or erro.code < 400 or request.path.startswith("/api/") or request.is_json:     # redirecionamentos e API seguem como são
+        return erro
+    titulo, texto = MENSAGENS_DE_ERRO.get(erro.code, ("Não foi possível abrir", "Volte para o início e tente de novo."))
+    return render_template("erro.html", codigo=erro.code, titulo=titulo, texto=texto), erro.code
+
+
+@app.errorhandler(Exception)
+def erro_interno(erro):
+    """Erro de verdade (um bug): registra o que aconteceu e mostra a página, sem detalhe técnico. Em desenvolvimento
+    (debug), deixa o depurador do Flask mostrar tudo."""
+    if app.debug:
+        raise erro
+    app.logger.exception("Erro não tratado em %s", request.path)
+    return render_template("erro.html", codigo=500, titulo=MENSAGENS_DE_ERRO[500][0], texto=MENSAGENS_DE_ERRO[500][1]), 500
 
 
 def _dados_para_novo(pessoa_id):
@@ -337,9 +367,27 @@ def gerar():
 def ficha(id):
     internacao = _buscar(Internacao, id)
     dias, atrasado = dias_de_espera(internacao)
+    p, hoje = internacao.pessoa, relatorios.hoje_no_brasil()
+    permanencia = ((hoje if internacao.status == "ativo" else internacao.termino) - internacao.inicio).days \
+        if internacao.inicio and (internacao.status == "ativo" or internacao.termino) else None
     return render_template("ficha.html", i=internacao, envelope_atrasado=atrasado,
                            envelope_tempo=tempo_decorrido(dias) if dias is not None else "",
-                           acolhimento=_resumo_do_acolhimento(internacao))
+                           acolhimento=_resumo_do_acolhimento(internacao),
+                           idade=calcular_idade(p.nascimento, hoje),
+                           previsao=previsao_termino(internacao.inicio, internacao.tratamento_ate) if internacao.inicio else None,
+                           permanencia=_duracao(permanencia) if permanencia is not None and permanencia >= 0 else "",
+                           avatar=avatar_da_pessoa(p.nome))
+
+
+def _duracao(dias):
+    """Quanto tempo, em palavras: '12 dias', '8 meses', '1 ano e 3 meses' (o cabeçalho da ficha mostra quanto ficou ou está internado)."""
+    if dias < 60:
+        return f"{dias} dia{'' if dias == 1 else 's'}"
+    meses = round(dias / 30.44)
+    if meses < 24:
+        return f"{meses} meses"
+    anos, resto = divmod(meses, 12)
+    return f"{anos} anos" + (f" e {resto} mese{'s' if resto > 1 else ''}" if resto else "")
 
 
 def _resumo_do_acolhimento(internacao):
@@ -499,7 +547,7 @@ def _tela_relatorio(internacao, form, erros, status=200):
     valores = servico_social.valores_do_formulario(form, servico_social.campos_para(internacao)) if form is not None \
         else servico_social.valores(internacao, relatorio, servico_social.campos_para(internacao))
     anterior = servico_social.anterior(internacao) if relatorio is None and form is None else None      # readmissão: de onde vieram as respostas
-    return render_template("servico_social_form.html", i=internacao, secoes=servico_social.secoes_para(internacao), v=valores, erros=erros,
+    return render_template("servico_social_form.html", i=internacao, secoes=servico_social.secoes_para(internacao), visual=servico_social.VISUAL, v=valores, erros=erros,
                            relatorio=relatorio, acolhido=acolhido, responsavel=responsavel, anterior=anterior), status
 
 

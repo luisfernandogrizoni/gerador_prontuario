@@ -2,10 +2,10 @@
 {% macro abas(atual) -%}
 <div class="ferramentas">
   <div class="segmentado" role="group" aria-label="Cadastros">
-    <a href="{{ url_for('lista_convenios') }}" class="{{ 'ativo' if atual == 'convenios' }}">Convênios</a>
-    <a href="{{ url_for('lista_funcionarios') }}" class="{{ 'ativo' if atual == 'funcionarios' }}">Funcionários</a>
-    <a href="{{ url_for('lista_niveis') }}" class="{{ 'ativo' if atual == 'niveis' }}">Níveis de acesso</a>
-    {% if e_administrador %}<a href="{{ url_for('lixeira') }}" class="{{ 'ativo' if atual == 'lixeira' }}">Lixeira</a>{% endif %}
+    <a href="{{ url_for('lista_convenios') }}" class="{{ 'ativo' if atual == 'convenios' }}"><svg class="icone"><use href="#i-prancheta"/></svg>Convênios</a>
+    <a href="{{ url_for('lista_funcionarios') }}" class="{{ 'ativo' if atual == 'funcionarios' }}"><svg class="icone"><use href="#i-usuarios"/></svg>Funcionários</a>
+    <a href="{{ url_for('lista_niveis') }}" class="{{ 'ativo' if atual == 'niveis' }}"><svg class="icone"><use href="#i-cadeado"/></svg>Níveis de acesso</a>
+    {% if e_administrador %}<a href="{{ url_for('lixeira') }}" class="{{ 'ativo' if atual == 'lixeira' }}"><svg class="icone"><use href="#i-lixeira"/></svg>Lixeira</a>{% endif %}
   </div>
 </div>
 {%- endmacro %}

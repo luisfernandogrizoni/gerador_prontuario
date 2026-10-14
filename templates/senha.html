@@ -1,26 +1,29 @@
 {% extends "base.html" %}
 {% from "_voltar.html" import linha_voltar with context %}
+{% from "_cartao.html" import legenda %}
 {% block titulo %}Alterar senha — Casa de Acolhida Restauração{% endblock %}
 
 {% block estilo %}
-  .senha { max-width: 420px; }
-  .senha form { display: grid; gap: 14px; margin-top: 18px; }
 {% endblock %}
 
 {% block conteudo %}
-<main class="senha">
+<main class="largo">
   {{ linha_voltar(url_for('home')) }}
   <h1>Alterar minha senha</h1>
   {% if erro %}<p class="caixa-erros erro" role="alert">{{ erro }}</p>{% endif %}
-  <form method="post" action="{{ url_for('alterar_senha') }}">
-    <label>Senha atual
-      <input name="atual" type="password" autocomplete="current-password" required autofocus></label>
-    <label>Senha nova
-      <input name="nova" type="password" autocomplete="new-password" minlength="{{ minimo }}" required></label>
-    <label>Repita a senha nova
-      <input name="confirmacao" type="password" autocomplete="new-password" minlength="{{ minimo }}" required></label>
-    <div><button class="botao">Alterar senha</button>
-      <a class="botao secundario" href="{{ url_for('home') }}">Cancelar</a></div>
+  <form class="estreito curto" method="post" action="{{ url_for('alterar_senha') }}">
+    <fieldset class="tom-roxo">
+      {{ legenda('Senha', 'cadeado') }}
+      <div class="grade">
+        <label class="c6">Senha atual
+          <input name="atual" type="password" autocomplete="current-password" required autofocus></label>
+        <label class="c6">Senha nova
+          <input name="nova" type="password" autocomplete="new-password" minlength="{{ minimo }}" required></label>
+        <label class="c6">Repita a senha nova
+          <input name="confirmacao" type="password" autocomplete="new-password" minlength="{{ minimo }}" required></label>
+      </div>
+    </fieldset>
+    <div class="botoes-form"><button class="botao">Alterar senha</button></div>
   </form>
 </main>
 {% endblock %}
