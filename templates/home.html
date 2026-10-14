@@ -84,6 +84,8 @@
   .vaga.sem_limite .barra { display: none; }
   .vaga.sem_limite .vaga-nome { color: var(--texto); }
 
+  .faixa-lixeira { margin: 0 0 16px; }
+
   /* ---- exames e enxoval de quem tem a internação marcada ---- */
   .imprimir-lista { list-style: none; margin: 0; padding: 4px 20px 6px; }
   .imprimir-lista li { display: flex; align-items: center; gap: 10px 14px; padding: 11px 0; border-top: 1px solid #f0f2f5; }
@@ -188,6 +190,11 @@
   {% with msgs = get_flashed_messages() %}
     {% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
   {% endwith %}
+
+  {% if na_lixeira %}
+  <a class="faixa-alerta faixa-lixeira" href="{{ url_for('lixeira') }}"><svg class="icone"><use href="#i-lixeira"/></svg>
+    {{ na_lixeira }} registro{{ '' if na_lixeira == 1 else 's' }} excluído{{ '' if na_lixeira == 1 else 's' }} aguardando o administrador — ver a lixeira</a>
+  {% endif %}
 
   <section class="kpis" aria-label="Resumo">
     <a class="kpi" href="{{ url_for('lista_internos') }}">
@@ -363,7 +370,7 @@
         <ul class="imprimir-lista">
           {% for p in para_imprimir.itens %}
           <li>
-            <span class="quem"><a href="{{ p.ficha }}" title="{{ p.nome }}">{{ p.nome }}</a><small>internação {{ p.quando }}</small></span>
+            <span class="quem"><a href="{{ p.ficha }}" title="{{ p.nome }}">{{ p.nome }}</a><small>internação {{ p.quando }}{{ ' · já impresso' if p.impresso }}</small></span>
             <a class="botao pequeno secundario" href="{{ p.url }}" target="_blank" rel="noopener" title="Imprimir o pedido de exames e o enxoval de {{ p.nome }}"><svg class="icone"><use href="#i-impressora"/></svg>Imprimir</a>
           </li>
           {% endfor %}

@@ -1,6 +1,6 @@
 """
-Regras de negócio: validar e gravar triagens e prontuários, mudar status, gravar o relatório do Serviço Social,
-lançar parcelas e unificar cadastros duplicados.
+Regras de negócio: validar e gravar triagens e prontuários, mudar status, gravar os relatórios do Serviço Social
+(o da internação e o da rejeição na triagem), lançar parcelas e unificar cadastros duplicados.
 
 As rotas (app.py) só chamam estas funções. Cada função de gravação devolve
 (objeto, erros): se `erros` vier preenchido, nada foi gravado e o formulário
@@ -10,9 +10,10 @@ volta para a tela com as mensagens ao lado de cada campo.
 from datetime import date
 
 import catalogo
+import rejeicao
 import servico_social
 from modelos import (ENVELOPE_PENDENTE, ENVELOPE_RECEBIDO, STATUS, STATUS_TRIAGEM, Internacao, Parcela,
-                     Pessoa, RelatorioSocial, db)
+                     Pessoa, RejeicaoTriagem, RelatorioSocial, db)
 from prontuario import CONVENIO_A_DEFINIR, ler_data, ler_valor
 from relatorios import hoje_no_brasil
 from validacao import cpf_valido, fmt_cpf, ler_hora, normalizar_nome, rg_valido, so_digitos
@@ -257,6 +258,19 @@ def salvar_relatorio_social(internacao, form, usuario=""):
     return relatorio, {}
 
 
+def salvar_rejeicao(internacao, form, usuario=""):
+    """Grava o relatório de rejeição escrito pela assistente social (veja rejeicao.py). Devolve (relatório, erros)."""
+    dados, erros = rejeicao.ler_formulario(form)
+    if erros:
+        return None, erros
+    relatorio = internacao.rejeicao or RejeicaoTriagem(internacao=internacao)
+    relatorio.dados = dados
+    relatorio.atualizado_por = usuario[:50]
+    db.session.add(relatorio)
+    db.session.commit()
+    return relatorio, {}
+
+
 # ------------------------------------------------------------------ parcelas
 def lancar_parcela(internacao, form):
     data = ler_data(form.get("data"))
@@ -278,8 +292,10 @@ def unificar(manter, remover):
             continue
         if not getattr(manter, coluna.name) and getattr(remover, coluna.name):
             setattr(manter, coluna.name, getattr(remover, coluna.name))
-    for internacao in list(remover.internacoes):
-        internacao.pessoa = manter
+    # todos os registros passam para o cadastro que fica, inclusive os excluídos (que `remover.internacoes` não enxerga):
+    # um UPDATE direto, antes de apagar `remover`, para que nenhum fique apontando para um cadastro que deixou de existir
+    db.session.execute(db.update(Internacao).where(Internacao.pessoa_id == remover.id).values(pessoa_id=manter.id))
+    db.session.expire(remover, ["internacoes"])
     db.session.delete(remover)
     db.session.commit()
 

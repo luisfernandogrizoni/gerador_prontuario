@@ -39,6 +39,9 @@
     </label>
   </div>
 
+  {% with msgs = get_flashed_messages() %}
+    {% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
+  {% endwith %}
   <div id="aviso" class="aviso" hidden></div>
 
   <div class="moldura">

@@ -6,7 +6,8 @@
   acolhido e responsavel ([(rótulo, valor)] que vêm do cadastro).
 #}
 
-{% block titulo %}Relatório do Serviço Social · {{ i.pessoa.nome }}{% endblock %}
+{% set titulo = titulo | default('Relatório do Serviço Social') %}
+{% block titulo %}{{ titulo }} · {{ i.pessoa.nome }}{% endblock %}
 
 {% block estilo %}
   .cabecalho-rel { display: flex; align-items: flex-end; gap: 8px 16px; flex-wrap: wrap; margin-bottom: 4px; }
@@ -76,7 +77,7 @@
   {% endwith %}
 
   <div class="cabecalho-rel">
-    <h1>Relatório do Serviço Social</h1>
+    <h1>{{ titulo }}</h1>
     {% if relatorio and relatorio.dados %}
       <span class="estado">salvo em {{ relatorio.atualizado_em.strftime('%d/%m/%Y às %H:%M') }}{{ ' por ' ~ relatorio.atualizado_por if relatorio.atualizado_por }}</span>
     {% else %}
@@ -88,8 +89,10 @@
   <section class="cadastro-resumo">
     <h3>Do cadastro do acolhido</h3>
     <dl>{% for rotulo, valor in acolhido %}<div><dt>{{ rotulo }}</dt><dd>{{ valor }}</dd></div>{% endfor %}</dl>
+    {% if responsavel %}
     <h3>Responsável</h3>
     <dl>{% for rotulo, valor in responsavel %}<div><dt>{{ rotulo }}</dt><dd>{{ valor }}</dd></div>{% endfor %}</dl>
+    {% endif %}
     <p class="corrigir"><a href="{{ url_for('editar_internacao', id=i.id) }}">Corrigir no cadastro</a></p>
   </section>
 

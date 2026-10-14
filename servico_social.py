@@ -128,6 +128,7 @@ def _data_da_triagem(i):
 
 PADROES = {
     "data_da_triagem": _data_da_triagem,
+    "hoje": lambda i: date.today().isoformat(),
     "endereco": lambda i: i.pessoa.endereco, "numero": lambda i: i.pessoa.numero, "bairro": lambda i: i.pessoa.bairro,
     "cep": lambda i: fmt_cep(i.pessoa.cep), "cidade": lambda i: i.pessoa.cidade, "estado": lambda i: i.pessoa.estado,
 }
@@ -148,11 +149,12 @@ def identificacao(internacao, hoje=None):
     return acolhido, responsavel
 
 
-def valores(internacao, relatorio=None):
-    """O que aparece em cada campo: o digitado; onde ainda não há nada, o que vem do cadastro (campo.padrao)."""
+def valores(internacao, relatorio=None, campos=None):
+    """O que aparece em cada campo: o digitado; onde ainda não há nada, o que vem do cadastro (campo.padrao).
+    `campos`: outro conjunto de perguntas (o relatório de rejeição usa as mesmas peças)."""
     salvo = (relatorio.dados if relatorio is not None else None) or {}
     resultado = {}
-    for campo in CAMPOS:
+    for campo in campos or CAMPOS:
         if campo.tipo == "sim_nao":
             resultado[campo.chave] = salvo.get(campo.chave, "")
             resultado[campo.chave + "_detalhe"] = salvo.get(campo.chave + "_detalhe", "")
@@ -163,10 +165,10 @@ def valores(internacao, relatorio=None):
     return resultado
 
 
-def valores_do_formulario(form):
+def valores_do_formulario(form, campos=None):
     """O que está na tela quando o formulário volta com erro: o que foi digitado, do jeito que foi digitado."""
     resultado = {}
-    for campo in CAMPOS:
+    for campo in campos or CAMPOS:
         resultado[campo.chave] = (form.get(campo.chave) or "").strip()
         if campo.tipo == "sim_nao":
             resultado[campo.chave + "_detalhe"] = (form.get(campo.chave + "_detalhe") or "").strip()
@@ -179,10 +181,10 @@ def preenchido(relatorio):
 
 
 # ============================================================ o que foi digitado
-def ler_formulario(form):
+def ler_formulario(form, campos=None):
     """Formulário -> (dados, erros). `dados` guarda só o que foi preenchido; valores fora do esperado viram erro."""
     dados, erros = {}, {}
-    for campo in CAMPOS:
+    for campo in campos or CAMPOS:
         bruto = (form.get(campo.chave) or "").strip()
         if campo.tipo == "data":
             if bruto and ler_data(bruto) is None:
@@ -220,7 +222,7 @@ def _opcoes(campo, escolhido):
     return "   ".join(f"( {'X' if opcao == escolhido else ' '} ) {opcao}" for opcao in campo.opcoes)
 
 
-def _campo(campo, v):
+def blocos_do_campo(campo, v):
     """Blocos de um campo, no jeito do papel: pergunta e resposta (ou linhas em branco)."""
     valor = v.get(campo.chave, "")
     if campo.tipo == "longo":
@@ -282,7 +284,7 @@ def blocos(internacao, relatorio=None, hoje=None):
     acolhido, responsavel = identificacao(internacao, hoje)
     saida = [Paragrafo([N("FICHA DE ACOLHIMENTO E CLASSIFICAÇÃO DE RISCO E VULNERABILIDADE DO RESIDENTE – SERVIÇO SOCIAL")],
                        "centro", tamanho=12, quebra_antes=True, depois=6),
-             *_campo(CAMPOS[0], v)]                                  # a data do acolhimento abre a ficha, antes das seções
+             *blocos_do_campo(CAMPOS[0], v)]                                  # a data do acolhimento abre a ficha, antes das seções
     for numero, secao in enumerate(SECOES, 1):
         saida += _cabecalho_da_secao(numero, secao, dict(acolhido), dict(responsavel))
         pendentes = []                                               # campos curtos seguidos que o papel põe na mesma linha
@@ -295,7 +297,7 @@ def blocos(internacao, relatorio=None, hoje=None):
             if campo.linha:
                 pendentes.append(campo)
             else:
-                saida += _campo(campo, v)
+                saida += blocos_do_campo(campo, v)
         if pendentes:
             saida.append(_campos_da_linha(pendentes, v))
     return saida + _fecho(v)

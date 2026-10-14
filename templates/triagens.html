@@ -5,6 +5,8 @@
 
 {% block estilo %}
     @media print { @page { size: A4 landscape; margin: 10mm; } }
+    .acoes-linha { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+    @media (max-width: 1279px) { .acoes-linha { justify-content: stretch; } .acoes-linha > * { flex: 1 1 0; } .acoes-linha .botao { width: 100%; justify-content: center; } }
 {% endblock %}
 
 {% block conteudo %}
@@ -20,6 +22,7 @@
       <button type="button" data-valor="em_admissao">Em admissão <span class="n" id="n-em_admissao">–</span></button>
       <button type="button" data-valor="lista_espera">Lista de espera <span class="n" id="n-lista_espera">–</span></button>
       <button type="button" data-valor="desistiu">Desistências <span class="n" id="n-desistiu">–</span></button>
+      <button type="button" data-valor="rejeitado">Rejeitados <span class="n" id="n-rejeitado">–</span></button>
       <button type="button" data-valor="">Todas <span class="n" id="n-todas">–</span></button>
     </div>
     <label class="busca">
@@ -28,6 +31,9 @@
     </label>
   </div>
 
+  {% with msgs = get_flashed_messages() %}
+    {% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
+  {% endwith %}
   <div id="aviso" class="aviso" hidden></div>
 
   <div class="moldura">
@@ -147,6 +153,29 @@
     return caixa;
   }
 
+  // desistência e rejeição saem de "em andamento": a triagem delas já terminou
+  const emAndamento = i => i.status !== "desistiu" && i.status !== "rejeitado";
+
+  // Editar; quem foi rejeitado ganha o relatório da rejeição; quem tem a internação marcada ganha Imprimir (exames e enxoval)
+  function celulaAcoes(i) {
+    const caixa = document.createElement("div");
+    caixa.className = "acoes-linha";
+    if (i.status === "rejeitado") caixa.append(link("Relatório", `/internacoes/${i.id}/rejeicao`, "botao pequeno secundario"));
+    else if (i.agendada && i.agendada >= hojeIso() && (i.status === "em_admissao" || i.status === "lista_espera")) {
+      const imprimir = link("Imprimir", `/internacoes/${i.id}/impressos?itens=exames,enxoval&imprimir=1`, "botao pequeno secundario");
+      imprimir.target = "_blank"; imprimir.rel = "noopener"; imprimir.title = "Pedido de exames e enxoval";
+      imprimir.prepend(icone("impressora"));
+      caixa.append(imprimir);
+    }
+    caixa.append(link("Editar", `/internacoes/${i.id}/editar`, "botao pequeno secundario"));
+    return caixa;
+  }
+
+  function hojeIso() {                           // data de hoje NO FUSO LOCAL (toISOString usaria UTC)
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
   function seletorStatus(item) {
     const sel = document.createElement("select");
     sel.className = "seletor " + item.status;
@@ -167,6 +196,8 @@
       if (resp.status === "ativo") {
         mostrarAviso([`${item.nome} foi admitido e já está na lista de internos. `,
                       link("Completar o prontuário", resp.editar), " · ", link("ver ficha", resp.ficha)]);
+      } else if (resp.status === "rejeitado") {
+        mostrarAviso([`${item.nome} foi marcado como rejeitado na triagem. `, link("Escrever o relatório da rejeição", resp.rejeicao), " · ", link("ver ficha", resp.ficha)]);
       } else {
         mostrarAviso([`Situação de ${item.nome} alterada para "${sel.selectedOptions[0].text}".`]);
       }
@@ -181,11 +212,11 @@
     destacar: NOVO,
     campos: { situacao: filtro },       // a situação escolhida fica na URL: o "voltar" a mantém
     camposBusca: i => [i.nome, i.cpf, i.cpf.replace(/\D/g, ""), i.responsavel, i.categoria, i.status_txt],
-    filtro: i => filtro.value === "andamento" ? i.status !== "desistiu" : (!filtro.value || i.status === filtro.value),
+    filtro: i => filtro.value === "andamento" ? emAndamento(i) : (!filtro.value || i.status === filtro.value),
     aoCarregar: itens => {
-      for (const s of ["em_admissao", "lista_espera", "desistiu"])
+      for (const s of ["em_admissao", "lista_espera", "desistiu", "rejeitado"])
         document.getElementById("n-" + s).textContent = itens.filter(i => i.status === s).length;
-      document.getElementById("n-andamento").textContent = itens.filter(i => i.status !== "desistiu").length;
+      document.getElementById("n-andamento").textContent = itens.filter(emAndamento).length;
       document.getElementById("n-todas").textContent = itens.length;
     },
     colunas: [
@@ -196,7 +227,7 @@
       { celula: i => dataOuMudo(i.agendada_fmt), classe: "fixo" },
       { celula: celulaResponsavel, classe: "livre" },
       { celula: i => seletorStatus(i), classe: "fixo" },
-      { celula: i => link("Editar", `/internacoes/${i.id}/editar`, "botao pequeno secundario"), classe: "fixo acao" },
+      { celula: celulaAcoes, classe: "fixo acao" },
     ],
   });
 

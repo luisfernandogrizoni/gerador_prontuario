@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% from "_abas_cadastros.html" import abas with context %}
+{% from "_voltar.html" import linha_voltar with context %}
+{#
+  A lixeira: os registros que alguém excluiu (exclusao.py). Só o administrador chega aqui: restaura ou apaga de vez do banco.
+  Variável: registros (as internações/triagens excluídas, a mais recente primeiro).
+#}
+
+{% block titulo %}Cadastros · Lixeira{% endblock %}
+
+{% block estilo %}
+  .lista .quando { color: var(--suave); }
+  .lista .acoes-linha { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+  .lista .acoes-linha form { margin: 0; }
+  @media (max-width: 1279px) { .lista .acoes-linha { justify-content: stretch; } .lista .acoes-linha form { flex: 1 1 0; } .lista .acoes-linha .botao { width: 100%; } }
+{% endblock %}
+
+{% block conteudo %}
+<main class="largo">
+  {{ linha_voltar(url_for('home')) }}
+  <div class="pagina-topo">
+    <div class="titulo">
+      <h1>Cadastros</h1>
+    </div>
+  </div>
+
+  {% with msgs = get_flashed_messages() %}
+    {% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
+  {% endwith %}
+
+  {{ abas('lixeira') }}
+
+  {% if registros %}
+  <div class="moldura">
+    <table class="lista">
+      <thead>
+        <tr>
+          <th>Pessoa</th>
+          <th>Era</th>
+          <th>Categoria</th>
+          <th>Datas</th>
+          <th>Excluído</th>
+          <th class="sem-ordem"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in registros %}
+        <tr>
+          <td><strong>{{ r.pessoa.nome }}</strong>{% if r.pessoa.cpf %}<small class="sub">{{ r.pessoa.cpf | cpf }}</small>{% endif %}</td>
+          <td class="fixo" data-rotulo="Era"><span class="selo {{ r.status }}">{{ r.status_txt }}</span></td>
+          <td class="fixo" data-rotulo="Categoria">{{ r.categoria }}</td>
+          <td class="fixo" data-rotulo="Datas">
+            {% if r.e_triagem %}1º contato {{ r.primeiro_contato | data or '—' }}{% else %}internado em {{ r.inicio | data or '—' }}{% endif %}
+          </td>
+          <td class="fixo quando" data-rotulo="Excluído">{{ r.excluido_em.strftime('%d/%m/%Y às %H:%M') }}{{ ' · por ' ~ r.excluido_por if r.excluido_por }}</td>
+          <td class="fixo acao">
+            <div class="acoes-linha">
+              <form method="post" action="{{ url_for('restaurar_registro', id=r.id) }}"><button class="botao pequeno secundario">Restaurar</button></form>
+              <form method="post" action="{{ url_for('apagar_registro', id=r.id) }}"
+                    onsubmit="return confirm('Apagar {{ r.pessoa.nome | replace("'", "") }} do banco de dados? Não tem volta.')">
+                <button class="botao pequeno perigo">Excluir de vez</button></form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="vazio">A lixeira está vazia.</div>
+  {% endif %}
+</main>
+{% endblock %}

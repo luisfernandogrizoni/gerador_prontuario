@@ -25,6 +25,9 @@ Telas:
                                     de orientação, ficha multiprofissional, capa do envelope, relatório do Serviço Social)
                                     num documento só
     /internacoes/<id>/relatorio-social   a assistente social escreve o relatório do Serviço Social no sistema
+    /internacoes/<id>/rejeicao      relatório de por que a triagem rejeitou a pessoa (situação "Rejeitado na triagem")
+    /internacoes/<id>/excluir       exclui o registro: o operador só tira de circulação; o administrador também apaga de vez
+    /cadastros/lixeira              (administrador) o que foi excluído: restaurar ou apagar do banco
 
 Organização:
     validacao.py   CPF, RG, CEP, telefone, hora
@@ -37,6 +40,8 @@ Organização:
     fichas.py      pedido de exames, enxoval, capa do envelope e ficha multiprofissional (em branco)
     manual_de_orientacao.py  o manual que a família recebe na internação (o texto fica lá)
     servico_social.py  o relatório do Serviço Social: perguntas, gravação e documento
+    rejeicao.py    o relatório de rejeição na triagem (mesmas peças do relatório acima)
+    exclusao.py    excluir em duas etapas: some de tudo sem sair do banco, até o administrador apagar de vez
     impressos.py   reúne os impressos de cada acolhido num documento só
     vagas.py       ocupação das vagas por categoria
     painel.py      números e agenda dos próximos dias da página inicial
@@ -65,8 +70,10 @@ import cadastros as cadastros_
 import catalogo
 import declaracoes
 import documentos
+import exclusao
 import impressos
 import painel
+import rejeicao
 import relatorios
 import servico_social
 import servicos
@@ -102,7 +109,15 @@ with app.app_context():
 app.before_request(autenticacao.exigir_login)
 app.after_request(autenticacao.cabecalhos_de_seguranca)
 autenticacao.registrar_comandos(app)
-app.context_processor(lambda: {"usuario_atual": g.get("usuario")})
+def _e_administrador():
+    """O usuário logado é o administrador? (cadastros.pode_gerenciar_acessos: enquanto nenhum administrador tem usuário
+    vinculado, vale para quem está logado.) Guardado por requisição: as telas perguntam várias vezes."""
+    if "e_administrador" not in g:
+        g.e_administrador = cadastros_.pode_gerenciar_acessos(g.get("usuario"))
+    return g.e_administrador
+
+
+app.context_processor(lambda: {"usuario_atual": g.get("usuario"), "e_administrador": _e_administrador()})
 
 # filtros usados nos templates: {{ p.cpf | cpf }}, {{ i.inicio | data }} ...
 app.jinja_env.filters.update(cpf=fmt_cpf, rg=fmt_rg, cep=fmt_cep, data=fmt_data, hora=fmt_hora,
@@ -165,7 +180,8 @@ def home():
     return render_template("home.html", avisos=gerar_avisos(), vagas=lista_de_vagas, vagas_total=totais(lista_de_vagas),
                            resumo=painel.resumo(), agenda=painel.agenda(hoje=hoje), para_imprimir=painel.impressos_da_internacao(hoje=hoje),
                            dias_da_agenda=painel.DIAS_DA_AGENDA, fim_do_tratamento=painel.tratamentos_a_finalizar(hoje=hoje),
-                           hoje_por_extenso=painel.data_por_extenso(hoje))
+                           hoje_por_extenso=painel.data_por_extenso(hoje),
+                           na_lixeira=exclusao.quantos_excluidos() if _e_administrador() else 0)     # o que os operadores excluíram
 
 
 @app.post("/avisos/ciente")
@@ -215,16 +231,21 @@ def nova_triagem():
 
 @app.post("/triagens/salvar")
 def salvar_triagem():
-    anterior = db.session.get(Internacao, request.form.get("internacao_id", type=int) or 0)
-    agendada_antes = anterior.internacao_agendada if anterior else None
     internacao, erros = servicos.salvar_triagem(request.form)
     if erros:
         pessoa = db.session.get(Pessoa, request.form.get("pessoa_id", type=int) or 0)
         return render_template("triagem_form.html", d=request.form, erros=erros, pessoa=pessoa,
                                **servicos.opcoes_formulario(request.form.get("convenio", ""))), 400
-    # internação marcada (ou remarcada): a lista pergunta se é para imprimir o pedido de exames e o enxoval
-    imprimir = 1 if internacao.internacao_agendada and internacao.internacao_agendada != agendada_antes else None
-    return redirect(url_for("lista_triagens", novo=internacao.id, imprimir=imprimir))
+    # internação marcada: a lista pergunta se é para imprimir o pedido de exames e o enxoval (até alguém imprimir)
+    return redirect(url_for("lista_triagens", novo=internacao.id, imprimir=1 if _perguntar_impressao(internacao) else None))
+
+
+def _perguntar_impressao(internacao):
+    """Triagem com a internação marcada (hoje ou depois) cujo pedido de exames e enxoval ainda não foram impressos para essa
+    data. Remarcar a data pergunta de novo; imprimir (impressos.py) anota a data e a pergunta para."""
+    return bool(internacao.status in painel.NA_TRIAGEM and internacao.internacao_agendada
+                and internacao.internacao_agendada >= date.today()
+                and internacao.exames_impressos_para != internacao.internacao_agendada)
 
 
 @app.post("/triagens/<int:id>/status")
@@ -233,8 +254,8 @@ def mudar_status(id):
     erros = servicos.mudar_status(internacao, request.get_json(force=True))
     if erros:
         return jsonify(ok=False, erros=erros), 400
-    return jsonify(ok=True, status=internacao.status,
-                   ficha=url_for("ficha", id=id), editar=url_for("editar_internacao", id=id))
+    return jsonify(ok=True, status=internacao.status, ficha=url_for("ficha", id=id), editar=url_for("editar_internacao", id=id),
+                   rejeicao=url_for("relatorio_de_rejeicao", id=id))
 
 
 # ================================================================== internos
@@ -307,7 +328,8 @@ def ficha(id):
     dias, atrasado = dias_de_espera(internacao)
     return render_template("ficha.html", i=internacao, envelope_atrasado=atrasado,
                            envelope_tempo=tempo_decorrido(dias) if dias is not None else "",
-                           relatorio_preenchido=servico_social.preenchido(internacao.relatorio_social))
+                           relatorio_preenchido=servico_social.preenchido(internacao.relatorio_social),
+                           rejeicao_preenchida=rejeicao.preenchido(internacao.rejeicao))
 
 
 @app.get("/internacoes/<int:id>/editar")
@@ -411,16 +433,29 @@ def _impresso(id):
     return internacao, itens, impressos.documento(internacao, itens, relatorios.hoje_no_brasil())
 
 
+def _anotar_impressao(internacao, itens):
+    """Pedido de exames ou enxoval impresso (ou baixado): anota para qual data de internação, e a pergunta ao salvar a
+    triagem para de aparecer (a data mudando, ela volta)."""
+    if ({"exames", "enxoval"} & set(itens)) and internacao.internacao_agendada \
+            and internacao.exames_impressos_para != internacao.internacao_agendada:
+        internacao.exames_impressos_para = internacao.internacao_agendada
+        db.session.commit()
+
+
 @app.get("/internacoes/<int:id>/impressos")
 def ver_impressos(id):
     internacao, itens, doc = _impresso(id)
+    if request.args.get("imprimir"):                      # só quem vai imprimir; ver o documento não conta como impresso
+        _anotar_impressao(internacao, itens)
     barra = {"itens": impressos.barra(internacao, itens, lambda novos: url_for("ver_impressos", id=id, itens=",".join(novos)))}
     return _mostrar(doc, url_for("baixar_impressos", id=id, itens=",".join(itens)), url_for("ficha", id=id), barra=barra)
 
 
 @app.get("/internacoes/<int:id>/impressos.docx")
 def baixar_impressos(id):
-    return _baixar(_impresso(id)[2])
+    internacao, itens, doc = _impresso(id)
+    _anotar_impressao(internacao, itens)
+    return _baixar(doc)
 
 
 # ------------------------------------------------- relatório do Serviço Social
@@ -444,6 +479,95 @@ def relatorio_social(id):
         flash("Relatório do Serviço Social salvo.")
         return redirect(url_for("relatorio_social", id=id))
     return _tela_relatorio(internacao, None, {})
+
+
+# ----------------------------------------- relatório de rejeição na triagem
+def _tela_rejeicao(internacao, form, erros, status=200):
+    relatorio = internacao.rejeicao
+    acolhido = rejeicao.identificacao(internacao, relatorios.hoje_no_brasil())
+    valores = rejeicao.valores_do_formulario(form) if form is not None else rejeicao.valores(internacao, relatorio)
+    return render_template("servico_social_form.html", i=internacao, titulo="Relatório de rejeição na triagem", secoes=rejeicao.SECOES, v=valores,
+                           erros=erros, relatorio=relatorio, acolhido=acolhido, responsavel=None), status
+
+
+@app.route("/internacoes/<int:id>/rejeicao", methods=["GET", "POST"])
+def relatorio_de_rejeicao(id):
+    internacao = _buscar(Internacao, id)
+    if not internacao.e_triagem:                          # quem já foi internado não tem rejeição na triagem
+        abort(404)
+    if request.method == "POST":
+        _, erros = servicos.salvar_rejeicao(internacao, request.form, g.usuario.nome if g.get("usuario") else "")
+        if erros:
+            return _tela_rejeicao(internacao, request.form, erros, 400)
+        if request.form.get("acao") == "imprimir":
+            return redirect(url_for("ver_impressos", id=id, itens="rejeicao", imprimir=1))
+        flash("Relatório de rejeição salvo.")
+        return redirect(url_for("relatorio_de_rejeicao", id=id))
+    return _tela_rejeicao(internacao, None, {})
+
+
+# ----------------------------------------------------------- excluir registros
+# Quem não é administrador só "exclui": o registro some das telas e continua no banco. O administrador vê o que foi
+# excluído na lixeira (Cadastros), restaura ou apaga de vez, e também pode apagar de vez direto da ficha (exclusao.py).
+def _nome_do_usuario():
+    return g.usuario.nome if g.get("usuario") else ""
+
+
+@app.post("/internacoes/<int:id>/excluir")
+def excluir_registro(id):
+    internacao = _buscar(Internacao, id)
+    nome, volta = internacao.pessoa.nome, "lista_triagens" if internacao.e_triagem else "lista_internos"
+    if request.form.get("acao") == "apagar":
+        if not _e_administrador():
+            flash("Só o administrador pode apagar um registro do banco.")
+            return redirect(url_for("ficha", id=id))
+        with exclusao.vendo_tudo():
+            exclusao.apagar(internacao)
+        flash(f"Registro de {nome} apagado do banco.")
+    else:
+        exclusao.excluir(internacao, _nome_do_usuario())
+        flash(f"Registro de {nome} excluído.")
+    return redirect(url_for(volta))
+
+
+@app.get("/cadastros/lixeira")
+def lixeira():
+    if not _e_administrador():
+        flash("Só o administrador vê a lixeira.")
+        return redirect(url_for("home"))
+    with exclusao.vendo_tudo():
+        return render_template("lixeira.html", registros=exclusao.excluidos())
+
+
+def _registro_excluido(id):
+    """O registro que está na lixeira, ou volta para a lixeira com aviso (só o administrador mexe nela)."""
+    if not _e_administrador():
+        flash("Só o administrador restaura ou apaga registros da lixeira.")
+        return None
+    with exclusao.vendo_tudo():
+        return db.session.get(Internacao, id) or abort(404)
+
+
+@app.post("/internacoes/<int:id>/restaurar")
+def restaurar_registro(id):
+    if (internacao := _registro_excluido(id)) is None:
+        return redirect(url_for("home"))
+    with exclusao.vendo_tudo():
+        nome = internacao.pessoa.nome
+        exclusao.restaurar(internacao)
+    flash(f"Registro de {nome} restaurado.")
+    return redirect(url_for("lixeira"))
+
+
+@app.post("/internacoes/<int:id>/apagar")
+def apagar_registro(id):
+    if (internacao := _registro_excluido(id)) is None:
+        return redirect(url_for("home"))
+    with exclusao.vendo_tudo():
+        nome = internacao.pessoa.nome
+        exclusao.apagar(internacao)
+    flash(f"Registro de {nome} apagado do banco.")
+    return redirect(url_for("lixeira"))
 
 
 # ================================================================ relatórios
