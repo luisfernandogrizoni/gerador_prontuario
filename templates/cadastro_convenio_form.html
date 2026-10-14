@@ -17,11 +17,11 @@
 {% endblock %}
 
 {% block conteudo %}
-<main>
+<main class="largo">
   {{ linha_voltar(url_for('lista_convenios')) }}
   <h1>{{ 'Editar convênio' if convenio else 'Novo convênio' }}</h1>
 
-  <form method="post">
+  <form class="estreito" method="post">
     {% if erros %}<div class="caixa-erros"><strong>Confira os campos marcados em vermelho.</strong></div>{% endif %}
     <fieldset class="tom-azul">
       {{ legenda('Convênio', 'casa') }}
@@ -55,7 +55,6 @@
 
     <div class="botoes-form">
       <button class="botao" type="submit">{{ 'Salvar alterações' if convenio else 'Cadastrar convênio' }}</button>
-      <a class="botao secundario" href="{{ url_for('lista_convenios') }}">Cancelar</a>
     </div>
   </form>
 </main>

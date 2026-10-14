@@ -1,7 +1,7 @@
 # Padrões de interface
 
 Como o sistema deve parecer e se comportar. Vale para toda tela nova e para o que for mexido em tela antiga. Foi definido
-com o usuário em 2026-10-14. Ainda faltam, na fase 4, as telas Relatórios, Cadastros (listas), entrada, senha, documento e janelas.
+com o usuário em 2026-10-14 e aplicado a todas as telas do sistema. Revisado no celular (360 e 390 px, sem rolar de lado) e nos contrastes.
 
 ## Ideia central
 
@@ -28,6 +28,8 @@ papel. Cada papel tem o tom **forte** (barras, ícones, borda de destaque), o **
 - **Nunca só a cor**: todo estado tem texto ou ícone junto (o selo "Ativo", não só uma bolinha verde).
 - **Contraste**: texto de pelo menos 4,5:1 sobre o fundo (o pastel leva texto escuro do mesmo tom); bordas e ícones que
   carregam informação, 3:1.
+  Conferido: todos os pares de papel (forte sobre suave) passam de 4,5:1. `--mais-suave` (cinza claro) **não** serve para texto
+  (2,6:1): só para ícone decorativo e traço; texto secundário usa `--suave` (5:1).
 - Foco visível em tudo que se clica: anel azul (`--foco`), nunca vermelho (o vermelho já quer dizer erro).
 - As cores das categorias de convênio (`.chip.*`, `.tipo-*`) são as mesmas em todas as telas e não mudam.
 
@@ -55,7 +57,10 @@ Um botão **cheio** (primário) por tela, para a ação principal. Os outros sã
 
 ## Páginas
 
-- **Duas larguras**: leitura e formulário curto em 960 px (`main`); listas, painéis, ficha e formulário com índice em 1320 px (`main.largo`), para o título e o Voltar ficarem no mesmo lugar em todas.
+- **Uma largura só** para todas as telas: o conteúdo usa a tela até 1760 px (`--largura-max`) e começa na mesma borda do menu, com
+  recuo de 16 a 32 px (`--pad-pagina`). Nada de coluna estreita centralizada no meio de uma tela grande. O que é estreito por
+  natureza (formulário curto, senha) fica **à esquerda** com `.estreito` (820 px) ou `.estreito.curto` (520 px). Só a entrada e a
+  página de erro são centralizadas.
 - Ordem do topo: **Voltar** (`linha_voltar`), título, subtítulo, ações à direita. Toda tela, menos Início e Entrada, tem Voltar.
 - `+ Triagem` e `+ Prontuário` só no cabeçalho.
 - **Sem textos de instrução ou ajuda** nas telas: só estado e erros.
@@ -80,6 +85,10 @@ Um botão **cheio** (primário) por tela, para a ação principal. Os outros sã
   vem primeiro; só um é primário. Leva o `span.estado-form` ("Alterações não salvas", aparece quando o formulário difere
   do que abriu). Sem botão "Cancelar": o Voltar do topo já faz isso.
 - Seção que a pessoa pode pular fica em `<details class="opcional">`.
+- A seção leva só o título (sem subtítulo nem texto explicativo): o que o papel traz a mais, como o subtítulo do modelo do
+  escritório, fica no documento impresso, não na tela.
+- Margem lateral de quem está dentro de um `fieldset` vem do cartão (`base.html`). Em CSS de página use `margin-top` e
+  `margin-bottom`, nunca `margin: x 0 y`, que zera a lateral e encosta o conteúdo na borda.
 - Rótulo **acima** do campo, nunca placeholder no lugar de rótulo.
 - Campos lado a lado só quando formam uma coisa só (CEP, rua e número; data e hora). O resto, em sequência.
 - Foco, erro e obrigatório sempre visíveis. Erro ao lado do campo, e a tela volta sem perder o digitado.
@@ -98,6 +107,15 @@ Um botão **cheio** (primário) por tela, para a ação principal. Os outros sã
 - **Vazio não ocupa lugar**: `dados([(rótulo, valor), ...])` mostra só o que tem valor e junta o resto numa linha,
   "Não informado: ...".
 - Impressão: botões e menus saem, uma coluna só, cartões sem cortar.
+
+## Estados vazios e erros
+
+- **Estado vazio** (lista sem registro, lixeira vazia): `.vazio` com um ícone pastel (`.icone-vazio`) e uma frase curta;
+  as listas dinâmicas já fazem isso (static/tabela.js).
+- **Páginas de erro** (404, 403, 405, 500): `templates/erro.html`, com ícone, o código, o que houve e **um** caminho de volta.
+  O de API (JSON) segue com a resposta padrão. Nenhum detalhe técnico aparece na tela (fica no registro do servidor).
+- **Entrada**: fundo em pastel (rosa da marca e azul) com o cartão em destaque; é a única tela com fundo diferente.
+- **Cadastros**: as abas têm ícone (`_abas_cadastros.html`); formulário curto sem "Cancelar".
 
 ## Antes de entregar uma tela
 

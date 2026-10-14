@@ -167,7 +167,9 @@ class TabelaDinamica {
       this.corpo.appendChild(tr);
     }
     this.vazio.hidden = lista.length > 0;
-    this.vazio.textContent = this.itens.length ? "Nada encontrado para essa busca/filtro." : "Nenhum registro ainda.";
+    const sem = document.createElement("span");
+    sem.className = "icone-vazio"; sem.appendChild(icone(this.itens.length ? "busca" : "prancheta"));
+    this.vazio.replaceChildren(sem, texto("span", this.itens.length ? "Nada encontrado para essa busca/filtro." : "Nenhum registro ainda."));
     const mostrando = document.getElementById("mostrando");   // opcional: "Mostrando 25 de 34"
     if (mostrando) mostrando.textContent = `Mostrando ${lista.length} de ${this.itens.length} registros`;
   }

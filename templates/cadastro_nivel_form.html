@@ -10,11 +10,11 @@
 {% endblock %}
 
 {% block conteudo %}
-<main>
+<main class="largo">
   {{ linha_voltar(url_for('lista_niveis')) }}
   <h1>{{ 'Editar nível de acesso' if nivel else 'Novo nível de acesso' }}</h1>
 
-  <form method="post">
+  <form class="estreito" method="post">
     {% if erros %}<div class="caixa-erros"><strong>Confira os campos marcados em vermelho.</strong></div>{% endif %}
     <fieldset class="tom-roxo">
       {{ legenda('Nível', 'usuarios') }}
@@ -34,7 +34,6 @@
 
     <div class="botoes-form">
       <button class="botao" type="submit">{{ 'Salvar alterações' if nivel else 'Cadastrar nível' }}</button>
-      <a class="botao secundario" href="{{ url_for('lista_niveis') }}">Cancelar</a>
     </div>
   </form>
 </main>

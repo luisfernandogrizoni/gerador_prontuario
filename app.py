@@ -64,6 +64,7 @@ from datetime import date
 
 from flask import (Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file,
                    session, url_for)
+from werkzeug.exceptions import HTTPException
 
 import autenticacao
 import banco
@@ -136,6 +137,34 @@ app.jinja_env.filters.update(cpf=fmt_cpf, rg=fmt_rg, cep=fmt_cep, data=fmt_data,
 
 def _buscar(modelo, id):
     return db.session.get(modelo, id) or abort(404)
+
+
+# Páginas de erro na mesma linguagem do resto do sistema (templates/erro.html). O que é de API (JSON) segue com a resposta padrão.
+MENSAGENS_DE_ERRO = {
+    400: ("Pedido inválido", "O sistema não entendeu o que foi enviado. Volte e tente de novo."),
+    403: ("Sem permissão", "Você não tem permissão para abrir esta página."),
+    404: ("Página não encontrada", "O endereço não existe, ou o registro foi excluído."),
+    405: ("Ação não permitida", "Esta página não aceita essa ação."),
+    500: ("Algo deu errado", "O sistema não conseguiu concluir. Tente de novo e, se continuar, avise o administrador."),
+}
+
+
+@app.errorhandler(HTTPException)
+def pagina_de_erro(erro):
+    if erro.code is None or erro.code < 400 or request.path.startswith("/api/") or request.is_json:     # redirecionamentos e API seguem como são
+        return erro
+    titulo, texto = MENSAGENS_DE_ERRO.get(erro.code, ("Não foi possível abrir", "Volte para o início e tente de novo."))
+    return render_template("erro.html", codigo=erro.code, titulo=titulo, texto=texto), erro.code
+
+
+@app.errorhandler(Exception)
+def erro_interno(erro):
+    """Erro de verdade (um bug): registra o que aconteceu e mostra a página, sem detalhe técnico. Em desenvolvimento
+    (debug), deixa o depurador do Flask mostrar tudo."""
+    if app.debug:
+        raise erro
+    app.logger.exception("Erro não tratado em %s", request.path)
+    return render_template("erro.html", codigo=500, titulo=MENSAGENS_DE_ERRO[500][0], texto=MENSAGENS_DE_ERRO[500][1]), 500
 
 
 def _dados_para_novo(pessoa_id):

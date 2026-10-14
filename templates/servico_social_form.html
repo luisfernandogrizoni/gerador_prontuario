@@ -24,7 +24,6 @@
   .cadastro-resumo h3 { margin: 12px 0 8px; font-size: .8rem; color: var(--suave); text-transform: uppercase; letter-spacing: .05em; }
   .cadastro-resumo h3:first-child { margin-top: 0; }
   .cadastro-resumo .corrigir { font-size: .85rem; }
-  .subtitulo-secao { margin: -2px 0 12px; color: var(--suave); font-size: .85rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
   .rotulo-campo { display: block; font-size: .9rem; margin-bottom: 4px; }
   textarea { resize: vertical; line-height: 1.4; min-height: 4.4em; }
   .escolhas { display: flex; flex-wrap: wrap; gap: 6px 8px; }
@@ -111,7 +110,6 @@
     {% set vis = visual.get(secao.titulo, ('documento', 'neutro')) %}
     <fieldset class="tom-{{ vis[1] }}">
       {{ legenda(secao.titulo, vis[0]) }}
-      {% if secao.subtitulo %}<p class="subtitulo-secao">{{ secao.subtitulo }}</p>{% endif %}
       <div class="grade">
         {% for campo in secao.campos %}{{ controle(campo) }}{% endfor %}
       </div>
