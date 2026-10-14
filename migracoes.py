@@ -49,8 +49,63 @@ def migrar(db):
         db.session.execute(text("ALTER TABLE pessoas ADD COLUMN excluido_em TIMESTAMP"))
         db.session.commit()
 
-    # 5) cadastros: na primeira subida trazem os convênios e o funcionário com que o sistema sempre trabalhou
+    # 5) acolhimento social: rascunho/finalizado e assinatura no relatório; marca do Serviço Social e registro profissional
+    #    (CRESS) no funcionário
+    if "situacao" not in _colunas(db, "relatorios_sociais"):
+        db.session.execute(text("ALTER TABLE relatorios_sociais ADD COLUMN situacao VARCHAR(12) NOT NULL DEFAULT 'rascunho'"))
+        db.session.execute(text("ALTER TABLE relatorios_sociais ADD COLUMN finalizado_em TIMESTAMP"))
+        db.session.execute(text("ALTER TABLE relatorios_sociais ADD COLUMN finalizado_por VARCHAR(50) NOT NULL DEFAULT ''"))
+        db.session.execute(text("ALTER TABLE relatorios_sociais ADD COLUMN assinatura VARCHAR(200) NOT NULL DEFAULT ''"))
+        db.session.commit()
+    if "servico_social" not in _colunas(db, "funcionarios"):
+        db.session.execute(text("ALTER TABLE funcionarios ADD COLUMN servico_social BOOLEAN NOT NULL DEFAULT FALSE"))
+        db.session.execute(text("ALTER TABLE funcionarios ADD COLUMN registro_profissional VARCHAR(30) NOT NULL DEFAULT ''"))
+        db.session.commit()
+
+    # 6) o relatório de rejeição virou o parecer do acolhimento social: o que já foi escrito passa para lá
+    _rejeicoes_para_o_acolhimento(db)
+
+    # 7) cadastros: na primeira subida trazem os convênios e o funcionário com que o sistema sempre trabalhou
     semear(db)
+
+
+def _rejeicoes_para_o_acolhimento(db):
+    """A tabela rejeicoes_triagem (o relatório de rejeição, que existiu por pouco tempo) deixou de existir no modelo.
+    Cada relatório dela vira o parecer 'Não condizente' do acolhimento social da mesma triagem, como rascunho: a
+    assistente social completa o que falta (classificação) e finaliza. Depois as linhas são apagadas, então rodar de
+    novo não repete nada. Bancos novos nem têm a tabela."""
+    if "rejeicoes_triagem" not in inspect(db.engine).get_table_names():
+        return
+    import json
+    from datetime import datetime
+
+    from modelos import RelatorioSocial
+    from servico_social import NAO_CONDIZENTE
+
+    linhas = db.session.execute(text("SELECT internacao_id, dados, atualizado_por, atualizado_em FROM rejeicoes_triagem")).all()
+    for internacao_id, dados, por, em in linhas:
+        if isinstance(dados, str):
+            dados = json.loads(dados or "{}")
+        dados = dados or {}
+        novos = {"parecer": NAO_CONDIZENTE}
+        if dados.get("motivo"):
+            novos["motivo_rejeicao"] = dados["motivo"]
+        texto = (dados.get("relatorio") or "").strip()
+        if dados.get("data_da_rejeicao"):
+            try:
+                quando = datetime.strptime(dados["data_da_rejeicao"], "%Y-%m-%d").strftime("%d/%m/%Y")
+                texto = f"Rejeição registrada em {quando}." + (f"\n\n{texto}" if texto else "")
+            except ValueError:
+                pass
+        if texto:
+            novos["parecer_texto"] = texto
+        relatorio = db.session.execute(db.select(RelatorioSocial).filter_by(internacao_id=internacao_id)).scalars().first()
+        if relatorio is None:
+            db.session.add(RelatorioSocial(internacao_id=internacao_id, dados=novos, atualizado_por=(por or "")[:50]))
+        else:
+            relatorio.dados = {**novos, **(relatorio.dados or {})}      # o que já estava no acolhimento tem a palavra final
+    db.session.execute(text("DELETE FROM rejeicoes_triagem"))
+    db.session.commit()
 
 
 def semear(db):

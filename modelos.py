@@ -10,7 +10,8 @@ Tabelas dos acolhidos:
        │ 1       espera, desistência) e, ao ser admitida, vira internação (ativo/inativo).
        │ N       Responsável, convênio e datas ficam aqui — mudam a cada internação.
     parcelas     contribuições pagas naquela internação (nº, data, valor)
-    relatorios_sociais  o relatório do Serviço Social daquela internação (1 por internação)
+    relatorios_sociais  o acolhimento social daquela internação: ficha, relatório e parecer (1 por internação)
+    adendos_sociais     correções acrescentadas a um acolhimento social já finalizado
 
 Os nomes das colunas são os mesmos dos campos dos formulários (name="..."):
     preencher(form)      formulário -> colunas (só os campos que vieram no form)
@@ -25,13 +26,13 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from prontuario import (calcular_idade, categoria_efetiva, classificar, fmt_data, fmt_reais, ler_data,
                         ler_valor, previsao_termino, tipo_da_categoria)
-from servico_social import preenchido
+from servico_social import estado
 from validacao import fmt_cpf, fmt_hora, fmt_telefone, ler_hora, limpar_rg, so_digitos
 
 db = SQLAlchemy()
 
 # Legenda da aba Triagens: 1 ativo, 2 inativo, 3 em admissão, 4 lista de espera, 5 desistiu
-# (rejeitado = a triagem concluiu que o tratamento da casa não é o que a pessoa precisa; a assistente social escreve o porquê)
+# (rejeitado = a triagem concluiu que o tratamento da casa não é o que a pessoa precisa; o porquê é o parecer da assistente social)
 STATUS = {
     "em_admissao": "Em processo de admissão",
     "lista_espera": "Lista de espera",
@@ -232,8 +233,6 @@ class Internacao(CamposDeFormulario, db.Model):
         back_populates="internacao", order_by="Parcela.numero", cascade="all, delete-orphan")
     relatorio_social: Mapped["RelatorioSocial | None"] = relationship(
         back_populates="internacao", uselist=False, cascade="all, delete-orphan")
-    rejeicao: Mapped["RejeicaoTriagem | None"] = relationship(
-        back_populates="internacao", uselist=False, cascade="all, delete-orphan")
 
     def normalizar(self):
         self.resp_cpf = so_digitos(self.resp_cpf)
@@ -289,7 +288,7 @@ class Internacao(CamposDeFormulario, db.Model):
             "contato": p.contato1 or p.contato2 or p.contato3,
             "status": self.status,
             "status_txt": self.status_txt,
-            "relatorio_social": preenchido(self.relatorio_social),     # o relatório do Serviço Social já foi escrito?
+            "acolhimento": estado(self.relatorio_social),     # acolhimento social: "" (não iniciado) | rascunho | finalizado
         }
 
     def para_lista(self):
@@ -335,8 +334,13 @@ class Parcela(db.Model):
 
 # =========================================================================
 class RelatorioSocial(db.Model):
-    """O relatório do Serviço Social de uma internação (servico_social.py): só as respostas que foram digitadas, num
-    JSON {campo: texto}. Uma linha por internação; mora aqui, não em colunas, porque o modelo do escritório pode mudar."""
+    """O acolhimento social de uma internação (servico_social.py): a ficha, o relatório livre, a classificação de risco e
+    o parecer. Só as respostas que foram digitadas, num JSON {campo: texto}. Uma linha por internação; mora aqui, não em
+    colunas, porque o modelo do escritório pode mudar.
+
+    Nasce como rascunho, que a assistente social edita à vontade. Finalizar trava: fica a data, a hora e a assinatura
+    (nome, cargo e registro profissional de quem finalizou, como estavam naquele momento) e as correções passam a ser
+    adendos (AdendoSocial)."""
     __tablename__ = "relatorios_sociais"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -344,23 +348,33 @@ class RelatorioSocial(db.Model):
     dados: Mapped[dict] = mapped_column(JSON, default=dict)
     atualizado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
     atualizado_por: Mapped[str] = mapped_column(String(50), default="")      # o usuário que salvou por último
+    situacao: Mapped[str] = mapped_column(String(12), default="rascunho")    # rascunho | finalizado
+    finalizado_em: Mapped[datetime | None] = mapped_column(DateTime)
+    finalizado_por: Mapped[str] = mapped_column(String(50), default="")      # o usuário (login) que finalizou
+    assinatura: Mapped[str] = mapped_column(String(200), default="")         # "Nome — cargo — registro", como estava ao finalizar
 
     internacao: Mapped[Internacao] = relationship(back_populates="relatorio_social")
+    adendos: Mapped[list["AdendoSocial"]] = relationship(
+        back_populates="relatorio", order_by="AdendoSocial.id", cascade="all, delete-orphan")
+
+    @property
+    def finalizado(self):
+        return self.situacao == "finalizado"
 
 
 # =========================================================================
-class RejeicaoTriagem(db.Model):
-    """O relatório de rejeição: quando a triagem conclui que o tratamento da casa não é o que a pessoa precisa
-    (status "rejeitado"), a assistente social escreve o porquê (rejeicao.py). Só as respostas digitadas, em JSON."""
-    __tablename__ = "rejeicoes_triagem"
+class AdendoSocial(db.Model):
+    """Correção ou informação nova acrescentada a um acolhimento social já finalizado. Nunca se edita nem se apaga:
+    o documento finalizado fica como foi assinado e os adendos vêm depois dele, cada um com data, hora e autor."""
+    __tablename__ = "adendos_sociais"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    internacao_id: Mapped[int] = mapped_column(ForeignKey("internacoes.id"), unique=True)
-    dados: Mapped[dict] = mapped_column(JSON, default=dict)
-    atualizado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
-    atualizado_por: Mapped[str] = mapped_column(String(50), default="")
+    relatorio_id: Mapped[int] = mapped_column(ForeignKey("relatorios_sociais.id"), index=True)
+    texto: Mapped[str] = mapped_column(String(3000))
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    criado_por: Mapped[str] = mapped_column(String(200), default="")         # "Nome — cargo — registro" de quem escreveu
 
-    internacao: Mapped[Internacao] = relationship(back_populates="rejeicao")
+    relatorio: Mapped[RelatorioSocial] = relationship(back_populates="adendos")
 
 
 # =========================================================================
@@ -413,6 +427,10 @@ class Funcionario(db.Model):
     padrao: Mapped[bool] = mapped_column(default=False)           # assina quando ninguém escolhe (só um por vez)
     usuario: Mapped[str] = mapped_column(String(50), default="")  # login desta pessoa: os documentos que ela emite saem no nome dela
     nivel_id: Mapped[int | None] = mapped_column(ForeignKey("niveis_acesso.id"), index=True)
+    # Serviço Social: lê e escreve o acolhimento social (ficha, relatório e parecer), que é sigiloso, e assina com o
+    # registro profissional (CRESS). O administrador também tem acesso, sem precisar desta marca.
+    servico_social: Mapped[bool] = mapped_column(default=False)
+    registro_profissional: Mapped[str] = mapped_column(String(30), default="")
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     nivel: Mapped[NivelAcesso | None] = relationship()

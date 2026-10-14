@@ -1,12 +1,14 @@
 {% extends "base.html" %}
 {% from "_voltar.html" import linha_voltar with context %}
 {#
-  O relatório do Serviço Social, escrito direto no sistema (servico_social.py descreve as perguntas).
+  O acolhimento social, escrito direto no sistema: ficha, relatório, classificação de risco e parecer
+  (servico_social.py descreve as perguntas).
   Variáveis: i (internação), secoes, v (valores de cada campo), erros, relatorio (o já gravado, ou None),
-  acolhido e responsavel ([(rótulo, valor)] que vêm do cadastro).
+  acolhido e responsavel ([(rótulo, valor)] que vêm do cadastro) e anterior (o acolhimento de uma passagem anterior de
+  onde vieram as respostas que não mudam, ou None).
 #}
 
-{% set titulo = titulo | default('Relatório do Serviço Social') %}
+{% set titulo = 'Acolhimento social' %}
 {% block titulo %}{{ titulo }} · {{ i.pessoa.nome }}{% endblock %}
 
 {% block estilo %}
@@ -35,6 +37,7 @@
   .sim-nao { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 12px; align-items: center; }
   .sim-nao .escolhas { flex-wrap: nowrap; }
   @media (max-width: 640px) { .sim-nao { grid-template-columns: 1fr; } }
+  [data-so-se][hidden] { display: none; }
   .barra-salvar { position: sticky; bottom: 0; z-index: 3; display: flex; gap: 10px; flex-wrap: wrap; padding: 12px 0; margin-top: 4px;
                   background: linear-gradient(to top, var(--fundo) 70%, transparent); }
   @media (max-width: 640px) { .barra-salvar .botao { flex: 1 1 100%; } }
@@ -48,7 +51,7 @@
       <textarea name="{{ nome }}" rows="{{ c.linhas }}" maxlength="5000" data-cresce>{{ v.get(nome, '') }}</textarea>
       {% if erros.get(nome) %}<small class="erro">{{ erros[nome] }}</small>{% endif %}</label>
   {% elif c.tipo == 'escolha' %}
-    <div class="{{ c.colunas }}{{ ' com-erro' if erros.get(nome) }}" role="radiogroup" aria-label="{{ c.rotulo }}"><span class="rotulo-campo">{{ c.rotulo }}</span>
+    <div class="{{ c.colunas }}{{ ' com-erro' if erros.get(nome) }}" role="radiogroup" aria-label="{{ c.rotulo }}"{% if c.so_se %} data-so-se="{{ c.so_se[0] }}" data-valor="{{ c.so_se[1] }}"{{ ' hidden' if v.get(c.so_se[0]) != c.so_se[1] }}{% endif %}><span class="rotulo-campo">{{ c.rotulo }}</span>
       <div class="escolhas">
         {% for o in c.opcoes %}<label class="opcao"><input type="radio" name="{{ nome }}" value="{{ o }}"{{ ' checked' if v.get(nome) == o }} data-desmarca>{{ o }}</label>{% endfor %}
       </div>
@@ -79,12 +82,15 @@
   <div class="cabecalho-rel">
     <h1>{{ titulo }}</h1>
     {% if relatorio and relatorio.dados %}
-      <span class="estado">salvo em {{ relatorio.atualizado_em.strftime('%d/%m/%Y às %H:%M') }}{{ ' por ' ~ relatorio.atualizado_por if relatorio.atualizado_por }}</span>
+      <span class="estado">rascunho salvo em {{ relatorio.atualizado_em.strftime('%d/%m/%Y às %H:%M') }}{{ ' por ' ~ relatorio.atualizado_por if relatorio.atualizado_por }}</span>
     {% else %}
       <span class="estado">ainda não preenchido</span>
     {% endif %}
   </div>
   <p class="ajuda">{{ i.pessoa.nome }} · {{ i.status_txt }}</p>
+  {% if anterior %}
+    <div class="aviso">Trouxe do acolhimento anterior, de {{ anterior.finalizado_em.strftime('%d/%m/%Y') if anterior.finalizado_em else anterior.atualizado_em.strftime('%d/%m/%Y') }}, o que não costuma mudar (identificação e histórico familiar, e crenças). Confira e atualize.</div>
+  {% endif %}
 
   <section class="cadastro-resumo">
     <h3>Do cadastro do acolhido</h3>
@@ -97,7 +103,7 @@
   </section>
 
   <form method="post" id="form-relatorio">
-    {% if erros %}<div class="caixa-erros"><strong>Confira os campos marcados em vermelho.</strong></div>{% endif %}
+    {% if erros %}<div class="caixa-erros"><strong>{{ erros['_'] if erros.get('_') else 'Confira os campos marcados em vermelho.' }}</strong></div>{% endif %}
     {% for secao in secoes %}
     <fieldset>
       <legend>{{ loop.index }}) {{ secao.titulo }}</legend>
@@ -109,8 +115,9 @@
     {% endfor %}
 
     <div class="barra-salvar">
-      <button class="botao" type="submit" name="acao" value="salvar">Salvar</button>
+      <button class="botao" type="submit" name="acao" value="salvar">Salvar rascunho</button>
       <button class="botao secundario" type="submit" name="acao" value="imprimir"><svg class="icone"><use href="#i-impressora"/></svg>Salvar e imprimir</button>
+      <button class="botao secundario" type="submit" name="acao" value="finalizar" id="finalizar">Finalizar e assinar</button>
       <a class="botao secundario" href="{{ url_for('ficha', id=i.id) }}">Cancelar</a>
     </div>
   </form>
@@ -133,6 +140,22 @@
     r.addEventListener("click", function () {
       if (r.dataset.estava) { r.checked = false; r.dataset.estava = ""; r.dispatchEvent(new Event("change", { bubbles: true })); }
     });
+  });
+
+  // o que só vale quando outra resposta é tal (o motivo da rejeição só aparece no parecer "não condizente")
+  document.querySelectorAll("[data-so-se]").forEach(function (alvo) {
+    function conferir() {
+      var marcada = document.querySelector('input[name="' + alvo.dataset.soSe + '"]:checked');
+      var vale = !!marcada && marcada.value === alvo.dataset.valor;
+      alvo.hidden = !vale;
+      if (!vale) alvo.querySelectorAll("input").forEach(function (r) { r.checked = false; });
+    }
+    document.querySelectorAll('input[name="' + alvo.dataset.soSe + '"]').forEach(function (r) { r.addEventListener("change", conferir); });
+  });
+
+  // finalizar trava o acolhimento: pede confirmação
+  document.getElementById("finalizar").addEventListener("click", function (e) {
+    if (!confirm("Finalizar o acolhimento social de " + {{ i.pessoa.nome | tojson }} + "? Depois disso ele não se edita mais: correções entram como adendo.")) e.preventDefault();
   });
 
   // avisa antes de sair da página com texto ainda não salvo

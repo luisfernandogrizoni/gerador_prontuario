@@ -22,14 +22,46 @@
   .simples tbody tr:hover { background: #fafbfc; }
   .simples td.num { text-align: right; white-space: nowrap; }
   .simples form { margin: 0; }
+  /* Documentos: painel lateral translúcido, aberto pelo botão da barra de ações */
+  dialog.gaveta { position: fixed; inset: 76px 16px auto auto; margin: 0; padding: 0; width: min(420px, calc(100vw - 32px)); max-width: none;
+                  max-height: calc(100dvh - 92px); overflow: auto; border: 1px solid rgba(255,255,255,.8); border-radius: 22px;
+                  background: linear-gradient(155deg, rgba(255,236,234,.9), rgba(236,243,255,.88) 58%, rgba(234,247,238,.9));
+                  backdrop-filter: blur(18px) saturate(1.3); box-shadow: 0 18px 48px rgba(16,24,40,.18); animation: gaveta-entra .22s ease-out; }
+  dialog.gaveta::backdrop { background: rgba(16,24,40,.14); backdrop-filter: none; }
+  @keyframes gaveta-entra { from { opacity: 0; transform: translateX(26px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { dialog.gaveta { animation: none; } }
+  .gaveta .conteudo { padding: 16px 16px 18px; }
+  .gaveta header { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 2px; }
+  .gaveta h2 { margin: 0; }
+  .gaveta .fechar { width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border-radius: 10px; cursor: pointer;
+                    background: rgba(255,255,255,.6); border: 1px solid rgba(255,255,255,.9); color: var(--suave); }
+  .gaveta .fechar:hover { color: var(--vermelho); background: #fff; }
   .docs { list-style: none; margin: 0; padding: 0; }
-  .docs li { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; padding: 12px 0; border-top: 1px solid #f0f2f5; }
-  .docs li:first-child { border-top: 0; }
-  .docs .nome-doc { font-weight: 600; margin-right: auto; }
-  .docs .acoes-doc { display: flex; gap: 8px; flex-wrap: wrap; }
-  @media (max-width: 640px) { .docs .acoes-doc { width: 100%; } .docs .acoes-doc .botao { flex: 1 1 auto; } }
-  @media print { .docs { display: none; } }
+  .docs li { --tom: #b3261e; --tom-claro: rgba(179,38,30,.1); --tom-borda: rgba(179,38,30,.26);
+             display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px 12px; margin-top: 10px; padding: 12px;
+             background: rgba(255,255,255,.58); border: 1px solid rgba(255,255,255,.85); border-radius: 15px; }
+  .docs li.azul { --tom: #1d4f9c; --tom-claro: rgba(29,79,156,.1); --tom-borda: rgba(29,79,156,.26); }
+  .docs li.verde { --tom: #1e6b31; --tom-claro: rgba(30,107,49,.1); --tom-borda: rgba(30,107,49,.26); }
+  .docs .chip { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: var(--tom-claro); color: var(--tom); }
+  .docs .chip .icone { width: 1.2em; height: 1.2em; }
+  .docs .nome-doc { font-weight: 600; }
+  .docs .acoes-doc { grid-column: 1 / -1; display: flex; gap: 6px; }
+  .docs .acoes-doc .botao { flex: 1 1 auto; padding: 6px 10px; font-size: .84rem; border-radius: 9px; gap: 6px; white-space: nowrap; box-shadow: none;
+                            background: rgba(255,255,255,.7); color: var(--tom); border-color: var(--tom-borda); }
+  .docs .acoes-doc .botao:first-child { background: var(--tom-claro); }
+  .docs .acoes-doc .botao:hover { background: #fff; border-color: var(--tom); }
+  @media (max-width: 640px) {
+    dialog.gaveta { inset: auto 8px 8px 8px; width: auto; max-height: calc(100dvh - 16px); }
+    .docs .acoes-doc { flex-wrap: wrap; }
+  }
+  @media print { dialog.gaveta, #abrir-documentos { display: none; } }
   .acoes-doc.espaco { margin-top: 12px; }
+  .adendos { list-style: none; margin: 14px 0 0; padding: 0; border-top: 1px solid #f0f2f5; }
+  .adendos li { padding: 10px 0; border-bottom: 1px solid #f0f2f5; font-size: .9rem; color: var(--suave); }
+  .adendos li:last-child { border-bottom: 0; padding-bottom: 0; }
+  .adendos li strong { color: var(--texto); }
+  .adendos p { margin: 4px 0 0; color: var(--texto); white-space: pre-wrap; overflow-wrap: anywhere; }
+  #adendo textarea { width: 100%; min-height: 9em; margin-bottom: 14px; }
   .envelope { display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; padding: 6px 0 0; }
   .envelope .situacao { margin-right: auto; display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
   .envelope form { display: flex; gap: 8px; flex-wrap: wrap; margin: 0; }
@@ -64,71 +96,46 @@
 
   <div class="acoes">
     <a class="botao" href="{{ url_for('editar_internacao', id=i.id) }}">Editar</a>
+    <button type="button" class="botao secundario" id="abrir-documentos"><svg class="icone"><use href="#i-documento"/></svg>Documentos</button>
     <a class="botao secundario" href="{{ url_for('formulario', pessoa=p.id) }}">Nova internação desta pessoa</a>
     <a class="botao secundario" href="{{ url_for('nova_triagem', pessoa=p.id) }}">Nova triagem desta pessoa</a>
     <button type="button" class="botao perigo" id="abrir-exclusao"><svg class="icone"><use href="#i-lixeira"/></svg>Excluir registro</button>
   </div>
 
-  {% if i.status == 'rejeitado' %}
-  <section class="cartao" id="rejeicao">
-    <h2>Rejeição na triagem</h2>
+  <section class="cartao" id="acolhimento">
+    <h2>Acolhimento social</h2>
     <div class="envelope">
       <div class="situacao">
-        {% if rejeicao_preenchida %}
-          <span class="selo ativo">Relatório escrito</span>
-          <span>{{ i.rejeicao.atualizado_em.strftime('%d/%m/%Y') }}{{ ' · ' ~ i.rejeicao.atualizado_por if i.rejeicao.atualizado_por }}</span>
+        {% if acolhimento.estado == 'finalizado' %}
+          <span class="selo ativo">Finalizado</span>
+          <span>{{ acolhimento.em.strftime('%d/%m/%Y às %H:%M') }}{{ ' · ' ~ acolhimento.por if pode_servico_social and acolhimento.por }}</span>
+          {% if pode_servico_social %}
+            {% if acolhimento.risco %}<span class="selo {{ {'Baixo': 'ativo', 'Médio': 'lista_espera', 'Alto': 'desistiu'}[acolhimento.risco] }}">Risco {{ acolhimento.risco | lower }}</span>{% endif %}
+            {% if acolhimento.parecer %}<span class="selo {{ 'rejeitado' if acolhimento.parecer.startswith('Não') else 'lista_espera' if 'ressalvas' in acolhimento.parecer else 'ativo' }}">{{ acolhimento.parecer }}</span>{% endif %}
+          {% endif %}
+        {% elif acolhimento.estado == 'rascunho' %}
+          <span class="selo lista_espera">Em andamento</span>
+          <span>salvo em {{ acolhimento.em.strftime('%d/%m/%Y às %H:%M') }}{{ ' · ' ~ acolhimento.por if pode_servico_social and acolhimento.por }}</span>
         {% else %}
-          <span class="selo desistiu">Falta o relatório</span><span>Por que ele não é condizente com o nosso tratamento?</span>
+          <span class="selo{{ ' desistiu' if i.status == 'rejeitado' }}">Não iniciado</span>
         {% endif %}
       </div>
-      <a class="botao{{ ' secundario' if rejeicao_preenchida }}" href="{{ url_for('relatorio_de_rejeicao', id=i.id) }}">{{ 'Editar' if rejeicao_preenchida else 'Escrever o relatório' }}</a>
-    </div>
-    {% if rejeicao_preenchida %}
-      {{ acoes_documento(url_for('ver_impressos', id=i.id, itens='rejeicao'), url_for('baixar_impressos', id=i.id, itens='rejeicao'), 'espaco') }}
-    {% endif %}
-  </section>
-  {% endif %}
-
-  <section class="cartao" id="documentos">
-    <h2>Documentos</h2>
-    <ul class="docs">
-      {% if i.e_triagem %}
-      <li>
-        <span class="nome-doc">Pedido de exames e enxoval</span>
-        {{ acoes_documento(url_for('ver_impressos', id=i.id, itens='exames,enxoval'), url_for('baixar_impressos', id=i.id, itens='exames,enxoval')) }}
-      </li>
-      {% else %}
-      <li>
-        <span class="nome-doc">Prontuário</span>
-        {{ acoes_documento(url_for('ver_prontuario', id=i.id), url_for('baixar_prontuario', id=i.id)) }}
-      </li>
-      <li>
-        <span class="nome-doc">Conjunto da internação</span>
-        {{ acoes_documento(url_for('ver_impressos', id=i.id), url_for('baixar_impressos', id=i.id)) }}
-      </li>
-      <li>
-        <span class="nome-doc">{{ 'Declaração de internação' if i.status == 'ativo' else 'Declaração de ex-interno' }}</span>
-        {{ acoes_documento(url_for('ver_declaracao', id=i.id), url_for('baixar_declaracao', id=i.id)) }}
-      </li>
+      {% if pode_servico_social and acolhimento.estado != 'finalizado' %}
+        <a class="botao" href="{{ url_for('relatorio_social', id=i.id) }}">{{ 'Continuar' if acolhimento.estado == 'rascunho' else 'Preencher a ficha' }}</a>
+      {% elif pode_servico_social %}
+        <button type="button" class="botao secundario" id="abrir-adendo">Adendo</button>
       {% endif %}
-    </ul>
-  </section>
-
-  <section class="cartao" id="relatorio-social">
-    <h2>Relatório do Serviço Social</h2>
-    <div class="envelope">
-      <div class="situacao">
-        {% if relatorio_preenchido %}
-          <span class="selo ativo">Preenchido</span>
-          <span>{{ i.relatorio_social.atualizado_em.strftime('%d/%m/%Y') }}{{ ' · ' ~ i.relatorio_social.atualizado_por if i.relatorio_social.atualizado_por }}</span>
-        {% else %}
-          <span class="selo">Ainda não preenchido</span>
-        {% endif %}
-      </div>
-      <a class="botao{{ ' secundario' if relatorio_preenchido }}" href="{{ url_for('relatorio_social', id=i.id) }}">{{ 'Editar' if relatorio_preenchido else 'Escrever o relatório' }}</a>
     </div>
-    {% if relatorio_preenchido %}
-      {{ acoes_documento(url_for('ver_impressos', id=i.id, itens='relatorio-social'), url_for('baixar_impressos', id=i.id, itens='relatorio-social'), 'espaco') }}
+    {% if acolhimento.estado == 'finalizado' %}
+      {% set item = 'relatorio-social' if pode_servico_social else 'resumo-social' %}
+      {{ acoes_documento(url_for('ver_impressos', id=i.id, itens=item), url_for('baixar_impressos', id=i.id, itens=item), 'espaco') }}
+    {% endif %}
+    {% if pode_servico_social and acolhimento.get('adendos') %}
+      <ul class="adendos">
+        {% for a in acolhimento.adendos %}
+        <li><strong>{{ a.criado_em.strftime('%d/%m/%Y às %H:%M') }}</strong> · {{ a.criado_por }}<p>{{ a.texto }}</p></li>
+        {% endfor %}
+      </ul>
     {% endif %}
   </section>
 
@@ -251,6 +258,48 @@
   {% endif %}
 </main>
 
+<dialog id="documentos" class="gaveta" aria-labelledby="titulo-documentos">
+  <div class="conteudo">
+    <header>
+      <h2 id="titulo-documentos">Documentos</h2>
+      <button type="button" class="fechar" id="fechar-documentos" aria-label="Fechar"><svg class="icone"><use href="#i-fechar"/></svg></button>
+    </header>
+    <ul class="docs">
+      {% if i.e_triagem %}
+      <li class="verde">
+        <span class="chip"><svg class="icone"><use href="#i-prancheta"/></svg></span>
+        <span class="nome-doc">Pedido de exames e enxoval</span>
+        {{ acoes_documento(url_for('ver_impressos', id=i.id, itens='exames,enxoval'), url_for('baixar_impressos', id=i.id, itens='exames,enxoval')) }}
+      </li>
+      {% else %}
+      <li>
+        <span class="chip"><svg class="icone"><use href="#i-prancheta"/></svg></span>
+        <span class="nome-doc">Prontuário</span>
+        {{ acoes_documento(url_for('ver_impressos', id=i.id), url_for('baixar_impressos', id=i.id)) }}
+      </li>
+      <li class="azul">
+        <span class="chip"><svg class="icone"><use href="#i-documento"/></svg></span>
+        <span class="nome-doc">{{ 'Declaração de internação' if i.status == 'ativo' else 'Declaração de ex-interno' }}</span>
+        {{ acoes_documento(url_for('ver_declaracao', id=i.id), url_for('baixar_declaracao', id=i.id)) }}
+      </li>
+      {% endif %}
+    </ul>
+  </div>
+</dialog>
+
+{% if pode_servico_social and acolhimento.estado == 'finalizado' %}
+<dialog id="adendo">
+  <form method="post" action="{{ url_for('adendo_social', id=i.id) }}">
+    <h2>Adendo ao acolhimento social</h2>
+    <textarea name="texto" maxlength="3000" required aria-label="Adendo"></textarea>
+    <div class="botoes">
+      <button type="button" class="botao secundario" id="cancelar-adendo">Cancelar</button>
+      <button class="botao">Registrar adendo</button>
+    </div>
+  </form>
+</dialog>
+{% endif %}
+
 <dialog id="excluir">
   <form method="post" action="{{ url_for('excluir_registro', id=i.id) }}">
     <h2>Excluir o registro de {{ p.nome }}?</h2>
@@ -275,6 +324,16 @@
 </dialog>
 <script>
   (function () {
+    var gaveta = document.getElementById("documentos");
+    document.getElementById("abrir-documentos").addEventListener("click", function () { gaveta.showModal(); });
+    document.getElementById("fechar-documentos").addEventListener("click", function () { gaveta.close(); });
+    gaveta.addEventListener("click", function (e) { if (e.target === gaveta) gaveta.close(); });
+    if (location.hash === "#documentos") gaveta.showModal();
+    var adendo = document.getElementById("adendo");
+    if (adendo) {
+      document.getElementById("abrir-adendo").addEventListener("click", function () { adendo.showModal(); });
+      document.getElementById("cancelar-adendo").addEventListener("click", function () { adendo.close(); });
+    }
     var dialogo = document.getElementById("excluir");
     document.getElementById("abrir-exclusao").addEventListener("click", function () { dialogo.showModal(); });
     document.getElementById("cancelar-exclusao").addEventListener("click", function () { dialogo.close(); });

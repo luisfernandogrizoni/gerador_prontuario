@@ -96,6 +96,7 @@
 <script>
   const NOVO = {{ novo | tojson }};            // id da internação recém-gravada (ou null)
   const BAIXAR = {{ baixar | tojson }};        // 1 = veio de "Salvar e baixar prontuário"
+  const PODE_SOCIAL = {{ pode_servico_social | tojson }};     // lê e escreve o acolhimento social (Serviço Social e administrador)
   const filtro = new ControleSegmentado(document.getElementById("filtro"));
   const aviso = document.getElementById("aviso");
 
@@ -205,10 +206,11 @@
     const url = `/internacoes/${NOVO}/prontuario`;
     const conjunto = `/internacoes/${NOVO}/impressos`;      // o prontuário e os outros impressos da internação, num documento só
     const nome = item ? item.nome : "novo interno";
-    const escrito = item && item.relatorio_social;
-    const partes = ["prontuário", "manual de orientação", "ficha multiprofissional", "capa do envelope", ...(escrito ? ["relatório do Serviço Social"] : [])];
+    const finalizado = item && item.acolhimento === "finalizado";       // o acolhimento social entra no conjunto quando já foi finalizado
+    const partes = ["prontuário", "manual de orientação", "ficha multiprofissional", "capa do envelope",
+                    ...(finalizado ? [PODE_SOCIAL ? "relatório do Serviço Social" : "resumo do Serviço Social"] : [])];
     const lista = partes.slice(0, -1).join(", ") + " e " + partes[partes.length - 1];
-    const relatorio = escrito ? [] : [" · ", link("Escrever o relatório do Serviço Social", `/internacoes/${NOVO}/relatorio-social`)];
+    const relatorio = PODE_SOCIAL && !finalizado ? [" · ", link("Preencher o acolhimento social", `/internacoes/${NOVO}/relatorio-social`)] : [];
     if (BAIXAR) {
       mostrarAviso([`Prontuário de ${nome} salvo. O download começou (${lista}). `, link("Baixar de novo", conjunto + ".docx"), " · ",
                     link("Só o prontuário", url), " · ", link("Escolher o que imprimir", conjunto), ...relatorio]);

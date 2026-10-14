@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session, with_loader_criteria
 from modelos import AvisoDispensado, Internacao, Pessoa, db
 
 # avisos que citam o registro (avisos.py): ao apagar de vez, as dispensas deles também vão (o SQLite reaproveita ids)
-AVISOS_DA_INTERNACAO = ("respcpf", "seminicio", "semtermino", "desistinicio", "agendavencida", "envelope", "rejeicao")
+AVISOS_DA_INTERNACAO = ("respcpf", "seminicio", "semtermino", "desistinicio", "agendavencida", "envelope", "rejeicao", "acolhimento")
 AVISOS_DA_PESSOA = ("cpf", "tel")
 
 
