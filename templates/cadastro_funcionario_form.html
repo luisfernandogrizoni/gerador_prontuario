@@ -45,6 +45,20 @@
     </fieldset>
 
     <fieldset>
+      <legend>Serviço Social</legend>
+      <div class="grade">
+        {{ f.entrada('registro_profissional', 'Registro profissional (CRESS)', 'c3', attrs={'maxlength': 30, 'placeholder': 'ex.: CRESS 12345 · 6ª Região'}) }}
+      </div>
+      <div class="caixas">
+        {% if pode_acessos %}
+        <label class="caixa"><input type="checkbox" name="servico_social" value="1"{{ ' checked' if d.get('servico_social') == '1' }}>Assina o Serviço Social: lê e escreve o acolhimento social (ficha, relatório e parecer)</label>
+        {% else %}
+        <label class="caixa"><input type="checkbox" disabled{{ ' checked' if d.get('servico_social') == '1' }}>Assina o Serviço Social (só o administrador muda)</label>
+        {% endif %}
+      </div>
+    </fieldset>
+
+    <fieldset>
       <legend>Assinatura dos documentos</legend>
       <div class="caixas">
         <label class="caixa"><input type="checkbox" name="ativo" value="1"{{ ' checked' if d.get('ativo') == '1' }}>Ativo</label>

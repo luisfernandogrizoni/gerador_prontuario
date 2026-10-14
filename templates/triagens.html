@@ -5,6 +5,13 @@
 
 {% block estilo %}
     @media print { @page { size: A4 landscape; margin: 10mm; } }
+    .ficha-social { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+    .ficha-social a { font-size: .74rem; font-weight: 600; padding: 2px 10px; border-radius: 999px; text-decoration: none; background: #fff;
+                      border: 1px solid var(--borda-forte); color: var(--suave); }
+    .ficha-social a:hover { border-color: var(--vermelho); color: var(--vermelho); }
+    .ficha-social a.pede { background: var(--vermelho-claro); border-color: #f0b4b0; color: var(--vermelho); }
+    .ficha-social a.rascunho { background: var(--amarelo); border-color: #ecd98a; color: var(--ambar); }
+    .ficha-social a.finalizado { background: var(--verde-claro); border-color: var(--verde-borda); color: var(--verde); }
     .acoes-linha { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
     @media (max-width: 1279px) { .acoes-linha { justify-content: stretch; } .acoes-linha > * { flex: 1 1 0; } .acoes-linha .botao { width: 100%; justify-content: center; } }
 {% endblock %}
@@ -95,6 +102,7 @@
 <script>
   const NOVO = {{ novo | tojson }};
   const IMPRIMIR = {{ imprimir | tojson }};     // 1 = a internação acabou de ser marcada: pergunta se imprime exames e enxoval
+  const PODE_SOCIAL = {{ pode_servico_social | tojson }};     // lê e escreve o acolhimento social (Serviço Social e administrador)
   const OPCOES = [...{{ status_triagem | tojson }}, ["ativo", "Admitido → internos"]];
   const filtro = new ControleSegmentado(document.getElementById("filtro"));
   const aviso = document.getElementById("aviso");
@@ -156,12 +164,33 @@
   // desistência e rejeição saem de "em andamento": a triagem delas já terminou
   const emAndamento = i => i.status !== "desistiu" && i.status !== "rejeitado";
 
-  // Editar; quem foi rejeitado ganha o relatório da rejeição; quem tem a internação marcada ganha Imprimir (exames e enxoval)
+  // acolhimento social (só a assistente social e o administrador abrem): embaixo do nome, o atalho da ficha, que mostra em que
+  // pé está (não iniciado, rascunho ou finalizado) e a classificação de risco quando já foi feita. Fica vermelho enquanto falta
+  // finalizar numa triagem que já aconteceu ou numa rejeição sem parecer.
+  const RISCO = { Baixo: "ativo", "Médio": "lista_espera", Alto: "desistiu" };
+  function atalhoSocial(i) {
+    const finalizado = i.acolhimento === "finalizado";
+    const pede = !finalizado && (i.status === "rejeitado" || (emAndamento(i) && i.triagem && i.triagem <= hojeIso()));
+    const rotulo = finalizado ? "Ficha social ✓" : i.acolhimento === "rascunho" ? "Ficha social · rascunho" : "Ficha social";
+    const atalho = link(rotulo, `/internacoes/${i.id}/relatorio-social`, i.acolhimento === "rascunho" ? "rascunho" : finalizado ? "finalizado" : pede ? "pede" : "");
+    atalho.title = finalizado ? "Acolhimento social finalizado" : i.acolhimento === "rascunho" ? "Acolhimento social em andamento" : "Acolhimento social ainda não iniciado";
+    const caixa = document.createElement("div");
+    caixa.className = "ficha-social";
+    caixa.append(atalho);
+    if (i.classificacao) caixa.append(texto("span", `Risco ${i.classificacao.toLowerCase()}`, "selo " + RISCO[i.classificacao]));
+    return caixa;
+  }
+  function celulaPessoaTriagem(i) {
+    const caixa = celulaPessoa(i);
+    if (PODE_SOCIAL) caixa.lastElementChild.append(atalhoSocial(i));
+    return caixa;
+  }
+
+  // quem tem a internação marcada ganha Imprimir (exames e enxoval); Editar
   function celulaAcoes(i) {
     const caixa = document.createElement("div");
     caixa.className = "acoes-linha";
-    if (i.status === "rejeitado") caixa.append(link("Relatório", `/internacoes/${i.id}/rejeicao`, "botao pequeno secundario"));
-    else if (i.agendada && i.agendada >= hojeIso() && (i.status === "em_admissao" || i.status === "lista_espera")) {
+    if (i.agendada && i.agendada >= hojeIso() && (i.status === "em_admissao" || i.status === "lista_espera")) {
       const imprimir = link("Imprimir", `/internacoes/${i.id}/impressos?itens=exames,enxoval&imprimir=1`, "botao pequeno secundario");
       imprimir.target = "_blank"; imprimir.rel = "noopener"; imprimir.title = "Pedido de exames e enxoval";
       imprimir.prepend(icone("impressora"));
@@ -197,7 +226,9 @@
         mostrarAviso([`${item.nome} foi admitido e já está na lista de internos. `,
                       link("Completar o prontuário", resp.editar), " · ", link("ver ficha", resp.ficha)]);
       } else if (resp.status === "rejeitado") {
-        mostrarAviso([`${item.nome} foi marcado como rejeitado na triagem. `, link("Escrever o relatório da rejeição", resp.rejeicao), " · ", link("ver ficha", resp.ficha)]);
+        mostrarAviso([`${item.nome} foi marcado como rejeitado na triagem. `,
+                      ...(resp.acolhimento ? [link("Escrever o parecer da rejeição", resp.acolhimento), " · "] : ["A assistente social precisa escrever o parecer. "]),
+                      link("ver ficha", resp.ficha)]);
       } else {
         mostrarAviso([`Situação de ${item.nome} alterada para "${sel.selectedOptions[0].text}".`]);
       }
@@ -220,7 +251,7 @@
       document.getElementById("n-todas").textContent = itens.length;
     },
     colunas: [
-      { celula: celulaPessoa },
+      { celula: celulaPessoaTriagem },
       { celula: i => chipCategoria(i.categoria, i.categoria_tipo), classe: "fixo" },
       { celula: i => dataOuMudo(i.primeiro_contato_fmt), classe: "fixo" },
       { celula: celulaTriagem, classe: "fixo" },

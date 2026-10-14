@@ -1,19 +1,18 @@
 """
-Regras de negócio: validar e gravar triagens e prontuários, mudar status, gravar os relatórios do Serviço Social
-(o da internação e o da rejeição na triagem), lançar parcelas e unificar cadastros duplicados.
+Regras de negócio: validar e gravar triagens e prontuários, mudar status, gravar o acolhimento social (ficha, relatório
+e parecer da assistente social, com finalização e adendos), lançar parcelas e unificar cadastros duplicados.
 
 As rotas (app.py) só chamam estas funções. Cada função de gravação devolve
 (objeto, erros): se `erros` vier preenchido, nada foi gravado e o formulário
 volta para a tela com as mensagens ao lado de cada campo.
 """
 
-from datetime import date
+from datetime import date, datetime
 
 import catalogo
-import rejeicao
 import servico_social
-from modelos import (ENVELOPE_PENDENTE, ENVELOPE_RECEBIDO, STATUS, STATUS_TRIAGEM, Internacao, Parcela,
-                     Pessoa, RejeicaoTriagem, RelatorioSocial, db)
+from modelos import (ENVELOPE_PENDENTE, ENVELOPE_RECEBIDO, STATUS, STATUS_TRIAGEM, AdendoSocial, Internacao, Parcela,
+                     Pessoa, RelatorioSocial, db)
 from prontuario import CONVENIO_A_DEFINIR, ler_data, ler_valor
 from relatorios import hoje_no_brasil
 from validacao import cpf_valido, fmt_cpf, ler_hora, normalizar_nome, rg_valido, so_digitos
@@ -244,31 +243,46 @@ def registrar_envelope(internacao, situacao):
     return None
 
 
-# ----------------------------------------------- relatório do Serviço Social
-def salvar_relatorio_social(internacao, form, usuario=""):
-    """Grava o que a assistente social digitou (veja servico_social.py). Devolve (relatório, erros): com erros, nada foi gravado."""
-    dados, erros = servico_social.ler_formulario(form)
+# ------------------------------------------------------- acolhimento social
+def salvar_relatorio_social(internacao, form, usuario="", finalizar=False, assinatura=""):
+    """Grava o que a assistente social digitou (veja servico_social.py). Devolve (relatório, erros): com erros, nada foi
+    gravado. `finalizar`: confere o mínimo da conclusão (relatório, classificação geral e parecer), trava o acolhimento
+    com data, hora e `assinatura` de quem finalizou e, se o parecer é 'não condizente', marca a triagem como rejeitada.
+    Depois de finalizado só entra adendo (adicionar_adendo)."""
+    relatorio = internacao.relatorio_social
+    if relatorio is not None and relatorio.finalizado:
+        return None, {"_": "Este acolhimento social já foi finalizado. Para corrigir ou acrescentar, escreva um adendo."}
+    dados, erros = servico_social.ler_formulario(form, servico_social.campos_para(internacao))
+    if finalizar:
+        erros = {**servico_social.validar_finalizacao(dados, internacao), **erros}
     if erros:
         return None, erros
-    relatorio = internacao.relatorio_social or RelatorioSocial(internacao=internacao)
+    relatorio = relatorio or RelatorioSocial(internacao=internacao)
     relatorio.dados = dados                 # um dicionário novo: é assim que o SQLAlchemy percebe a mudança no JSON
     relatorio.atualizado_por = usuario[:50]
+    if finalizar:
+        relatorio.situacao, relatorio.finalizado_em = "finalizado", datetime.now()
+        relatorio.finalizado_por, relatorio.assinatura = usuario[:50], assinatura[:200]
+        if dados["parecer"] == servico_social.NAO_CONDIZENTE and internacao.e_triagem:
+            internacao.status = "rejeitado"
     db.session.add(relatorio)
     db.session.commit()
     return relatorio, {}
 
 
-def salvar_rejeicao(internacao, form, usuario=""):
-    """Grava o relatório de rejeição escrito pela assistente social (veja rejeicao.py). Devolve (relatório, erros)."""
-    dados, erros = rejeicao.ler_formulario(form)
-    if erros:
-        return None, erros
-    relatorio = internacao.rejeicao or RejeicaoTriagem(internacao=internacao)
-    relatorio.dados = dados
-    relatorio.atualizado_por = usuario[:50]
-    db.session.add(relatorio)
+def adicionar_adendo(internacao, texto, assinatura):
+    """Acrescenta um adendo a um acolhimento social já finalizado (não se edita nem se apaga). Devolve o erro, ou None."""
+    relatorio = internacao.relatorio_social
+    texto = (texto or "").strip()
+    if relatorio is None or not relatorio.finalizado:
+        return "O adendo só vale depois de finalizar o acolhimento social."
+    if not texto:
+        return "Escreva o adendo."
+    if len(texto) > 3000:
+        return f"O adendo pode ter até 3000 caracteres (tem {len(texto)})."
+    relatorio.adendos.append(AdendoSocial(texto=texto, criado_por=assinatura[:200]))
     db.session.commit()
-    return relatorio, {}
+    return None
 
 
 # ------------------------------------------------------------------ parcelas

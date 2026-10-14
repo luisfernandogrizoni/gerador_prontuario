@@ -44,7 +44,7 @@
           <td class="livre" data-rotulo="Cargo">{{ p.cargo }}</td>
           <td class="fixo" data-rotulo="Usuário de login">{{ p.usuario }}</td>
           <td class="fixo" data-rotulo="Nível de acesso">{{ p.nivel.nome if p.nivel else '' }}</td>
-          <td class="fixo" data-rotulo="Situação"><span class="selo {{ 'ativo' if p.ativo else 'desativado' }}">{{ 'Ativo' if p.ativo else 'Desativado' }}</span>{% if p.padrao %}<span class="selo padrao" title="Assina quando ninguém escolhe outra pessoa">Assina por padrão</span>{% endif %}</td>
+          <td class="fixo" data-rotulo="Situação"><span class="selo {{ 'ativo' if p.ativo else 'desativado' }}">{{ 'Ativo' if p.ativo else 'Desativado' }}</span>{% if p.padrao %}<span class="selo padrao" title="Assina quando ninguém escolhe outra pessoa">Assina por padrão</span>{% endif %}{% if p.servico_social %}<span class="selo padrao" title="Lê e escreve o acolhimento social">Serviço Social</span>{% endif %}</td>
           <td class="fixo acao"><a class="botao pequeno secundario" href="{{ url_for('editar_funcionario', id=p.id) }}">Editar</a></td>
         </tr>
         {% endfor %}

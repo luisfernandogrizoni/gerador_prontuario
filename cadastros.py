@@ -4,7 +4,9 @@ Cadastros: convênios e funcionários.
   * Convênios (Cadastros > Convênios): nome, vagas, cor. Um convênio novo aparece sozinho nos formulários, no quadro
     de vagas, na página de relatórios e entre as colunas do relatório anual (veja catalogo.py).
   * Funcionários (Cadastros > Funcionários): quem pode assinar como responsável pela emissão dos documentos, o login
-    de cada um (o administrador cria o usuário e a senha aqui mesmo) e o nível de acesso.
+    de cada um (o administrador cria o usuário e a senha aqui mesmo) e o nível de acesso. Quem é do Serviço Social
+    (marca 'Assina o Serviço Social' e registro profissional, o CRESS) lê e escreve o acolhimento social, que é sigiloso:
+    pode_servico_social.
   * Níveis de acesso (Cadastros > Níveis de acesso): uma cascata, do que tem mais acesso para o que tem menos. O
     primeiro da cascata é o do administrador. Por enquanto a única regra aplicada é a do próprio acesso (pode_gerenciar_
     acessos: criar usuário e senha, vincular login, mudar o nível de alguém, mexer nos níveis); o resto do que cada nível
@@ -206,6 +208,11 @@ def validar_funcionario(form, funcionario=None, pode_acessos=True):
         erros["padrao"] = "Quem assina por padrão precisa estar ativo."
     if funcionario is not None and funcionario.padrao and not padrao:
         erros["padrao"] = "Para trocar quem assina por padrão, marque a outra pessoa como padrão."
+    registro = (form.get("registro_profissional") or "").strip()
+    if len(registro) > 30:
+        erros["registro_profissional"] = "O registro pode ter até 30 caracteres."
+    elif pode_acessos and form.get("servico_social") == "1" and not registro:
+        erros["registro_profissional"] = "Informe o registro profissional (CRESS): ele assina o relatório."
     if pode_acessos:
         erros.update(_validar_acesso(form, funcionario, ativo))
     return erros
@@ -224,8 +231,10 @@ def salvar_funcionario(form, funcionario=None, por=None):
         db.session.add(funcionario)
     funcionario.nome, funcionario.cargo = form["nome"].strip(), form["cargo"].strip()
     funcionario.ativo = form.get("ativo") == "1"
+    funcionario.registro_profissional = (form.get("registro_profissional") or "").strip()
     try:
         if pode:
+            funcionario.servico_social = form.get("servico_social") == "1"     # dar acesso ao sigilo é coisa do administrador
             funcionario.nivel_id = int(form["nivel_id"])
             erro_de_acesso = _gravar_acesso(form, funcionario)
             if erro_de_acesso:
@@ -304,13 +313,38 @@ def nivel_para_novo_funcionario():
     return str(ativos[-1].id) if ativos else ""
 
 
+def funcionario_do_usuario(usuario):
+    """O funcionário ativo que tem o login de quem está logado (None se não houver)."""
+    if usuario is None:
+        return None
+    return db.session.execute(db.select(Funcionario).filter_by(usuario=usuario.nome, ativo=True)).scalars().first()
+
+
 def nivel_do_usuario(usuario):
     """O nível de acesso de quem está logado: o do funcionário ativo que tem o login dele (None se não houver).
     Ainda não restringe nada: é a base da configuração da cascata."""
-    if usuario is None:
-        return None
-    funcionario = db.session.execute(db.select(Funcionario).filter_by(usuario=usuario.nome, ativo=True)).scalars().first()
+    funcionario = funcionario_do_usuario(usuario)
     return funcionario.nivel if funcionario else None
+
+
+def pode_servico_social(usuario):
+    """Quem lê e escreve o acolhimento social (ficha, relatório e parecer da assistente social), que traz dados muito
+    sensíveis: o administrador e quem tem a marca 'Assina o Serviço Social' no cadastro de funcionários. Os outros só
+    sabem se foi feito. (Enquanto nenhum administrador tem usuário vinculado, o sistema está recém-instalado e quem está
+    logado conta como administrador: veja pode_gerenciar_acessos.)"""
+    if pode_gerenciar_acessos(usuario):
+        return True
+    funcionario = funcionario_do_usuario(usuario)
+    return bool(funcionario and funcionario.servico_social)
+
+
+def assinatura_do_usuario(usuario):
+    """Como quem está logado assina o que finaliza: 'Nome — cargo — registro profissional' do funcionário dele (só o
+    login, se não há funcionário vinculado). Quem finaliza leva isso gravado, como estava naquele momento."""
+    funcionario = funcionario_do_usuario(usuario)
+    if funcionario is None:
+        return usuario.nome if usuario is not None else ""
+    return " — ".join(parte for parte in (funcionario.nome, funcionario.cargo, funcionario.registro_profissional) if parte)
 
 
 def validar_nivel(form, nivel=None):

@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta
 
 from flask import current_app, url_for
 
-import rejeicao
+import servico_social
 from banco import arquivo_ultimo_backup
 from modelos import ENVELOPE_PENDENTE, AvisoDispensado, Internacao, Pessoa, db
 from relatorios import hoje_no_brasil
@@ -24,7 +24,8 @@ from validacao import cpf_valido, fmt_cpf, normalizar_nome, so_digitos
 # ao escritório. Passou disso, o aviso fica vermelho: é hora de cobrar.
 PRAZO_ENVELOPE_DIAS = 7
 CATEGORIA_ENVELOPE = "Prontuário a receber da casa de acolhida"
-CATEGORIA_REJEICAO = "Relatório de rejeição a escrever"      # a assistente social ainda não escreveu o porquê da rejeição
+CATEGORIA_REJEICAO = "Parecer da rejeição a escrever"          # rejeitado na triagem, e a assistente social ainda não finalizou o parecer
+CATEGORIA_ACOLHIMENTO = "Acolhimento social a finalizar"        # a triagem já aconteceu e o acolhimento social não foi finalizado
 
 # No servidor do escritório (servidor.py), o backup diário (backup.py) anota quando terminou. Passou deste
 # prazo sem backup, a página inicial avisa. 3 dias cobrem um fim de semana prolongado com o computador desligado.
@@ -54,7 +55,9 @@ def tempo_decorrido(dias):
     return "hoje" if dias == 0 else f"há {dias} dia{'' if dias == 1 else 's'}"
 
 
-def gerar_avisos():
+def gerar_avisos(pode_servico_social=False):
+    """`pode_servico_social`: quem olha é do Serviço Social (ou administrador); só para ele o aviso do acolhimento social
+    leva direto ao formulário (os outros vão à ficha, onde veem se já foi feito, sem o conteúdo)."""
     avisos = []
     pessoas = db.session.execute(db.select(Pessoa)).scalars().all()
     internacoes = db.session.execute(db.select(Internacao)).scalars().all()
@@ -100,9 +103,20 @@ def gerar_avisos():
                                 + (f" e saída em {i.termino.strftime('%d/%m/%Y')}" if i.termino else "")
                                 + ". Se ele chegou a ficar na casa, o certo é Inativo (Desistência).",
                                 _ficha(i), f"desistinicio:{i.id}"))
-        if i.status == "rejeitado" and not rejeicao.preenchido(i.rejeicao):
-            avisos.append(Aviso(CATEGORIA_REJEICAO, f"{nome}: marcado como rejeitado na triagem. Falta o relatório do porquê (assistente social).",
-                                url_for("relatorio_de_rejeicao", id=i.id), f"rejeicao:{i.id}", dispensavel=False))
+        triagem_ja_foi = i.status in ("em_admissao", "lista_espera") and i.data_triagem and i.data_triagem <= hoje_no_brasil()
+        if i.status == "rejeitado" or triagem_ja_foi:       # (só aqui se olha o acolhimento: é uma consulta por registro)
+            situacao = servico_social.estado(i.relatorio_social)
+            aonde = url_for("relatorio_social", id=i.id) if pode_servico_social else _ficha(i) + "#acolhimento"
+            if situacao == "finalizado":
+                pass
+            elif i.status == "rejeitado":
+                avisos.append(Aviso(CATEGORIA_REJEICAO, f"{nome}: marcado como rejeitado na triagem. Falta o parecer do porquê (assistente social).",
+                                    aonde, f"rejeicao:{i.id}", dispensavel=False))
+            else:
+                avisos.append(Aviso(CATEGORIA_ACOLHIMENTO,
+                                    f"{nome}: triagem em {i.data_triagem.strftime('%d/%m/%Y')}, e o acolhimento social ainda não foi finalizado "
+                                    f"({'em rascunho' if situacao else 'não iniciado'}).",
+                                    aonde, f"acolhimento:{i.id}", dispensavel=False))
         if (i.status in ("em_admissao", "lista_espera") and i.internacao_agendada
                 and i.internacao_agendada < date.today()):
             avisos.append(Aviso("Internação agendada já passou",
@@ -139,8 +153,9 @@ def gerar_avisos():
     grupos = defaultdict(list)
     for a in avisos:
         grupos[a.categoria].append(a)
-    # o backup, o envelope pendente e o relatório de rejeição são tarefas, não correções de cadastro: vêm primeiro
-    return dict(sorted(grupos.items(), key=lambda g: (g[0] not in (CATEGORIA_BACKUP, CATEGORIA_ENVELOPE, CATEGORIA_REJEICAO), g[0])))
+    # o backup, o envelope pendente e o acolhimento social são tarefas, não correções de cadastro: vêm primeiro
+    tarefas = (CATEGORIA_BACKUP, CATEGORIA_ENVELOPE, CATEGORIA_REJEICAO, CATEGORIA_ACOLHIMENTO)
+    return dict(sorted(grupos.items(), key=lambda g: (g[0] not in tarefas, g[0])))
 
 
 def _aviso_do_backup():

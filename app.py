@@ -24,9 +24,11 @@ Telas:
     /internacoes/<id>/impressos     os impressos da triagem (pedido de exames, enxoval) e da internação (prontuário, manual
                                     de orientação, ficha multiprofissional, capa do envelope, relatório do Serviço Social)
                                     num documento só
-    /internacoes/<id>/relatorio-social   a assistente social escreve o relatório do Serviço Social no sistema
-    /internacoes/<id>/rejeicao      relatório de por que a triagem rejeitou a pessoa (situação "Rejeitado na triagem")
-    /internacoes/<id>/excluir       exclui o registro: o operador só tira de circulação; o administrador também apaga de vez
+    /internacoes/<id>/relatorio-social   o acolhimento social: a assistente social preenche a ficha, escreve o relatório, classifica
+                                    o risco e dá o parecer no sistema (sigiloso: só Serviço Social e administrador); finalizar
+                                    trava e um parecer "não condizente" marca a triagem como "Rejeitado na triagem"
+    /internacoes/<id>/relatorio-social/adendo   correção ou informação nova num acolhimento já finalizado
+    /internacoes/<id>/excluir      exclui o registro: o operador só tira de circulação; o administrador também apaga de vez
     /cadastros/lixeira              (administrador) o que foi excluído: restaurar ou apagar do banco
 
 Organização:
@@ -39,9 +41,8 @@ Organização:
     cadastros.py   cadastros de convênios e de funcionários
     fichas.py      pedido de exames, enxoval, capa do envelope e ficha multiprofissional (em branco)
     manual_de_orientacao.py  o manual que a família recebe na internação (o texto fica lá)
-    servico_social.py  o relatório do Serviço Social: perguntas, gravação e documento
-    rejeicao.py    o relatório de rejeição na triagem (mesmas peças do relatório acima)
-    exclusao.py    excluir em duas etapas: some de tudo sem sair do banco, até o administrador apagar de vez
+    servico_social.py  o acolhimento social: perguntas, classificação, parecer, gravação e documento
+    exclusao.py   excluir em duas etapas: some de tudo sem sair do banco, até o administrador apagar de vez
     impressos.py   reúne os impressos de cada acolhido num documento só
     vagas.py       ocupação das vagas por categoria
     painel.py      números e agenda dos próximos dias da página inicial
@@ -73,7 +74,6 @@ import documentos
 import exclusao
 import impressos
 import painel
-import rejeicao
 import relatorios
 import servico_social
 import servicos
@@ -117,7 +117,16 @@ def _e_administrador():
     return g.e_administrador
 
 
-app.context_processor(lambda: {"usuario_atual": g.get("usuario"), "e_administrador": _e_administrador()})
+def _pode_servico_social():
+    """O usuário logado lê e escreve o acolhimento social (ficha, relatório e parecer)? Só o Serviço Social e o
+    administrador (cadastros.pode_servico_social). Guardado por requisição, como _e_administrador."""
+    if "pode_servico_social" not in g:
+        g.pode_servico_social = cadastros_.pode_servico_social(g.get("usuario"))
+    return g.pode_servico_social
+
+
+app.context_processor(lambda: {"usuario_atual": g.get("usuario"), "e_administrador": _e_administrador(),
+                               "pode_servico_social": _pode_servico_social()})
 
 # filtros usados nos templates: {{ p.cpf | cpf }}, {{ i.inicio | data }} ...
 app.jinja_env.filters.update(cpf=fmt_cpf, rg=fmt_rg, cep=fmt_cep, data=fmt_data, hora=fmt_hora,
@@ -177,7 +186,7 @@ def alterar_senha():
 def home():
     hoje = date.today()
     lista_de_vagas = gerar_vagas()
-    return render_template("home.html", avisos=gerar_avisos(), vagas=lista_de_vagas, vagas_total=totais(lista_de_vagas),
+    return render_template("home.html", avisos=gerar_avisos(_pode_servico_social()), vagas=lista_de_vagas, vagas_total=totais(lista_de_vagas),
                            resumo=painel.resumo(), agenda=painel.agenda(hoje=hoje), para_imprimir=painel.impressos_da_internacao(hoje=hoje),
                            dias_da_agenda=painel.DIAS_DA_AGENDA, fim_do_tratamento=painel.tratamentos_a_finalizar(hoje=hoje),
                            hoje_por_extenso=painel.data_por_extenso(hoje),
@@ -218,7 +227,9 @@ def api_triagens():
     itens = db.session.execute(
         db.select(Internacao).filter(Internacao.status.in_(STATUS_TRIAGEM))
         .order_by(Internacao.primeiro_contato.desc().nulls_last(), Internacao.id.desc())).scalars()
-    return jsonify([i.para_triagem() for i in itens])
+    pode = _pode_servico_social()       # a classificação de risco é do sigilo do Serviço Social: só vai para quem pode vê-la
+    return jsonify([{**i.para_triagem(), **({"classificacao": servico_social.classificacao(i.relatorio_social)} if pode else {})}
+                    for i in itens])
 
 
 @app.get("/triagens/nova")
@@ -255,7 +266,7 @@ def mudar_status(id):
     if erros:
         return jsonify(ok=False, erros=erros), 400
     return jsonify(ok=True, status=internacao.status, ficha=url_for("ficha", id=id), editar=url_for("editar_internacao", id=id),
-                   rejeicao=url_for("relatorio_de_rejeicao", id=id))
+                   acolhimento=url_for("relatorio_social", id=id) if _pode_servico_social() else None)
 
 
 # ================================================================== internos
@@ -328,8 +339,22 @@ def ficha(id):
     dias, atrasado = dias_de_espera(internacao)
     return render_template("ficha.html", i=internacao, envelope_atrasado=atrasado,
                            envelope_tempo=tempo_decorrido(dias) if dias is not None else "",
-                           relatorio_preenchido=servico_social.preenchido(internacao.relatorio_social),
-                           rejeicao_preenchida=rejeicao.preenchido(internacao.rejeicao))
+                           acolhimento=_resumo_do_acolhimento(internacao))
+
+
+def _resumo_do_acolhimento(internacao):
+    """O que a ficha mostra do acolhimento social. Quem não é do Serviço Social (nem administrador) só fica sabendo se
+    foi feito e quando: a classificação, o parecer, quem escreveu e os adendos são do sigilo."""
+    relatorio = internacao.relatorio_social
+    situacao = servico_social.estado(relatorio)
+    resumo = {"estado": situacao, "em": None}
+    if situacao:
+        resumo["em"] = relatorio.finalizado_em if situacao == "finalizado" else relatorio.atualizado_em
+    if situacao and _pode_servico_social():
+        resumo.update(por=(relatorio.assinatura or relatorio.finalizado_por) if situacao == "finalizado" else relatorio.atualizado_por,
+                      risco=servico_social.classificacao(relatorio), parecer=servico_social.resposta(relatorio, "parecer"),
+                      adendos=list(relatorio.adendos))
+    return resumo
 
 
 @app.get("/internacoes/<int:id>/editar")
@@ -429,7 +454,7 @@ def baixar_declaracao(id):
 # envelope, relatório do Serviço Social) saem num documento só; ?itens=a,b escolhe quais (veja impressos.py).
 def _impresso(id):
     internacao = _buscar(Internacao, id)
-    itens = impressos.ler_itens(request.args.get("itens"), internacao)
+    itens = impressos.ler_itens(request.args.get("itens"), internacao, _pode_servico_social())
     return internacao, itens, impressos.documento(internacao, itens, relatorios.hoje_no_brasil())
 
 
@@ -447,7 +472,8 @@ def ver_impressos(id):
     internacao, itens, doc = _impresso(id)
     if request.args.get("imprimir"):                      # só quem vai imprimir; ver o documento não conta como impresso
         _anotar_impressao(internacao, itens)
-    barra = {"itens": impressos.barra(internacao, itens, lambda novos: url_for("ver_impressos", id=id, itens=",".join(novos)))}
+    barra = {"itens": impressos.barra(internacao, itens, lambda novos: url_for("ver_impressos", id=id, itens=",".join(novos)),
+                                      _pode_servico_social())}
     return _mostrar(doc, url_for("baixar_impressos", id=id, itens=",".join(itens)), url_for("ficha", id=id), barra=barra)
 
 
@@ -458,52 +484,67 @@ def baixar_impressos(id):
     return _baixar(doc)
 
 
-# ------------------------------------------------- relatório do Serviço Social
+# ------------------------------------------------------- acolhimento social
+# Ficha, relatório livre, classificação de risco e parecer da assistente social (servico_social.py). Sigiloso: só o
+# Serviço Social e o administrador abrem; os outros veem na ficha se foi feito (e a folha-resumo nos impressos).
+def _so_servico_social(id):
+    """Quem não é do Serviço Social (nem administrador) volta para a ficha com o aviso, sem ver nada do conteúdo."""
+    flash("O acolhimento social é sigiloso: só a assistente social e o administrador abrem.")
+    return redirect(url_for("ficha", id=id))
+
+
 def _tela_relatorio(internacao, form, erros, status=200):
     relatorio = internacao.relatorio_social
     acolhido, responsavel = servico_social.identificacao(internacao, relatorios.hoje_no_brasil())
-    valores = servico_social.valores_do_formulario(form) if form is not None else servico_social.valores(internacao, relatorio)
-    return render_template("servico_social_form.html", i=internacao, secoes=servico_social.SECOES, v=valores, erros=erros,
-                           relatorio=relatorio, acolhido=acolhido, responsavel=responsavel), status
+    valores = servico_social.valores_do_formulario(form, servico_social.campos_para(internacao)) if form is not None \
+        else servico_social.valores(internacao, relatorio, servico_social.campos_para(internacao))
+    anterior = servico_social.anterior(internacao) if relatorio is None and form is None else None      # readmissão: de onde vieram as respostas
+    return render_template("servico_social_form.html", i=internacao, secoes=servico_social.secoes_para(internacao), v=valores, erros=erros,
+                           relatorio=relatorio, acolhido=acolhido, responsavel=responsavel, anterior=anterior), status
 
 
 @app.route("/internacoes/<int:id>/relatorio-social", methods=["GET", "POST"])
 def relatorio_social(id):
     internacao = _buscar(Internacao, id)
+    if not _pode_servico_social():
+        return _so_servico_social(id)
+    relatorio = internacao.relatorio_social
+    if relatorio is not None and relatorio.finalizado:          # finalizado não se edita: abre o documento (e o adendo é na ficha)
+        if request.method == "POST":
+            flash("Este acolhimento social já foi finalizado. Para corrigir ou acrescentar, escreva um adendo.")
+            return redirect(url_for("ficha", id=id) + "#acolhimento")
+        return redirect(url_for("ver_impressos", id=id, itens="relatorio-social"))
     if request.method == "POST":
-        _, erros = servicos.salvar_relatorio_social(internacao, request.form, g.usuario.nome if g.get("usuario") else "")
+        acao = request.form.get("acao")
+        _, erros = servicos.salvar_relatorio_social(internacao, request.form, _nome_do_usuario(), finalizar=acao == "finalizar",
+                                                    assinatura=cadastros_.assinatura_do_usuario(g.get("usuario")))
         if erros:
             return _tela_relatorio(internacao, request.form, erros, 400)
-        if request.form.get("acao") == "imprimir":
+        if acao == "finalizar":
+            flash("Acolhimento social finalizado." + (f" {internacao.pessoa.nome} foi marcado como rejeitado na triagem."
+                                                      if internacao.status == "rejeitado" else ""))
+            return redirect(url_for("ficha", id=id) + "#acolhimento")
+        if acao == "imprimir":
             return redirect(url_for("ver_impressos", id=id, itens="relatorio-social", imprimir=1))
-        flash("Relatório do Serviço Social salvo.")
+        flash("Rascunho salvo.")
         return redirect(url_for("relatorio_social", id=id))
     return _tela_relatorio(internacao, None, {})
 
 
-# ----------------------------------------- relatório de rejeição na triagem
-def _tela_rejeicao(internacao, form, erros, status=200):
-    relatorio = internacao.rejeicao
-    acolhido = rejeicao.identificacao(internacao, relatorios.hoje_no_brasil())
-    valores = rejeicao.valores_do_formulario(form) if form is not None else rejeicao.valores(internacao, relatorio)
-    return render_template("servico_social_form.html", i=internacao, titulo="Relatório de rejeição na triagem", secoes=rejeicao.SECOES, v=valores,
-                           erros=erros, relatorio=relatorio, acolhido=acolhido, responsavel=None), status
-
-
-@app.route("/internacoes/<int:id>/rejeicao", methods=["GET", "POST"])
-def relatorio_de_rejeicao(id):
+@app.post("/internacoes/<int:id>/relatorio-social/adendo")
+def adendo_social(id):
     internacao = _buscar(Internacao, id)
-    if not internacao.e_triagem:                          # quem já foi internado não tem rejeição na triagem
-        abort(404)
-    if request.method == "POST":
-        _, erros = servicos.salvar_rejeicao(internacao, request.form, g.usuario.nome if g.get("usuario") else "")
-        if erros:
-            return _tela_rejeicao(internacao, request.form, erros, 400)
-        if request.form.get("acao") == "imprimir":
-            return redirect(url_for("ver_impressos", id=id, itens="rejeicao", imprimir=1))
-        flash("Relatório de rejeição salvo.")
-        return redirect(url_for("relatorio_de_rejeicao", id=id))
-    return _tela_rejeicao(internacao, None, {})
+    if not _pode_servico_social():
+        return _so_servico_social(id)
+    erro = servicos.adicionar_adendo(internacao, request.form.get("texto"), cadastros_.assinatura_do_usuario(g.get("usuario")))
+    flash(erro or "Adendo registrado.")
+    return redirect(url_for("ficha", id=id) + "#acolhimento")
+
+
+@app.get("/internacoes/<int:id>/rejeicao")
+def relatorio_de_rejeicao(id):
+    """O relatório de rejeição virou o parecer do acolhimento social: o endereço antigo continua levando para lá."""
+    return redirect(url_for("relatorio_social", id=id))
 
 
 # ----------------------------------------------------------- excluir registros
@@ -724,7 +765,8 @@ def editar_funcionario(id):
         return _tela_funcionario(funcionario, request.form, erros, 400)
     dados = {"nome": funcionario.nome, "cargo": funcionario.cargo, "usuario": funcionario.usuario,
              "nivel_id": str(funcionario.nivel_id or ""), "ativo": "1" if funcionario.ativo else "",
-             "padrao": "1" if funcionario.padrao else ""}
+             "padrao": "1" if funcionario.padrao else "", "servico_social": "1" if funcionario.servico_social else "",
+             "registro_profissional": funcionario.registro_profissional}
     return _tela_funcionario(funcionario, dados, {})
 
 

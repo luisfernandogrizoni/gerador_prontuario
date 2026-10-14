@@ -1,19 +1,29 @@
 """
-Relatório do Serviço Social: a "Ficha de acolhimento e classificação de risco e vulnerabilidade do residente", que a
-assistente social escreve direto no sistema em vez de preencher à mão.
+Acolhimento social: o que a assistente social registra na triagem, direto no sistema em vez de à mão. Reúne, num registro
+só por triagem/internação (modelos.RelatorioSocial):
 
-O modelo do escritório está descrito UMA vez, em SECOES (seções e perguntas). Dele saem:
+  1. a FICHA, o modelo do escritório ("Ficha de acolhimento e classificação de risco e vulnerabilidade do residente")
+     mais as perguntas de voluntariedade, documentos e benefícios, situação jurídica e rede de apoio;
+  2. o RELATÓRIO SOCIAL, um campo livre: a descrição da situação e a análise dela;
+  3. a CLASSIFICAÇÃO de risco e vulnerabilidade (baixo, médio ou alto em cada domínio e a geral);
+  4. o PARECER: favorável, favorável com ressalvas ou não condizente com o tratamento da casa. Finalizar um parecer
+     'não condizente' marca a triagem como "Rejeitado na triagem" (e pede o motivo).
+
+O modelo está descrito UMA vez, em SECOES (seções e perguntas). Dele saem:
   * o formulário da tela (templates/servico_social_form.html);
   * o documento para imprimir ou baixar em Word (blocos de documentos.py), com as respostas no lugar das linhas em
-    branco — e as linhas em branco de sempre onde ainda não há resposta;
-  * a leitura e a validação do que foi digitado (ler_formulario).
+    branco — e as linhas em branco de sempre onde ainda não há resposta; e a folha-resumo (blocos_resumo), só com a
+    classificação e a conclusão, que é o que sai no prontuário de quem não é do Serviço Social;
+  * a leitura e a validação do que foi digitado (ler_formulario, validar_finalizacao).
 
-As respostas ficam numa linha por internação (modelos.RelatorioSocial, coluna `dados` em JSON, só o que foi
-preenchido). Os dados que o sistema já tem (nome, mãe, idade, profissão, escolaridade, telefones e o responsável)
-não são digitados de novo: aparecem no formulário e no documento direto do cadastro.
+As respostas ficam numa linha por internação (coluna `dados` em JSON, só o que foi preenchido). O que o sistema já sabe
+não é digitado de novo: nome, mãe, idade, profissão, escolaridade, telefones e o responsável vêm do cadastro, e o que diz
+respeito às passagens anteriores pela casa vem delas (PADROES). Numa readmissão, as respostas que não mudam de uma
+vez para a outra (campo.reaproveitar) vêm do acolhimento anterior, para conferir e atualizar. Quem vê e escreve é
+controlado em cadastros.pode_servico_social (é sigiloso).
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 
 from documentos import N, Paragrafo, Pauta
@@ -23,6 +33,18 @@ from validacao import fmt_cep, fmt_cpf, fmt_rg
 LIMITE_TEXTO, LIMITE_LONGO = 200, 5000
 EM_BRANCO = "_" * 24
 DATA_EM_BRANCO = "____/____/________"
+
+NIVEIS = ("Baixo", "Médio", "Alto")
+PARECERES = ("Favorável à admissão", "Favorável, com ressalvas", "Não condizente com o tratamento da casa")
+NAO_CONDIZENTE = PARECERES[2]
+# Os motivos vêm do que o Manual de Orientação exige de quem entra e do que a RDC 29/2011 veda (art. 16: admitir quem
+# precisa de serviço de saúde que a casa não oferece); "Outro" cobre o resto.
+MOTIVOS_DA_REJEICAO = ("Sem desejo firme de tratamento", "Comprometimento psíquico grave",
+                       "Precisa de acompanhamento médico-hospitalar complexo", "Fora do perfil da casa (sexo ou idade)", "Outro")
+DOMINIOS = (("risco_vida", "Risco à vida (suicídio e violência)"), ("risco_saude", "Saúde"),
+            ("risco_vinculos", "Vínculos familiares e rede de apoio"), ("risco_moradia_renda", "Moradia e renda"),
+            ("risco_juridico", "Situação jurídica"))
+RISCO_GERAL = "risco_geral"
 
 
 @dataclass(frozen=True)
@@ -35,6 +57,9 @@ class Campo:
     linhas: int = 3            # longo: linhas em branco na impressão e altura do campo
     linha: str = ""            # campos seguidos com o mesmo `linha` saem juntos na mesma linha do papel
     padrao: str = ""           # de onde vem o valor inicial no cadastro (nome de uma função de PADROES)
+    so_se: tuple = ()          # (campo, valor): só vale (e só aparece) quando aquele campo tem aquele valor
+    reaproveitar: bool = False  # numa readmissão, a resposta do acolhimento anterior vem como ponto de partida
+    antigo: str = ""           # chave com que esta resposta foi gravada antes (modelo anterior da ficha)
 
 
 @dataclass(frozen=True)
@@ -49,19 +74,21 @@ C = Campo
 SECOES = (
     Secao("Identificação individual", (
         C("data_acolhimento", "Data do acolhimento", "data", colunas="c2", padrao="data_da_triagem"),
-        C("sexo", "Sexo", "escolha", ("Masculino", "Feminino"), "c2", linha="a"),
-        C("genero", "Gênero", colunas="c2", linha="a"),
-        C("opcao_sexual", "Opção sexual", colunas="c2", linha="a"),
+        C("sexo", "Sexo", "escolha", ("Masculino", "Feminino"), "c2", linha="a", reaproveitar=True),
+        C("genero", "Gênero", colunas="c2", linha="a", reaproveitar=True),
+        C("opcao_sexual", "Opção sexual", colunas="c2", linha="a", reaproveitar=True),
         C("raca_cor", "Qual raça / cor você se considera?", "escolha",
-          ("Negra/Preta", "Indígena", "Branca", "Amarela/Oriental", "Parda/Mestiça", "Não respondeu"), "c6"),
+          ("Negra/Preta", "Indígena", "Branca", "Amarela/Oriental", "Parda/Mestiça", "Não respondeu"), "c6", reaproveitar=True),
         C("moradia", "Qual a situação atual de moradia", colunas="c6"),
         C("encaminhado_por", "Encaminhado por", colunas="c3"),
         C("chegada", "Chegada", "escolha", ("Resgate", "Abordagem", "Família", "Voluntário"), "c3"),
-        C("numero_internacoes", "Número de internações", colunas="c2", linha="b"),
-        C("ultima_internacao", "Última internação", "data", colunas="c2", linha="b"),
-        C("desligamento_data", "Data do desligamento", "data", colunas="c2", linha="c"),
+        # as quatro seguintes já vêm preenchidas com o que o sistema sabe das passagens anteriores pela casa (editáveis:
+        # internações em outros lugares a assistente social acrescenta)
+        C("numero_internacoes", "Número de internações", colunas="c2", linha="b", padrao="n_anteriores"),
+        C("ultima_internacao", "Última internação", "data", colunas="c2", linha="b", padrao="ultima_internacao"),
+        C("desligamento_data", "Data do desligamento", "data", colunas="c2", linha="c", padrao="desligamento_data"),
         C("desligamento_local", "Local", colunas="c4", linha="c"),
-        C("desligamento_motivo", "Motivo", "longo", colunas="c6", linhas=5),
+        C("desligamento_motivo", "Motivo", "longo", colunas="c6", linhas=5, padrao="desligamento_motivo"),
     )),
     Secao("Responsável pelo acompanhamento do residente", subtitulo="Sócio econômico — identificação social", nova_pagina=True, campos=(
         C("resp_endereco", "Endereço", colunas="c4", padrao="endereco"),
@@ -97,28 +124,73 @@ SECOES = (
                        "Cite os três últimos casos, se houver, com breves relatos.", "longo", colunas="c6", linhas=3),
     )),
     Secao("Investigação de espiritualidade", (
-        C("crencas", "Quais as crenças do residente?", "longo", colunas="c6", linhas=3),
-        C("crencas_familiares", "Qual a crença dos familiares?", "longo", colunas="c6", linhas=3),
+        C("crencas", "Quais as crenças do residente?", "longo", colunas="c6", linhas=3, reaproveitar=True),
+        C("crencas_familiares", "Qual a crença dos familiares?", "longo", colunas="c6", linhas=3, reaproveitar=True),
         C("tratamento_com_crenca", "O residente já fez algum tipo de tratamento que teve envolvimento com suas crenças? Se sim, qual?",
           "longo", colunas="c6", linhas=3),
     )),
     Secao("Histórico familiar", (
-        C("familiares", "Comente sobre os familiares de primeiro e segundo grau do residente.", "longo", colunas="c6", linhas=3),
-        C("filho_adotivo", "O residente é filho adotivo?", "longo", colunas="c6", linhas=2),
-        C("irmaos", "O residente tem irmãos? Quantos? Qual a idade? Comente um pouco sobre a relação com eles.", "longo", colunas="c6", linhas=3),
+        C("familiares", "Comente sobre os familiares de primeiro e segundo grau do residente.", "longo", colunas="c6", linhas=3, reaproveitar=True),
+        C("filho_adotivo", "O residente é filho adotivo?", "longo", colunas="c6", linhas=2, reaproveitar=True),
+        C("irmaos", "O residente tem irmãos? Quantos? Qual a idade? Comente um pouco sobre a relação com eles.", "longo", colunas="c6", linhas=3,
+          reaproveitar=True),
         C("pensou_em_internar", "Quando o familiar começou a pensar em internar o residente? A partir de qual atitude?", "longo", colunas="c6", linhas=3),
         C("grupos_de_apoio", "O familiar já frequentou grupos de apoio? Por quanto tempo? Qual?", "longo", colunas="c6", linhas=3),
         C("convivio", "Como é o convívio familiar em geral? Já houve agressões verbais e físicas?", "longo", colunas="c6", linhas=3),
-        C("dependencia_na_familia", "Existe histórico de dependência química na família?", "longo", colunas="c6", linhas=3),
+        C("dependencia_na_familia", "Existe histórico de dependência química na família?", "longo", colunas="c6", linhas=3, reaproveitar=True),
     )),
     Secao("Investigação sobre perdas", (
         C("maior_perda", "Qual foi a maior perda sentimental que o residente teve?", "longo", colunas="c6", linhas=3),
         C("razoes_do_uso", "Quais são as principais razões para o residente fazer uso de drogas e/ou álcool?", "longo", colunas="c6", linhas=3),
-        C("observacoes", "Observações complementares", "longo", colunas="c6", linhas=3),
-        C("data_do_relatorio", "Data", "data", colunas="c2"),
+    )),
+    # --- o que o modelo do escritório não perguntava e uma triagem precisa registrar
+    Secao("Voluntariedade e motivação", (
+        C("desejo_de_tratamento", "O acolhido quer o tratamento?", "escolha",
+          ("Sim, por decisão própria", "Aceita, por insistência da família", "Não quer", "Está em dúvida"), "c6"),
+        C("motivacao", "O que ele espera do tratamento? Registre com as palavras dele.", "longo", colunas="c6", linhas=3),
+        C("orientado_das_regras", "O acolhido e o responsável foram orientados sobre as regras da casa (Manual de Orientação) e estão de acordo?",
+          "sim_nao", colunas="c6"),
+    )),
+    Secao("Documentos e benefícios", (
+        C("beneficios", "Recebe algum benefício? (Bolsa Família, BPC/LOAS, aposentadoria, auxílio, outro)", "longo", colunas="c6", linhas=2),
+        C("cadunico", "Está inscrito no CadÚnico?", "sim_nao", colunas="c6"),
+        C("documentos_a_regularizar", "Quais documentos faltam ou precisam ser regularizados?", "longo", colunas="c6", linhas=2),
+    )),
+    Secao("Situação jurídica", (
+        C("pendencias_justica", "Tem processo, medida judicial ou pendência com a justiça?", "sim_nao", colunas="c6"),
+    )),
+    Secao("Rede de apoio e serviços", (
+        C("pessoas_de_apoio", "Quem apoia o acolhido? (família, amigos, igreja, grupo)", "longo", colunas="c6", linhas=3),
+        C("servicos_de_referencia", "Que serviços já o acompanham? (CAPS, CRAS, UBS, outros) Onde?", "longo", colunas="c6", linhas=3),
+    )),
+    # --- a conclusão da assistente social
+    Secao("Relatório social", (
+        C("relatorio", "Descrição da situação e análise da assistente social", "longo", colunas="c6", linhas=14, antigo="observacoes"),
+    )),
+    Secao("Classificação de risco e vulnerabilidade", (
+        *(C(chave, rotulo, "escolha", NIVEIS, "c6") for chave, rotulo in DOMINIOS),
+        C(RISCO_GERAL, "Classificação geral", "escolha", NIVEIS, "c6"),
+    )),
+    Secao("Parecer social", (
+        C("parecer", "Parecer", "escolha", PARECERES, "c6"),
+        C("motivo_rejeicao", "Motivo principal da rejeição", "escolha", MOTIVOS_DA_REJEICAO, "c6", so_se=("parecer", NAO_CONDIZENTE)),
+        C("parecer_texto", "Conclusão e justificativa do parecer", "longo", colunas="c6", linhas=8),
     )),
 )
 CAMPOS = [campo for secao in SECOES for campo in secao.campos]
+POR_CHAVE = {campo.chave: campo for campo in CAMPOS}
+
+
+def secoes_para(internacao):
+    """As seções para esta internação: quem já foi internado não tem como ser 'não condizente' (isso é da triagem)."""
+    if internacao.e_triagem:
+        return SECOES
+    sem_rejeicao = lambda c: replace(c, opcoes=tuple(o for o in c.opcoes if o != NAO_CONDIZENTE)) if c.chave == "parecer" else c
+    return tuple(replace(s, campos=tuple(sem_rejeicao(c) for c in s.campos)) for s in SECOES)
+
+
+def campos_para(internacao):
+    return [campo for secao in secoes_para(internacao) for campo in secao.campos]
 
 
 # ============================================================ o que o cadastro já sabe
@@ -126,12 +198,37 @@ def _data_da_triagem(i):
     return i.data_triagem.isoformat() if i.data_triagem else ""
 
 
+def _passagens_anteriores(i):
+    """As outras internações desta pessoa que chegaram a acontecer, a mais recente primeiro."""
+    return sorted((o for o in i.pessoa.internacoes if o.id != i.id and o.inicio), key=lambda o: (o.inicio, o.id), reverse=True)
+
+
+def _da_ultima(i, campo):
+    anteriores = _passagens_anteriores(i)
+    valor = getattr(anteriores[0], campo) if anteriores else None
+    return valor.isoformat() if isinstance(valor, date) else (valor or "")
+
+
 PADROES = {
     "data_da_triagem": _data_da_triagem,
     "hoje": lambda i: date.today().isoformat(),
     "endereco": lambda i: i.pessoa.endereco, "numero": lambda i: i.pessoa.numero, "bairro": lambda i: i.pessoa.bairro,
     "cep": lambda i: fmt_cep(i.pessoa.cep), "cidade": lambda i: i.pessoa.cidade, "estado": lambda i: i.pessoa.estado,
+    # o histórico de internações nesta casa (quem esteve fora daqui a assistente social acrescenta)
+    "n_anteriores": lambda i: str(len(_passagens_anteriores(i))) if _passagens_anteriores(i) else "",
+    "ultima_internacao": lambda i: _da_ultima(i, "inicio"),
+    "desligamento_data": lambda i: _da_ultima(i, "termino"),
+    "desligamento_motivo": lambda i: _da_ultima(i, "motivo"),
 }
+
+
+def anterior(internacao):
+    """O acolhimento anterior mais recente desta pessoa que tem alguma resposta (None se não há): de onde vêm as respostas
+    que não mudam numa readmissão."""
+    for outro in sorted((o for o in internacao.pessoa.internacoes if o.id != internacao.id), key=lambda o: o.id, reverse=True):
+        if preenchido(outro.relatorio_social):
+            return outro.relatorio_social
+    return None
 
 
 def identificacao(internacao, hoje=None):
@@ -150,9 +247,11 @@ def identificacao(internacao, hoje=None):
 
 
 def valores(internacao, relatorio=None, campos=None):
-    """O que aparece em cada campo: o digitado; onde ainda não há nada, o que vem do cadastro (campo.padrao).
-    `campos`: outro conjunto de perguntas (o relatório de rejeição usa as mesmas peças)."""
+    """O que aparece em cada campo: o digitado; onde ainda não há nada, o que o sistema já sabe (campo.padrao) e, numa
+    readmissão (ainda sem acolhimento próprio), as respostas que não mudam do acolhimento anterior (campo.reaproveitar)."""
     salvo = (relatorio.dados if relatorio is not None else None) or {}
+    anterior_ = anterior(internacao) if relatorio is None and any(c.reaproveitar for c in campos or CAMPOS) else None
+    antes = (anterior_.dados if anterior_ is not None else None) or {}
     resultado = {}
     for campo in campos or CAMPOS:
         if campo.tipo == "sim_nao":
@@ -160,6 +259,10 @@ def valores(internacao, relatorio=None, campos=None):
             resultado[campo.chave + "_detalhe"] = salvo.get(campo.chave + "_detalhe", "")
         elif campo.chave in salvo:
             resultado[campo.chave] = salvo[campo.chave]
+        elif campo.antigo and campo.antigo in salvo:
+            resultado[campo.chave] = salvo[campo.antigo]
+        elif campo.reaproveitar and campo.chave in antes:
+            resultado[campo.chave] = antes[campo.chave]
         else:
             resultado[campo.chave] = PADROES[campo.padrao](internacao) if campo.padrao else ""
     return resultado
@@ -180,11 +283,28 @@ def preenchido(relatorio):
     return relatorio is not None and any(str(v).strip() for v in (relatorio.dados or {}).values())
 
 
+def estado(relatorio):
+    """Em que pé está o acolhimento social: '' (não iniciado), 'rascunho' ou 'finalizado'."""
+    if not preenchido(relatorio):
+        return ""
+    return "finalizado" if relatorio.situacao == "finalizado" else "rascunho"
+
+
+def resposta(relatorio, chave):
+    return ((relatorio.dados if relatorio is not None else None) or {}).get(chave, "")
+
+
+def classificacao(relatorio):
+    """A classificação geral de risco e vulnerabilidade ('Baixo', 'Médio', 'Alto' ou '')."""
+    return resposta(relatorio, RISCO_GERAL)
+
+
 # ============================================================ o que foi digitado
 def ler_formulario(form, campos=None):
     """Formulário -> (dados, erros). `dados` guarda só o que foi preenchido; valores fora do esperado viram erro."""
     dados, erros = {}, {}
-    for campo in campos or CAMPOS:
+    campos = campos or CAMPOS
+    for campo in campos:
         bruto = (form.get(campo.chave) or "").strip()
         if campo.tipo == "data":
             if bruto and ler_data(bruto) is None:
@@ -209,7 +329,35 @@ def ler_formulario(form, campos=None):
             if len(bruto) > limite:
                 erros[campo.chave] = f"Escreva até {limite} caracteres (tem {len(bruto)})."
             dados[campo.chave] = bruto[:limite]
+    for campo in campos:                       # o que só vale quando outra resposta é tal não fica gravado fora dela
+        if campo.so_se and dados.get(campo.so_se[0]) != campo.so_se[1]:
+            dados.pop(campo.chave, None)
+            erros.pop(campo.chave, None)
     return dados, erros
+
+
+def validar_finalizacao(dados, internacao):
+    """O mínimo para finalizar (a ficha pode ter perguntas em branco, como no papel; a conclusão não): o relatório, a
+    classificação geral e o parecer, com o motivo e a justificativa quando ele pede. Devolve {campo: mensagem}."""
+    erros = {}
+    if not dados.get("relatorio"):
+        erros["relatorio"] = "Escreva o relatório social para finalizar."
+    if not dados.get(RISCO_GERAL):
+        erros[RISCO_GERAL] = "Marque a classificação geral para finalizar."
+    parecer = dados.get("parecer")
+    if not parecer:
+        erros["parecer"] = "Escolha o parecer para finalizar."
+    elif parecer == NAO_CONDIZENTE:
+        if not internacao.e_triagem:
+            erros["parecer"] = "Quem já foi internado não pode ter parecer 'não condizente': isso é da triagem."
+        elif not dados.get("motivo_rejeicao"):
+            erros["motivo_rejeicao"] = "Escolha o motivo da rejeição."
+    elif internacao.status == "rejeitado":
+        erros["parecer"] = ("Esta pessoa está marcada como rejeitada na triagem: o parecer tem de ser 'não condizente'. "
+                            "Para seguir com a admissão, mude a situação na lista de triagens antes.")
+    if parecer and parecer != PARECERES[0] and not dados.get("parecer_texto"):
+        erros["parecer_texto"] = "Explique o parecer: a conclusão e o porquê."
+    return erros
 
 
 # ============================================================ o documento
@@ -253,12 +401,29 @@ def _campos_da_linha(campos, v):
     return Paragrafo(partes[:-1], antes=4)
 
 
-def _fecho(v):
-    data = fmt_data(ler_data(v.get("data_do_relatorio", ""))) or DATA_EM_BRANCO
-    return [Paragrafo([f"Data: {data}"], antes=26),
+def _fecho(relatorio):
+    """O fecho: quando e por quem foi finalizado no sistema (ou que ainda é rascunho) e a linha da assinatura no papel."""
+    if relatorio is not None and relatorio.finalizado and relatorio.finalizado_em:
+        em = relatorio.finalizado_em
+        situacao = Paragrafo([f"Finalizado no sistema em {em:%d/%m/%Y} às {em:%H:%M} por ", N(relatorio.assinatura or relatorio.finalizado_por)],
+                             antes=26)
+    else:
+        situacao = Paragrafo(["Rascunho: ainda não finalizado no sistema."], antes=26)
+    return [situacao,
             Paragrafo(["_" * 38], "centro", antes=24, unido_ao_proximo=True),
             Paragrafo(["Assistente Social"], "centro", unido_ao_proximo=True),
             Paragrafo(["Carimbo/Assinatura"], "centro")]
+
+
+def _adendos(relatorio):
+    """Os adendos, depois da assinatura: cada um com data, hora e autor."""
+    if relatorio is None or not relatorio.adendos:
+        return []
+    saida = [Paragrafo([N("ADENDOS")], "centro", antes=22, unido_ao_proximo=True)]
+    for adendo in relatorio.adendos:
+        saida += [Paragrafo([N(f"{adendo.criado_em:%d/%m/%Y} às {adendo.criado_em:%H:%M}"), f" — {adendo.criado_por}"], antes=8, unido_ao_proximo=True),
+                  Paragrafo([adendo.texto], "esquerda", antes=1, depois=2)]
+    return saida
 
 
 def _cabecalho_da_secao(numero, secao, do_acolhido, do_responsavel):
@@ -291,6 +456,8 @@ def blocos(internacao, relatorio=None, hoje=None):
         for campo in secao.campos:
             if campo is CAMPOS[0]:
                 continue
+            if campo.so_se and v.get(campo.so_se[0]) not in ("", campo.so_se[1]):      # só vale em outra resposta: fica de fora
+                continue
             if pendentes and pendentes[-1].linha != campo.linha:
                 saida.append(_campos_da_linha(pendentes, v))
                 pendentes = []
@@ -300,4 +467,22 @@ def blocos(internacao, relatorio=None, hoje=None):
                 saida += blocos_do_campo(campo, v)
         if pendentes:
             saida.append(_campos_da_linha(pendentes, v))
-    return saida + _fecho(v)
+    return saida + _fecho(relatorio) + _adendos(relatorio)
+
+
+def blocos_resumo(internacao, relatorio=None, hoje=None):
+    """A folha-resumo: quem é, a classificação de risco e vulnerabilidade e a conclusão do parecer, sem as respostas
+    detalhadas nem o relatório. É o que sai no prontuário de quem não é do Serviço Social (começa em página nova)."""
+    v = valores(internacao, relatorio)
+    acolhido = dict(identificacao(internacao, hoje)[0])
+    saida = [Paragrafo([N("RESUMO DO ACOLHIMENTO SOCIAL")], "centro", tamanho=13, quebra_antes=True, depois=10),
+             *(Paragrafo(_linha(r, acolhido[r]), antes=4) for r in ("Nome", "Nome da mãe", "Idade")),
+             *blocos_do_campo(CAMPOS[0], v),
+             Paragrafo([N("CLASSIFICAÇÃO DE RISCO E VULNERABILIDADE")], "centro", antes=16, unido_ao_proximo=True)]
+    for chave in [c for c, _ in DOMINIOS] + [RISCO_GERAL]:
+        saida += blocos_do_campo(POR_CHAVE[chave], v)
+    saida.append(Paragrafo([N("CONCLUSÃO")], "centro", antes=16, unido_ao_proximo=True))
+    saida += blocos_do_campo(POR_CHAVE["parecer"], v)
+    if v.get("parecer") == NAO_CONDIZENTE:
+        saida += blocos_do_campo(POR_CHAVE["motivo_rejeicao"], v)
+    return saida + _fecho(relatorio)
