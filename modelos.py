@@ -31,14 +31,16 @@ from validacao import fmt_cpf, fmt_hora, fmt_telefone, ler_hora, limpar_rg, so_d
 db = SQLAlchemy()
 
 # Legenda da aba Triagens: 1 ativo, 2 inativo, 3 em admissão, 4 lista de espera, 5 desistiu
+# (rejeitado = a triagem concluiu que o tratamento da casa não é o que a pessoa precisa; a assistente social escreve o porquê)
 STATUS = {
     "em_admissao": "Em processo de admissão",
     "lista_espera": "Lista de espera",
     "desistiu": "Desistência",
+    "rejeitado": "Rejeitado na triagem",
     "ativo": "Ativo",
     "inativo": "Inativo",
 }
-STATUS_TRIAGEM = ("em_admissao", "lista_espera", "desistiu")
+STATUS_TRIAGEM = ("em_admissao", "lista_espera", "desistiu", "rejeitado")
 STATUS_INTERNACAO = ("ativo", "inativo")
 MODALIDADES = ["Presencial", "Online"]
 
@@ -53,7 +55,7 @@ class CamposDeFormulario:
     """Comportamento comum: copiar formulário <-> colunas, convertendo pelo tipo."""
 
     CAMPOS_DO_SISTEMA = {"id", "pessoa_id", "internacao_id", "status", "criado_em", "atualizado_em",
-                         "envelope", "envelope_recebido_em"}
+                         "envelope", "envelope_recebido_em", "excluido_em", "excluido_por", "exames_impressos_para"}
 
     def preencher(self, form):
         for coluna in self.__table__.columns:
@@ -128,6 +130,8 @@ class Pessoa(CamposDeFormulario, db.Model):
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     atualizado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
                                                     onupdate=datetime.now)
+    # excluída (exclusao.py): some das telas e das buscas, mas continua no banco até o administrador apagar de vez
+    excluido_em: Mapped[datetime | None] = mapped_column(DateTime)
 
     internacoes: Mapped[list["Internacao"]] = relationship(
         back_populates="pessoa", order_by="Internacao.id")
@@ -211,6 +215,14 @@ class Internacao(CamposDeFormulario, db.Model):
     doc_ctps: Mapped[str] = mapped_column(String(20), default="")
     doc_outro: Mapped[str] = mapped_column(String(100), default="")
 
+    # --- pedido de exames e enxoval: a data de internação para a qual já foram impressos (None = ainda não)
+    exames_impressos_para: Mapped[date | None] = mapped_column(Date)
+
+    # --- exclusão em duas etapas (exclusao.py): quem não é administrador só "exclui" (some das telas, fica no banco);
+    # o administrador vê o que foi excluído e apaga de vez
+    excluido_em: Mapped[datetime | None] = mapped_column(DateTime)
+    excluido_por: Mapped[str] = mapped_column(String(50), default="")
+
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     atualizado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
                                                     onupdate=datetime.now)
@@ -219,6 +231,8 @@ class Internacao(CamposDeFormulario, db.Model):
     parcelas: Mapped[list["Parcela"]] = relationship(
         back_populates="internacao", order_by="Parcela.numero", cascade="all, delete-orphan")
     relatorio_social: Mapped["RelatorioSocial | None"] = relationship(
+        back_populates="internacao", uselist=False, cascade="all, delete-orphan")
+    rejeicao: Mapped["RejeicaoTriagem | None"] = relationship(
         back_populates="internacao", uselist=False, cascade="all, delete-orphan")
 
     def normalizar(self):
@@ -332,6 +346,21 @@ class RelatorioSocial(db.Model):
     atualizado_por: Mapped[str] = mapped_column(String(50), default="")      # o usuário que salvou por último
 
     internacao: Mapped[Internacao] = relationship(back_populates="relatorio_social")
+
+
+# =========================================================================
+class RejeicaoTriagem(db.Model):
+    """O relatório de rejeição: quando a triagem conclui que o tratamento da casa não é o que a pessoa precisa
+    (status "rejeitado"), a assistente social escreve o porquê (rejeicao.py). Só as respostas digitadas, em JSON."""
+    __tablename__ = "rejeicoes_triagem"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    internacao_id: Mapped[int] = mapped_column(ForeignKey("internacoes.id"), unique=True)
+    dados: Mapped[dict] = mapped_column(JSON, default=dict)
+    atualizado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
+    atualizado_por: Mapped[str] = mapped_column(String(50), default="")
+
+    internacao: Mapped[Internacao] = relationship(back_populates="rejeicao")
 
 
 # =========================================================================

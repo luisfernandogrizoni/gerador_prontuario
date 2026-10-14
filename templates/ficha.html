@@ -66,7 +66,28 @@
     <a class="botao" href="{{ url_for('editar_internacao', id=i.id) }}">Editar</a>
     <a class="botao secundario" href="{{ url_for('formulario', pessoa=p.id) }}">Nova internação desta pessoa</a>
     <a class="botao secundario" href="{{ url_for('nova_triagem', pessoa=p.id) }}">Nova triagem desta pessoa</a>
+    <button type="button" class="botao perigo" id="abrir-exclusao"><svg class="icone"><use href="#i-lixeira"/></svg>Excluir registro</button>
   </div>
+
+  {% if i.status == 'rejeitado' %}
+  <section class="cartao" id="rejeicao">
+    <h2>Rejeição na triagem</h2>
+    <div class="envelope">
+      <div class="situacao">
+        {% if rejeicao_preenchida %}
+          <span class="selo ativo">Relatório escrito</span>
+          <span>{{ i.rejeicao.atualizado_em.strftime('%d/%m/%Y') }}{{ ' · ' ~ i.rejeicao.atualizado_por if i.rejeicao.atualizado_por }}</span>
+        {% else %}
+          <span class="selo desistiu">Falta o relatório</span><span>Por que ele não é condizente com o nosso tratamento?</span>
+        {% endif %}
+      </div>
+      <a class="botao{{ ' secundario' if rejeicao_preenchida }}" href="{{ url_for('relatorio_de_rejeicao', id=i.id) }}">{{ 'Editar' if rejeicao_preenchida else 'Escrever o relatório' }}</a>
+    </div>
+    {% if rejeicao_preenchida %}
+      {{ acoes_documento(url_for('ver_impressos', id=i.id, itens='rejeicao'), url_for('baixar_impressos', id=i.id, itens='rejeicao'), 'espaco') }}
+    {% endif %}
+  </section>
+  {% endif %}
 
   <section class="cartao" id="documentos">
     <h2>Documentos</h2>
@@ -229,4 +250,34 @@
   </section>
   {% endif %}
 </main>
+
+<dialog id="excluir">
+  <form method="post" action="{{ url_for('excluir_registro', id=i.id) }}">
+    <h2>Excluir o registro de {{ p.nome }}?</h2>
+    <p>
+      {% if i.status == 'ativo' %}<strong>Este interno está ativo: a vaga dele será liberada.</strong> {% endif %}
+      {% if e_administrador %}
+        Ele sai das listas, dos relatórios e das buscas. Na lixeira ele fica guardado no banco e pode ser restaurado; excluído de vez, é apagado do banco e não tem volta.
+      {% else %}
+        Ele sai das listas, dos relatórios e das buscas. O administrador ainda pode recuperá-lo.
+      {% endif %}
+    </p>
+    <div class="botoes">
+      <button type="button" class="botao secundario" id="cancelar-exclusao">Cancelar</button>
+      {% if e_administrador %}
+        <button class="botao secundario" name="acao" value="lixeira">Mover para a lixeira</button>
+        <button class="botao perigo" name="acao" value="apagar" onclick="return confirm('Apagar {{ p.nome | replace("'", "") }} do banco de dados? Não tem volta.')">Excluir de vez</button>
+      {% else %}
+        <button class="botao perigo" name="acao" value="lixeira">Excluir</button>
+      {% endif %}
+    </div>
+  </form>
+</dialog>
+<script>
+  (function () {
+    var dialogo = document.getElementById("excluir");
+    document.getElementById("abrir-exclusao").addEventListener("click", function () { dialogo.showModal(); });
+    document.getElementById("cancelar-exclusao").addEventListener("click", function () { dialogo.close(); });
+  })();
+</script>
 {% endblock %}

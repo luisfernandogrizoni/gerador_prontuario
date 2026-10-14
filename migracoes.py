@@ -35,7 +35,21 @@ def migrar(db):
         db.session.execute(text("ALTER TABLE internacoes ADD COLUMN envelope_recebido_em DATE"))
         db.session.commit()
 
-    # 3) cadastros: na primeira subida trazem os convênios e o funcionário com que o sistema sempre trabalhou
+    # 3) pedido de exames e enxoval: para qual data de internação já foram impressos (vazio = ainda não)
+    if "exames_impressos_para" not in _colunas(db, "internacoes"):
+        db.session.execute(text("ALTER TABLE internacoes ADD COLUMN exames_impressos_para DATE"))
+        db.session.commit()
+
+    # 4) exclusão em duas etapas: nada é apagado do banco ao excluir, só marcado (exclusao.py)
+    if "excluido_em" not in _colunas(db, "internacoes"):
+        db.session.execute(text("ALTER TABLE internacoes ADD COLUMN excluido_em TIMESTAMP"))
+        db.session.execute(text("ALTER TABLE internacoes ADD COLUMN excluido_por VARCHAR(50) NOT NULL DEFAULT ''"))
+        db.session.commit()
+    if "excluido_em" not in _colunas(db, "pessoas"):
+        db.session.execute(text("ALTER TABLE pessoas ADD COLUMN excluido_em TIMESTAMP"))
+        db.session.commit()
+
+    # 5) cadastros: na primeira subida trazem os convênios e o funcionário com que o sistema sempre trabalhou
     semear(db)
 
 

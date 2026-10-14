@@ -30,9 +30,9 @@ import banco
 from modelos import db
 
 RAIZ = Path(__file__).parent
-TABELAS_COPIADAS = ("pessoas", "internacoes", "parcelas", "relatorios_sociais", "avisos_dispensados", "convenios", "niveis_acesso",
-                    "funcionarios")   # ordem das chaves
-OPCIONAIS = {"relatorios_sociais"}    # tabelas mais novas: um banco de origem antigo pode não tê-las (a cópia segue sem elas)
+TABELAS_COPIADAS = ("pessoas", "internacoes", "parcelas", "relatorios_sociais", "rejeicoes_triagem", "avisos_dispensados", "convenios",
+                    "niveis_acesso", "funcionarios")   # ordem das chaves
+OPCIONAIS = {"relatorios_sociais", "rejeicoes_triagem"}    # tabelas mais novas: um banco de origem antigo pode não tê-las (a cópia segue sem elas)
 SEM_ID_SEQUENCIAL = {"avisos_dispensados"}   # a chave é um texto, não há sequência para acertar
 # Cadastros de fábrica: o sistema os cria sozinho ao subir, então um destino "vazio" já os tem. Não contam como dados
 # do destino, e a cópia sempre os substitui pelos da origem (se a origem for um banco antigo, sem eles, ficam os de fábrica

@@ -126,6 +126,7 @@ def impressos_da_internacao(hoje=None, maximo=LINHAS_DOS_IMPRESSOS):
         .order_by(Internacao.internacao_agendada, Internacao.id)).scalars().all()
     itens = [{"nome": i.pessoa.nome, "ficha": url_for("ficha", id=i.id),
               "quando": f"{DIAS_CURTOS[i.internacao_agendada.weekday()]}, {i.internacao_agendada:%d/%m}",
+              "impresso": i.exames_impressos_para == i.internacao_agendada,       # já foi impresso para esta data
               "url": url_for("ver_impressos", id=i.id, itens="exames,enxoval", imprimir=1)} for i in marcadas]
     return {"itens": itens[:maximo], "total": len(itens)}
 

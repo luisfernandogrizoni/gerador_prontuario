@@ -74,6 +74,10 @@
     .botao:hover { background: var(--vermelho-escuro); border-color: var(--vermelho-escuro); }
     .botao:focus-visible, .topo .item:focus-visible { outline: 3px solid rgba(179,38,30,.3); outline-offset: 2px; }
     .botao.secundario { background: #fff; color: var(--vermelho); border-color: var(--borda-forte); box-shadow: none; }
+    .botao.perigo { background: #7a1712; border-color: #7a1712; color: #fff; }                    /* excluir: mais escuro que o botão comum */
+    .botao.perigo:hover { background: #5c100d; border-color: #5c100d; }
+    .botao.secundario.perigo { background: #fff; color: #7a1712; border-color: #e3b5b2; }
+    .botao.secundario.perigo:hover { background: #fff5f5; border-color: #7a1712; }
     .botao.secundario:hover { background: var(--vermelho-claro); border-color: var(--vermelho); }
     .botao.pequeno { padding: 5px 11px; font-size: .82rem; border-radius: 8px; gap: 6px; }
     .botao[disabled] { opacity: .6; cursor: default; }
@@ -87,6 +91,7 @@
     .selo.em_admissao { background: var(--azul-claro); color: var(--azul); }
     .selo.lista_espera { background: var(--amarelo); color: var(--ambar); }
     .selo.desistiu { background: var(--vermelho-claro); color: var(--vermelho); }
+    .selo.rejeitado { background: #e4e7ec; color: #344054; }
 
     /* ---- formulários (triagem e prontuário) ---- */
     fieldset { background: #fff; border: 1px solid var(--borda); border-radius: var(--raio); margin-bottom: 16px; padding: 12px 18px 18px; box-shadow: var(--sombra); }
@@ -191,6 +196,7 @@
     .seletor.em_admissao { background-color: var(--azul-claro); color: var(--azul); }
     .seletor.lista_espera { background-color: var(--amarelo); color: var(--ambar); }
     .seletor.desistiu { background-color: var(--vermelho-claro); color: var(--vermelho); }
+    .seletor.rejeitado { background-color: #e4e7ec; color: #344054; }
     .vazio { padding: 40px 20px; text-align: center; color: var(--suave); }
     .rodape { color: var(--suave); font-size: .8rem; margin-top: 10px; }
 
@@ -326,6 +332,7 @@
       <symbol id="i-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
       <symbol id="i-bandeira" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></symbol>
       <symbol id="i-documento" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4M10 9H8M16 13H8M16 17H8"/></symbol>
+      <symbol id="i-lixeira" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></symbol>
       <symbol id="i-impressora" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></symbol>
       <symbol id="i-baixar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/></symbol>
       <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>

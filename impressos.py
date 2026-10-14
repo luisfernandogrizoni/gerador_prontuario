@@ -1,16 +1,20 @@
 """
 Os impressos de cada acolhido, reunidos num documento só (um arquivo Word, ou uma página para ver e imprimir):
 
-    Antes da internação (triagem com a internação marcada)    Na internação
+    Triagem                                                   Na internação
       exames       Pedido de exames                              prontuario         o prontuário
       enxoval      Enxoval                                       manual             Manual de orientação (para a família)
-                                                                 multiprofissional  Ficha multiprofissional de saúde
+      rejeicao     Relatório de rejeição na triagem              multiprofissional  Ficha multiprofissional de saúde
                                                                  capa               Capa do envelope
                                                                  relatorio-social   Relatório do Serviço Social
 
 Quem escolhe o que entra é a barra acima do documento (?itens=exames,enxoval). Sem escolha, vale o conjunto de cada
-situação: a triagem leva exames e enxoval; a internação leva o prontuário, o manual, a ficha multiprofissional e a capa
-do envelope, e o relatório do Serviço Social quando ele já foi escrito (em branco ele só serviria para preencher à mão).
+situação: a triagem leva exames e enxoval; quem foi rejeitado na triagem, só o relatório de rejeição; a internação leva o
+prontuário, o manual, a ficha multiprofissional e a capa do envelope, e o relatório do Serviço Social quando ele já foi
+escrito (em branco ele só serviria para preencher à mão).
+
+Imprimir (ou baixar) exames ou enxoval anota, na triagem, para qual data de internação isso foi feito: enquanto não foi,
+a lista de triagens pergunta se é para imprimir ao salvar (modelos.Internacao.exames_impressos_para).
 """
 
 import re
@@ -19,6 +23,7 @@ from datetime import date
 import catalogo
 import fichas
 import manual_de_orientacao
+import rejeicao
 import servico_social
 from documentos import Documento, Pagina
 from prontuario import calcular_idade, fmt_data, montar_documento
@@ -26,13 +31,14 @@ from prontuario import calcular_idade, fmt_data, montar_documento
 ROTULOS = {
     "exames": "Pedido de exames",
     "enxoval": "Enxoval",
+    "rejeicao": "Relatório de rejeição na triagem",
     "prontuario": "Prontuário",
     "manual": "Manual de orientação",
     "multiprofissional": "Ficha multiprofissional de saúde",
     "capa": "Capa do envelope",
     "relatorio-social": "Relatório do Serviço Social",
 }
-GRUPOS = (("Antes da internação", ("exames", "enxoval")),
+GRUPOS = (("Triagem", ("exames", "enxoval", "rejeicao")),
           ("Na internação", ("prontuario", "manual", "multiprofissional", "capa", "relatorio-social")))
 ORDEM = tuple(chave for _, chaves in GRUPOS for chave in chaves)
 DA_TRIAGEM = ("exames", "enxoval")
@@ -40,6 +46,8 @@ DA_TRIAGEM = ("exames", "enxoval")
 
 def itens_padrao(internacao):
     """O conjunto de cada situação (veja o alto do arquivo)."""
+    if internacao.status == "rejeitado":
+        return ("rejeicao",)
     if internacao.e_triagem:
         return DA_TRIAGEM
     base = ("prontuario", "manual", "multiprofissional", "capa")
@@ -69,6 +77,8 @@ def _blocos(chave, internacao, hoje):
         return fichas.enxoval(pessoa.nome)
     if chave == "prontuario":
         return [Pagina(), *montar_documento(internacao.dados_completos()).blocos]
+    if chave == "rejeicao":
+        return [Pagina(), *rejeicao.blocos(internacao, internacao.rejeicao, hoje)]
     if chave == "manual":
         return manual_de_orientacao.blocos()
     if chave == "multiprofissional":
@@ -105,6 +115,7 @@ def barra(internacao, itens, endereco):
             novos = [c for c in ORDEM if (c in itens) != (c == chave)]
             marcas.append({"nome": ROTULOS[chave], "ativa": ativa,
                            "url": endereco(novos) if novos else endereco(list(itens)),
-                           "aviso": "em branco" if chave == "relatorio-social" and not servico_social.preenchido(internacao.relatorio_social) else ""})
+                           "aviso": ("em branco" if (chave == "relatorio-social" and not servico_social.preenchido(internacao.relatorio_social))
+                                     or (chave == "rejeicao" and not rejeicao.preenchido(internacao.rejeicao)) else "")})
         grupos.append({"titulo": titulo, "itens": marcas})
     return grupos
