@@ -173,7 +173,9 @@ O banco se atualiza sozinho na subida. Se algo falhar, o sistema volta a ligar n
 - O firewall libera a porta 8000 só para a sub-rede local. **Não** redirecione portas no roteador.
 - O Windows 11 Home não tem o BitLocker completo. Em Configurações > Privacidade e segurança, veja se há
   *Criptografia do dispositivo* e, se houver, ative (guarde a chave de recuperação fora do computador). Use senha no Windows.
-- O servidor registra só erros, sem acessos e sem dados dos internos.
+- O arquivo `logs\servidor.log` registra só erros e acessos negados, sem dados dos internos. Quem fez o quê (entradas, quem abriu
+  cada ficha, quem baixou documentos, alterações e mudanças de permissão) fica na **trilha de auditoria**, dentro do sistema:
+  **Cadastros > Auditoria** (só o administrador), com filtros e CSV. A trilha não guarda o conteúdo dos dados, só quais campos mudaram.
 - Acesso de fora do escritório não existe, de propósito.
 
 ## 7. Desinstalar

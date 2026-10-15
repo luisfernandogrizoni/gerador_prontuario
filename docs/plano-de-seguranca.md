@@ -27,7 +27,7 @@ com banco SQLite, sem custo de hospedagem. Isso tem uma vantagem de segurança (
 |---|---|---|
 | Entrada | Login obrigatório em toda rota; senha só como hash (scrypt); 5 erros bloqueiam o usuário por 10 min; mensagem igual para usuário inexistente e senha errada; sessão de 10 h que não renova; trocar a senha derruba as outras sessões | Sem lista de senhas fracas; senha provisória não precisa ser trocada; sem tempo ocioso; sem limite por IP; sem segundo fator |
 | Quem pode o quê | **Fase 1 (esta entrega)**: cascata de níveis com permissões configuráveis, nega por padrão, funcionário desativado perde o acesso | Quem tem "ver" vê todas as fichas; não há registro de quem viu o quê |
-| Rastro | Só o registro técnico do servidor (erros e, agora, acessos negados) | **Sem trilha de auditoria**: não dá para responder "quem abriu/alterou/baixou isto?" |
+| Rastro | **Fase 2**: trilha de auditoria com tela só do administrador (entradas, leituras, alterações, administração e acessos negados); mais o registro técnico do servidor | Quem controla o computador e o banco consegue mexer na tabela (a trilha não protege do dono da máquina); sem política de retenção ainda (fase 8) |
 | Rede | Porta aberta só para a sub-rede local (firewall); sem acesso externo | **HTTP sem criptografia**: senha e ficha trafegam em texto puro pela rede interna |
 | Navegador | Cookie HttpOnly e SameSite=Lax; nosniff; X-Frame-Options; sem cache das páginas | Sem token CSRF; sem CSP |
 | Dados | Excluir é em duas etapas (lixeira); banco fora do git; hook que barra dado real no repositório; **fase 5**: cópia externa criptografada em pen-drives em rodízio, conferida na hora, com aviso, tela de situação e teste de restauração | Depende de alguém trocar o pen-drive toda semana (o sistema avisa) e de a frase de recuperação estar em papel; o backup do dia (`.db`) segue sem criptografia no computador |
@@ -56,7 +56,7 @@ fase 10 (VPN), nunca abrindo porta no roteador.
 | Fase | O que entrega | Quem faz | Situação |
 |---|---|---|---|
 | 1 | Cascata de acesso por nível | Sistema | **Feita** (nesta entrega) |
-| 2 | Trilha de auditoria (com tela dentro do sistema, só administrador) | Sistema | A fazer; decidido registrar tudo |
+| 2 | Trilha de auditoria (com tela dentro do sistema, só administrador) | Sistema | **Feita** (2026-10-15) |
 | 3 | Contas e sessões mais fortes: tempo ocioso, e-mail validado, "esqueci minha senha" e segundo fator do administrador | Sistema + usuário (e-mail institucional e celular com app autenticador) | A fazer; **depende de saber qual serviço de e-mail a casa usa** |
 | 4 | HTTPS (celular e todos os navegadores) | Sistema + usuário (instalar a VPN) | A fazer; decidido usar o certificado da VPN |
 | 5 | Backup que sobrevive ao computador | Sistema + usuário (pen-drives e rotina) | **Feita** (2026-10-15); falta o usuário configurar |
@@ -113,6 +113,7 @@ com o operador) e que o nível **Consulta** passa a só consultar:
 | Criar usuários, trocar senhas, definir níveis e permissões | ✓ | – | – |
 | Lixeira: restaurar e apagar de vez | ✓ | – | – |
 | Ver a situação do backup e dos pen-drives (fase 5) | ✓ | – | – |
+| Ver a trilha de auditoria (fase 2) | ✓ | – | – |
 | Acolhimento social (sigiloso) | ✓ | só com a marca | só com a marca |
 
 Quem tem a permissão de cadastros vê também as abas Níveis de acesso e Permissões, só para ler; sem ela a área Cadastros inteira
@@ -129,29 +130,49 @@ some do menu. O administrador pode devolver qualquer uma ao Operador na grade, a
 cerca de 60 rotas, tela escondendo botões, edição da matriz (valor ruim, campo ausente, nível desativado, mover nível),
 acolhimento pela marca, funcionário desativado com sessão aberta, rota sem regra.
 
-### Fase 2 — Trilha de auditoria
+### Fase 2 — Trilha de auditoria (entregue em 2026-10-15)
 
 **Para quê.** Responder, depois do fato, "quem abriu, alterou, baixou ou apagou isto, e quando?". É o que a ANPD espera para
-investigar um incidente e o que dissuade o curioso.
+investigar um incidente e o que dissuade o curioso. Decisão do usuário: **registrar tudo**, inclusive toda abertura de ficha, e
+**ver os registros dentro do sistema**, com um botão que só o administrador enxerga.
 
-**O que registrar** (tabela `eventos`, só o administrador lê, nunca editável pela tela):
+**O que foi feito** (`auditoria.py`, tabela `eventos_auditoria`, tela **Cadastros > Auditoria**, permissão fixa `auditoria`):
 
-- Entradas: login certo, login errado, bloqueio, saída, sessão derrubada.
-- **Leitura de dado sensível**: abrir ficha de acolhido, abrir o acolhimento social, baixar ou imprimir documento, relatório.
-- Alterações: criar, editar, excluir, restaurar, apagar de vez (de quem e qual registro).
-- Administração: usuário criado, senha trocada, nível ou permissão alterados, funcionário (des)ativado.
-- Acessos negados.
+- **Entradas**: entrou, senha errada (de usuário que existe), usuário que não existe, bloqueio depois de 5 erros, tentativa durante o
+  bloqueio, entrada recusada por funcionário desativado, saiu, sessão derrubada.
+- **Leituras**: abrir a ficha, o formulário de edição, o acolhimento social e um formulário já preenchido com um acolhido; carregar
+  as listas; buscar pessoa; ver, imprimir (`?imprimir=1`) e baixar cada documento; ver e baixar relatórios; lixeira; cadastro de
+  funcionário, lista de funcionários, níveis, permissões, backup; e a própria trilha (ver e exportar).
+- **Alterações** (só quando **deu certo**; formulário recusado não vira "alterou"): triagem e prontuário (criou, ou editou e **quais
+  campos**), situação, baixa, envelope, parcelas, unificação, excluir, restaurar e apagar de vez, acolhimento (rascunho, finalizar,
+  adendo) e "Ciente" de aviso.
+- **Administração**: funcionário criado e editado (quais campos), usuário criado, senha redefinida pelo administrador, senha trocada
+  pela própria pessoa, níveis, **permissões (de qual nível para qual)** e convênios.
+- **Acessos negados**: cada 403, com a permissão que faltou.
+- Cada linha leva **quando, o login, o código da ação, o acolhido e/ou o objeto, o endereço de rede e o navegador**.
 
-**O que não registrar**: o conteúdo dos campos. Só *qual* campo mudou, para a trilha não virar uma segunda cópia dos dados
-sensíveis.
+**O que NÃO é guardado**: o conteúdo. Só *qual* campo mudou, nunca o valor; não vai o que foi digitado numa busca, nem o usuário
+digitado num login que não existe (pode ser uma senha no campo errado), nem senha, nem o valor de uma parcela, nem a chave do
+"Ciente" (pode ter CPF). O nome do acolhido aparece na tela porque vem do cadastro, não da trilha: se o registro for apagado do
+banco, fica "apagado do banco" e o número do cadastro. **O Início não é registrado** (é um resumo; o que ele leva a abrir é registrado
+quando abre).
 
-**Detalhes.** Quando, usuário, ação, registro, endereço de rede do computador. Tela "Cadastros > Auditoria" com filtro por
-pessoa, por acolhido e por período. Retenção definida na fase 8 (sugestão: 12 meses, depois resumida). Índice no banco para
-não pesar.
+**Regras de construção.** Só se acrescenta: nenhuma tela edita nem apaga evento. Gravar a trilha **nunca derruba a tela** (falha vai
+para `logs/servidor.log`). **Tudo está classificado**: cada rota está em `LEITURAS`, `EXPLICITAS` ou `NAO_REGISTRA` (com o motivo), e um
+teste falha se aparecer rota nova sem classificação (o mesmo espírito do "nega por padrão" da fase 1).
 
-**Decisão do usuário (2026-10-15)**: registrar **tudo**, inclusive toda abertura de ficha, e poder **ver os registros dentro do
-sistema**: um botão (Cadastros > Auditoria) que só o administrador enxerga e abre, como a lixeira e o backup (permissão fixa do
-administrador). A própria consulta à auditoria também fica registrada.
+**A tela** (Cadastros > Auditoria, só o administrador): filtros por período, usuário, tipo (entradas, leituras, alterações,
+administração, acessos negados) e **acolhido** (parte do nome; acha até quem foi apagado), 50 por página, do mais novo para o mais
+velho, com o nome de quem fez (do cadastro de funcionários), o link da ficha e o endereço. **Baixar CSV** (separador `;`, com BOM para o
+Excel, sem fórmulas, até 20 mil linhas). Consultar e exportar **ficam registrados**, com os filtros, sem o nome buscado.
+
+**Limites.** Quem controla o computador e o banco consegue mexer na tabela: a trilha protege contra o uso indevido **pelo sistema**,
+não contra o dono da máquina (os backups, que levam a tabela, permitem comparar). A retenção (por quanto tempo guardar) é definida na
+fase 8; por ora nada é apagado. Leitura que não passa pelo sistema (alguém abrindo o arquivo do banco) não aparece.
+
+**Como conferir.** `teste_auditoria.py` (132 verificações: login, bloqueio, cada leitura, cada alteração, as que **não** podem
+registrar, nada sensível no registro, filtros, paginação, CSV, falha de gravação) e `teste_auditoria_pg.py` (Postgres e
+`copiar_banco.py`).
 
 ### Fase 3 — Contas e sessões
 
@@ -353,7 +374,7 @@ fazer, porque depende das fases 2, 3 e 4 (pré-requisitos acima) e do backup ext
    polo) e 1 celular móvel; cabe no plano gratuito (conferir os limites atuais na hora).
 3. Grade de fábrica: unificar e cadastros só do administrador; parcelas ficam com o operador. Níveis: Administrador, Operador e
    Consulta; o administrador reorganiza na tela quando precisar.
-4. Auditoria: registrar tudo, com tela dentro do sistema que só o administrador vê (fase 2).
+4. Auditoria: registrar tudo, com tela dentro do sistema que só o administrador vê (fase 2, entregue).
 5. Tempo ocioso: sim (fase 3). Validação de e-mail, "esqueci minha senha" e bloqueio após 5 erros: sim (fase 3; o bloqueio já existe).
 6. O pen-drive que sai do computador fica **na gaveta trancada do escritório** (risco aceito: não protege de incêndio nem de roubo do
    escritório inteiro).

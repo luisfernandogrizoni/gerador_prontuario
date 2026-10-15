@@ -378,6 +378,26 @@ class AdendoSocial(db.Model):
 
 
 # =========================================================================
+class Evento(db.Model):
+    """Trilha de auditoria (auditoria.py): quem fez o quê, em qual registro e quando. Só se acrescenta: nenhuma tela edita nem
+    apaga. Não guarda o conteúdo dos dados (só QUAIS campos mudaram) e não aponta para as outras tabelas por chave: sobrevive
+    a um 'apagar de vez' e não vira uma segunda cópia dos dados sensíveis."""
+    __tablename__ = "eventos_auditoria"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    quando: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, index=True)
+    usuario: Mapped[str] = mapped_column(String(50), default="", index=True)       # o login (vazio: ninguém entrou, ou usuário que não existe)
+    acao: Mapped[str] = mapped_column(String(40), index=True)                      # o código (auditoria.ACOES)
+    categoria: Mapped[str] = mapped_column(String(15), index=True)                 # entrada, leitura, alteracao, administracao ou negado
+    alvo_tipo: Mapped[str] = mapped_column(String(20), default="")                 # internacao, funcionario, nivel...
+    alvo_id: Mapped[int | None] = mapped_column()
+    pessoa_id: Mapped[int | None] = mapped_column(index=True)                      # o acolhido, para "tudo o que mexeu nesta pessoa"
+    detalhe: Mapped[str] = mapped_column(String(300), default="")
+    endereco: Mapped[str] = mapped_column(String(45), default="")                  # o endereço de rede do computador
+    navegador: Mapped[str] = mapped_column(String(120), default="")
+
+
+# =========================================================================
 class AvisoDispensado(db.Model):
     """Avisos que alguém marcou como 'ciente' no quadro da home."""
     __tablename__ = "avisos_dispensados"

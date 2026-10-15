@@ -37,6 +37,7 @@ from flask import g, jsonify, redirect, request, session, url_for
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
 
+import auditoria
 from modelos import Usuario, db
 
 log = logging.getLogger(__name__)
@@ -156,15 +157,20 @@ def entrar(nome, senha):
     agora = datetime.now()
     if usuario and usuario.bloqueado_ate and usuario.bloqueado_ate > agora:
         minutos = math.ceil((usuario.bloqueado_ate - agora).total_seconds() / 60)
+        auditoria.registrar("login.bloqueado", usuario=usuario.nome)
         return None, f"Muitas tentativas erradas. Tente de novo em {minutos} min."
 
     confere = check_password_hash(usuario.senha_hash if usuario else _HASH_FALSO, senha or "")
     if not (usuario and usuario.ativo and confere):
         if usuario:
             usuario.falhas += 1
-            if usuario.falhas >= MAX_FALHAS:
+            bloqueou = usuario.falhas >= MAX_FALHAS
+            if bloqueou:
                 usuario.falhas, usuario.bloqueado_ate = 0, agora + BLOQUEIO
             db.session.commit()
+            auditoria.registrar("login.bloqueio" if bloqueou else "login.falha", usuario=usuario.nome)
+        else:
+            auditoria.registrar("login.inexistente", usuario="")       # (o que foi digitado como usuário não é guardado: pode ser uma senha no campo errado)
         return None, "Usuário ou senha incorretos."
 
     usuario.falhas, usuario.bloqueado_ate = 0, None

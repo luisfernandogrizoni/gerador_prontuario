@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% from "_abas_cadastros.html" import abas with context %}
+{% from "_voltar.html" import linha_voltar with context %}
+
+{% block titulo %}Cadastros · Auditoria{% endblock %}
+
+{% block estilo %}
+  .filtros { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px 14px; align-items: end; margin-bottom: 14px; padding: 14px 16px;
+             background: #fff; border: 1px solid var(--borda); border-radius: var(--r-lg); box-shadow: var(--sombra); }
+  .filtros label { display: flex; flex-direction: column; gap: 4px; font-size: var(--t-rotulo); font-weight: 600; color: var(--neutro); }
+  .filtros input, .filtros select { min-height: 42px; }          /* o seletor de data é mais alto que os outros campos: todos na mesma altura, os rótulos alinham */
+  .filtros .acoes-filtro { display: flex; gap: 8px; flex-wrap: wrap; grid-column: 1 / -1; }
+  .total { color: var(--suave); font-size: .88rem; margin: 0 0 10px; }
+  .lista td.quando { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .lista td small { display: block; color: var(--suave); font-size: .78rem; margin-top: 1px; }
+  .cat { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: .74rem; font-weight: 700; margin-bottom: 3px; border: 1px solid transparent; }
+  .cat-entrada { background: var(--info-suave); color: var(--info); border-color: var(--info-borda); }
+  .cat-leitura { background: var(--neutro-suave); color: var(--neutro); border-color: var(--neutro-borda); }
+  .cat-alteracao { background: var(--atencao-suave); color: var(--atencao); border-color: var(--atencao-borda); }
+  .cat-administracao { background: var(--primaria-suave); color: var(--primaria); border-color: var(--primaria-borda); }
+  .cat-negado { background: var(--perigo-suave); color: var(--perigo); border-color: var(--perigo-borda); }
+  .oque { display: block; }
+  .detalhe { color: var(--suave); font-size: .86rem; overflow-wrap: anywhere; }
+  .paginacao { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  .paginacao .de-ate { color: var(--suave); font-size: .86rem; margin-right: auto; }
+  .lista td.sobre { min-width: 180px; }
+{% endblock %}
+
+{% block conteudo %}
+<main class="largo">
+  {{ linha_voltar(url_for('home')) }}
+  <div class="pagina-topo">
+    <div class="titulo">
+      <h1>Cadastros</h1>
+    </div>
+  </div>
+
+  {% with msgs = get_flashed_messages() %}
+    {% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
+  {% endwith %}
+
+  {{ abas('auditoria') }}
+
+  <form class="filtros" method="get" action="{{ url_for('pagina_auditoria') }}">
+    <label>De<input type="date" name="de" value="{{ filtros.de.isoformat() if filtros.de }}"></label>
+    <label>Até<input type="date" name="ate" value="{{ filtros.ate.isoformat() if filtros.ate }}"></label>
+    <label>Usuário
+      <select name="usuario"><option value="">Todos</option>{% for u in usuarios %}<option value="{{ u }}"{{ ' selected' if u == filtros.usuario }}>{{ u }}</option>{% endfor %}</select></label>
+    <label>Tipo
+      <select name="categoria"><option value="">Todos</option>{% for chave, nome in categorias.items() %}<option value="{{ chave }}"{{ ' selected' if chave == filtros.categoria }}>{{ nome }}</option>{% endfor %}</select></label>
+    <label>Acolhido<input type="search" name="acolhido" value="{{ filtros.acolhido }}" maxlength="100" autocomplete="off"></label>
+    <div class="acoes-filtro">
+      <button class="botao" type="submit">Filtrar</button>
+      <a class="botao secundario" href="{{ url_for('pagina_auditoria') }}">Limpar</a>
+      <a class="botao secundario" href="{{ url_for('exportar_auditoria', **consulta) }}"><svg class="icone"><use href="#i-baixar"/></svg>Baixar CSV</a>
+    </div>
+  </form>
+
+  <p class="total">{{ total }} registro{{ '' if total == 1 else 's' }}{% if total > por_pagina %} · mostrando {{ (filtros.pagina - 1) * por_pagina + 1 }} a {{ (filtros.pagina - 1) * por_pagina + linhas | length }}{% endif %}</p>
+
+  <div class="moldura">
+    {% if linhas %}
+    <table class="lista">
+      <thead>
+        <tr>
+          <th class="sem-ordem">Quando</th>
+          <th class="sem-ordem">Quem</th>
+          <th class="sem-ordem">O que aconteceu</th>
+          <th class="sem-ordem">Sobre</th>
+          <th class="sem-ordem">Detalhe</th>
+          <th class="sem-ordem">Endereço</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in linhas %}
+        {% set e = l.evento %}
+        <tr>
+          <td class="quando" data-rotulo="Quando">{{ e.quando.strftime('%d/%m/%Y') }}<small>{{ e.quando.strftime('%H:%M:%S') }}</small></td>
+          <td class="fixo" data-rotulo="Quem">{% if e.usuario %}<strong>{{ e.usuario }}</strong>{% if l.funcionario %}<small>{{ l.funcionario }}</small>{% endif %}{% else %}<span class="mudo">ninguém entrou</span>{% endif %}</td>
+          <td data-rotulo="O que aconteceu"><span class="cat cat-{{ e.categoria }}">{{ categorias.get(e.categoria, e.categoria) }}</span><span class="oque">{{ l.texto }}</span></td>
+          <td class="sobre" data-rotulo="Sobre">
+            {% if l.acolhido %}
+              {% if l.ficha %}<a href="{{ url_for('ficha', id=l.ficha) }}">{{ l.acolhido }}</a>{% else %}{{ l.acolhido }}{% endif %}<small>cadastro nº {{ e.pessoa_id }}</small>
+            {% elif l.apagado %}<span class="mudo">apagado do banco</span><small>cadastro nº {{ e.pessoa_id }}</small>
+            {% elif e.alvo_tipo %}{{ e.alvo_tipo }}<small>nº {{ e.alvo_id }}</small>{% endif %}
+          </td>
+          <td data-rotulo="Detalhe"><span class="detalhe">{{ e.detalhe }}</span></td>
+          <td class="fixo" data-rotulo="Endereço">{{ e.endereco }}{% if e.navegador %}<small title="{{ e.navegador }}">{{ e.navegador[:40] }}</small>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <div class="vazio"><span class="icone-vazio"><svg class="icone"><use href="#i-busca"/></svg></span>Nenhum registro com esses filtros.</div>
+    {% endif %}
+  </div>
+
+  {% if filtros.pagina > 1 or mais %}
+  <nav class="paginacao" aria-label="Páginas">
+    <span class="de-ate">Página {{ filtros.pagina }}</span>
+    {% if filtros.pagina > 1 %}<a class="botao secundario" href="{{ url_for('pagina_auditoria', pagina=filtros.pagina - 1, **consulta) }}">Anterior</a>{% endif %}
+    {% if mais %}<a class="botao secundario" href="{{ url_for('pagina_auditoria', pagina=filtros.pagina + 1, **consulta) }}">Próxima</a>{% endif %}
+  </nav>
+  {% endif %}
+</main>
+{% endblock %}
