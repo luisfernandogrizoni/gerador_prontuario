@@ -493,10 +493,11 @@
       <a class="item {{ 'atual' if request.path == '/' }}" href="{{ url_for('home') }}">Início</a>
       <a class="item {{ 'atual' if request.path.startswith('/triagens') }}" href="{{ url_for('lista_triagens') }}">Triagens</a>
       <a class="item {{ 'atual' if request.path.startswith('/internos') }}" href="{{ url_for('lista_internos') }}">Internos</a>
-      <a class="item {{ 'atual' if request.path.startswith('/relatorios') }}" href="{{ url_for('pagina_relatorios') }}">Relatórios</a>
-      <a class="item {{ 'atual' if request.path.startswith('/cadastros') }}" href="{{ url_for('cadastros') }}">Cadastros</a>
-      <a class="item novo" href="{{ url_for('nova_triagem') }}"><svg class="icone"><use href="#i-mais"/></svg>Triagem</a>
-      <a class="item novo" href="{{ url_for('formulario') }}"><svg class="icone"><use href="#i-mais"/></svg>Prontuário</a>
+      {# o menu só mostra o que o nível de acesso da pessoa permite (permissoes.py) #}
+      {% if pode('relatorios') %}<a class="item {{ 'atual' if request.path.startswith('/relatorios') }}" href="{{ url_for('pagina_relatorios') }}">Relatórios</a>{% endif %}
+      {% if pode('cadastros') %}<a class="item {{ 'atual' if request.path.startswith('/cadastros') }}" href="{{ url_for('cadastros') }}">Cadastros</a>{% endif %}
+      {% if pode('triagem') %}<a class="item novo" href="{{ url_for('nova_triagem') }}"><svg class="icone"><use href="#i-mais"/></svg>Triagem</a>{% endif %}
+      {% if pode('internacao') %}<a class="item novo" href="{{ url_for('formulario') }}"><svg class="icone"><use href="#i-mais"/></svg>Prontuário</a>{% endif %}
       </div>
       <span class="usuario">
         <a class="eu" href="{{ url_for('alterar_senha') }}" title="Alterar minha senha">

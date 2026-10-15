@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% from "_abas_cadastros.html" import abas with context %}
+{% from "_voltar.html" import linha_voltar with context %}
+{% from "_cartao.html" import legenda %}
+
+{% block titulo %}Cadastros · Permissões{% endblock %}
+
+{% block estilo %}
+  .matriz-rolavel { overflow-x: auto; }
+  .matriz { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .9rem; }
+  .matriz th, .matriz td { padding: 10px 12px; border-bottom: 1px solid var(--borda); vertical-align: middle; }
+  .matriz thead th { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--suave);
+                     text-align: center; white-space: nowrap; border-bottom-color: var(--borda-forte); }
+  .matriz thead th:first-child { text-align: left; }
+  .matriz tbody th { text-align: left; font-weight: 600; min-width: 240px; }
+  .matriz tbody th small { display: block; margin-top: 2px; color: var(--suave); font-size: .8rem; font-weight: 400; }
+  .matriz tbody th .icone { width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px; color: var(--suave); }
+  .matriz tbody tr:last-child > * { border-bottom: 0; }
+  .matriz td { text-align: center; width: 1%; white-space: nowrap; }
+  .nivel-col { display: inline-flex; align-items: center; gap: 8px; }
+  .posicao { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; flex: none; background: var(--primaria-suave);
+             color: var(--primaria); font-size: .74rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .celula { position: relative; display: inline-grid; place-items: center; cursor: pointer; }
+  .celula input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+  .sinal { display: grid; place-items: center; width: 36px; height: 34px; border-radius: var(--r-sm); border: 1px solid transparent; font-weight: 700; }
+  .sinal.sim { background: var(--sucesso-suave); color: var(--sucesso); border-color: var(--sucesso-borda); }
+  .sinal.nao { background: var(--neutro-suave); color: var(--suave); }
+  .celula input:checked + .sinal { box-shadow: 0 0 0 2px var(--sucesso); }          /* o nível mínimo: de onde a permissão passa a valer */
+  .celula input:focus-visible + .sinal { outline: 3px solid var(--foco); outline-offset: 2px; }
+  .celula:hover .sinal { filter: brightness(.96); }
+  .pilula-marca { display: inline-block; padding: 5px 12px; border-radius: 999px; background: var(--info-suave); color: var(--info); border: 1px solid var(--info-borda);
+                  font-size: .8rem; font-weight: 600; white-space: normal; }
+  .so-leitor { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .nome-nivel { display: none; }
+  /* celular: a grade não cabe em colunas; cada permissão vira um bloco, com o nome de cada nível ao lado do sinal */
+  @media (max-width: 759px) {
+    .matriz thead { display: none; }
+    .matriz, .matriz tbody, .matriz tr { display: block; }
+    .matriz tbody tr { padding-bottom: 10px; border-bottom: 1px solid var(--borda); }
+    .matriz tbody tr:last-child { border-bottom: 0; padding-bottom: 0; }
+    .matriz tbody th, .matriz td { border: 0; }
+    .matriz tbody th { display: block; min-width: 0; padding: 12px 0 6px; }
+    .matriz td { display: inline-block; width: auto; padding: 4px 14px 4px 0; text-align: left; white-space: normal; }
+    .celula { display: inline-flex; flex-direction: row; gap: 8px; }
+    .nome-nivel { display: inline; font-size: .86rem; font-weight: 600; color: var(--suave); }
+  }
+{% endblock %}
+
+{% block conteudo %}
+<main class="largo">
+  {{ linha_voltar(url_for('home')) }}
+  <div class="pagina-topo">
+    <div class="titulo">
+      <h1>Cadastros</h1>
+    </div>
+  </div>
+
+  {% with msgs = get_flashed_messages() %}
+    {% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
+  {% endwith %}
+
+  {{ abas('permissoes') }}
+
+  <div class="form-grade">
+    <form data-indice{% if pode_acessos %} method="post" action="{{ url_for('salvar_permissoes') }}"{% endif %}>
+      {% for g in grupos %}
+      <fieldset class="tom-{{ g.grupo.tom }}">
+        {{ legenda(g.grupo.titulo, g.grupo.icone) }}
+        <div class="matriz-rolavel">
+        <table class="matriz">
+          <thead>
+            <tr>
+              <th scope="col">Pode</th>
+              {% for n in niveis %}<th scope="col"><span class="nivel-col"><span class="posicao">{{ n.ordem }}</span>{{ n.nome }}</span></th>{% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for linha in g.linhas %}
+            {% set p = linha.permissao %}
+            <tr data-linha>
+              <th scope="row">{% if p.fixa %}<svg class="icone" aria-hidden="true"><use href="#i-cadeado"/></svg>{% endif %}{{ p.rotulo }}<small>{{ p.detalhe }}</small></th>
+              {% for n, tem, escolhido in linha.celulas %}
+              <td>
+                {% if linha.editavel and pode_acessos %}
+                  <label class="celula" title="{{ n.nome }} e os níveis acima">
+                    <input type="radio" name="perm_{{ p.chave }}" value="{{ n.id }}"{{ ' checked' if escolhido }} aria-label="{{ p.rotulo }}: a partir de {{ n.nome }}">
+                    <span class="sinal {{ 'sim' if tem else 'nao' }}" aria-hidden="true">{{ '✓' if tem else '–' }}</span><span class="nome-nivel">{{ n.nome }}</span>
+                  </label>
+                {% else %}
+                  <span class="celula"><span class="sinal {{ 'sim' if tem else 'nao' }}" aria-hidden="true">{{ '✓' if tem else '–' }}</span><span class="so-leitor">{{ 'Pode' if tem else 'Não pode' }}</span><span class="nome-nivel">{{ n.nome }}</span></span>
+                {% endif %}
+              </td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      </fieldset>
+      {% endfor %}
+
+      <fieldset class="tom-rosa">
+        {{ legenda('Sigilo', 'coracao') }}
+        <div class="matriz-rolavel">
+        <table class="matriz">
+          <thead>
+            <tr>
+              <th scope="col">Pode</th>
+              {% for n in niveis %}<th scope="col"><span class="nivel-col"><span class="posicao">{{ n.ordem }}</span>{{ n.nome }}</span></th>{% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row"><svg class="icone" aria-hidden="true"><use href="#i-cadeado"/></svg>Ler e escrever o acolhimento social<small>Ficha, relatório e parecer da assistente social</small></th>
+              {% for n in niveis %}
+                {% if loop.first %}
+                <td><span class="celula"><span class="sinal sim" aria-hidden="true">✓</span><span class="so-leitor">Pode</span><span class="nome-nivel">{{ n.nome }}</span></span></td>
+                {% elif loop.index == 2 %}
+                <td colspan="{{ niveis | length - 1 }}"><span class="pilula-marca">Quem tem a marca Serviço Social no cadastro do funcionário</span></td>
+                {% endif %}
+              {% endfor %}
+            </tr>
+          </tbody>
+        </table>
+        </div>
+      </fieldset>
+
+      {% if pode_acessos %}
+      <div class="barra-salvar">
+        <button class="botao" type="submit">Salvar permissões</button>
+        <span class="estado-form" hidden>Alterações não salvas</span>
+      </div>
+      {% endif %}
+    </form>
+  </div>
+</main>
+<script src="{{ url_for('static', filename='secoes.js') }}"></script>
+<script src="{{ url_for('static', filename='permissoes.js') }}"></script>
+{% endblock %}

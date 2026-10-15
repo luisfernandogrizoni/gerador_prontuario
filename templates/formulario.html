@@ -49,7 +49,7 @@
     <!-- o 1º botão é o que o Enter aciona: Salvar, sem download -->
     <div class="barra-salvar">
       <button class="botao" type="submit" name="acao" value="salvar">Salvar</button>
-      <button class="botao secundario" type="submit" name="acao" value="baixar">Salvar e baixar prontuário</button>
+      {% if pode('documentos') %}<button class="botao secundario" type="submit" name="acao" value="baixar">Salvar e baixar prontuário</button>{% endif %}
       <span class="estado-form" hidden>Alterações não salvas</span>
     </div>
   </form>

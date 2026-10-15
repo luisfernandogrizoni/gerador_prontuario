@@ -31,13 +31,13 @@ from modelos import db
 
 RAIZ = Path(__file__).parent
 TABELAS_COPIADAS = ("pessoas", "internacoes", "parcelas", "relatorios_sociais", "adendos_sociais", "avisos_dispensados", "convenios",
-                    "niveis_acesso", "funcionarios")   # ordem das chaves
-OPCIONAIS = {"relatorios_sociais", "adendos_sociais"}    # tabelas mais novas: um banco de origem antigo pode não tê-las (a cópia segue sem elas)
-SEM_ID_SEQUENCIAL = {"avisos_dispensados"}   # a chave é um texto, não há sequência para acertar
+                    "niveis_acesso", "permissoes_nivel", "funcionarios")   # ordem das chaves
+OPCIONAIS = {"relatorios_sociais", "adendos_sociais", "permissoes_nivel"}    # tabelas mais novas: um banco de origem antigo pode não tê-las (a cópia segue sem elas)
+SEM_ID_SEQUENCIAL = {"avisos_dispensados", "permissoes_nivel"}   # a chave é um texto, não há sequência para acertar
 # Cadastros de fábrica: o sistema os cria sozinho ao subir, então um destino "vazio" já os tem. Não contam como dados
 # do destino, e a cópia sempre os substitui pelos da origem (se a origem for um banco antigo, sem eles, ficam os de fábrica
 # do destino).
-CADASTROS = {"convenios", "niveis_acesso", "funcionarios"}
+CADASTROS = {"convenios", "niveis_acesso", "permissoes_nivel", "funcionarios"}
 
 
 def _tabelas():
@@ -84,9 +84,11 @@ def copiar(origem, substituir):
         db.metadata.create_all(para)                 # cria o que faltar (inclusive usuarios)
         with de.connect() as o, para.begin() as d:   # destino numa transação: erro = nada muda
             # os cadastros andam juntos (funcionários apontam para níveis): só copia se a origem tiver todos
-            if not all(inspect(o).has_table(nome) for nome in CADASTROS):
+            if not all(inspect(o).has_table(nome) for nome in CADASTROS - OPCIONAIS):
                 tabelas = [t for t in tabelas if t.name not in CADASTROS]
             tabelas = [t for t in tabelas if t.name not in OPCIONAIS or inspect(o).has_table(t.name)]
+            if any(t.name in CADASTROS for t in tabelas):       # as permissões do destino apontam para os níveis que vão ser trocados
+                d.execute(db.metadata.tables["permissoes_nivel"].delete())
             existentes = {t.name: d.execute(select(func.count()).select_from(t)).scalar() for t in tabelas if t.name not in CADASTROS}
             if any(existentes.values()):
                 resumo = ", ".join(f"{n}: {q}" for n, q in existentes.items())
