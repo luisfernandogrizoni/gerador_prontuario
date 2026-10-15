@@ -232,7 +232,8 @@ def home():
                            para_imprimir=painel.impressos_da_internacao(hoje=hoje) if permissoes.pode("documentos") else {"total": 0, "itens": []},
                            dias_da_agenda=painel.DIAS_DA_AGENDA, fim_do_tratamento=painel.tratamentos_a_finalizar(hoje=hoje),
                            hoje_por_extenso=painel.data_por_extenso(hoje),
-                           na_lixeira=exclusao.quantos_excluidos() if _e_administrador() else 0)     # o que os operadores excluíram
+                           na_lixeira=exclusao.quantos_excluidos() if _e_administrador() else 0,     # o que os operadores excluíram
+                           lembrete_da_troca=copia_externa.lembrete_de_troca(app.instance_path) if os.environ.get("AVISAR_BACKUP") == "1" else None)
 
 
 @app.post("/avisos/ciente")
