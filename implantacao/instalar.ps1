@@ -114,7 +114,7 @@ if (-not $PastaBackup) {
     $PastaBackup = Join-Path $Raiz "backups"
     Aviso "sem -PastaBackup, os backups ficam em $PastaBackup, no MESMO disco do banco: protegem de um erro, não de um disco que queima. Use um HD externo."
 } elseif ((Split-Path $PastaBackup -Qualifier -ErrorAction SilentlyContinue) -eq (Split-Path $Raiz -Qualifier)) {
-    Aviso "a pasta de backup está no mesmo disco do sistema: não protege de um disco que queima."
+    Aviso "a pasta de backup está no mesmo disco do sistema: não protege de um disco que queima. Ligue também a cópia externa criptografada em pen-drives (implantacao\configurar-backup-externo.ps1)."
 }
 if ($PastaBackup -like "\\*") {
     Aviso "pasta de rede como destino costuma falhar nas tarefas do sistema (elas não têm a sua senha). Prefira um disco ligado a este computador."
@@ -224,4 +224,4 @@ $ips = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
 foreach ($ip in $ips) { Write-Host "    http://${ip}:${Porta}" }
 Write-Host "    http://${env:COMPUTERNAME}:${Porta}   (pelo nome do computador, se a rede resolver)"
 Write-Host ""
-Write-Host "Falta fazer à mão (veja o LEIA-ME.md): IP fixo no roteador, horário ativo do Windows Update e os usuários das pessoas." -ForegroundColor Yellow
+Write-Host "Falta fazer à mão (veja o LEIA-ME.md): IP fixo no roteador, horário ativo do Windows Update, os usuários das pessoas e a cópia externa criptografada em pen-drives (implantacao\configurar-backup-externo.ps1)." -ForegroundColor Yellow
