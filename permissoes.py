@@ -28,6 +28,7 @@ from datetime import datetime
 from flask import g, jsonify, render_template, request, session
 from sqlalchemy.exc import IntegrityError
 
+import auditoria
 import autenticacao
 import cadastros
 from modelos import Internacao, PermissaoNivel, db
@@ -75,6 +76,7 @@ GRUPOS = (
         Permissao("acessos", "Criar usuários, trocar senhas e definir níveis e permissões", "Cadastros > Funcionários, Níveis e Permissões", padrao=0, fixa=True),
         Permissao("lixeira", "Restaurar da lixeira e apagar de vez", "O que os outros excluíram", padrao=0, fixa=True),
         Permissao("backup", "Ver a situação do backup e dos pen-drives", "Cadastros > Backup", padrao=0, fixa=True),
+        Permissao("auditoria", "Ver a trilha de auditoria", "Cadastros > Auditoria: quem fez o quê e quando", padrao=0, fixa=True),
     )),
 )
 
@@ -199,6 +201,7 @@ REGRAS = {
 
     "novo_nivel": "acessos", "editar_nivel": "acessos", "mover_nivel": "acessos", "salvar_permissoes": "acessos",
     "lixeira": "lixeira", "restaurar_registro": "lixeira", "apagar_registro": "lixeira", "pagina_backup": "backup",
+    "pagina_auditoria": "auditoria", "exportar_auditoria": "auditoria",
 }
 
 
@@ -210,12 +213,14 @@ def exigir_permissao():
     if cadastros.acesso_desativado(usuario):
         session.clear()
         log.warning("Acesso de %s negado: o funcionário dele está desativado", usuario.nome)
+        auditoria.registrar("sessao.derrubada", usuario=usuario.nome)
         if request.path.startswith("/api/") or request.is_json:
             return jsonify(ok=False, erros={"sessao": "Este acesso foi desativado."}), 401
         return render_template("login.html", erro="Este acesso foi desativado. Procure o administrador.", proximo=""), 401
     regra = REGRAS.get(endpoint)
     if regra is None:
         log.error("Rota %s sem regra de acesso em permissoes.REGRAS: fechada para todos", endpoint)
+        auditoria.registrar("acesso.negado", detalhe=f"{request.method} {request.path}: rota sem regra de acesso")
         return _negar(usuario, ())
     if regra == LIVRE:
         return None
@@ -224,6 +229,7 @@ def exigir_permissao():
     if pode(*chaves, usuario=usuario):
         return None
     log.warning("Acesso negado a %s: %s %s pede %s", usuario.nome, request.method, request.path, " ou ".join(chaves))
+    auditoria.registrar("acesso.negado", detalhe=f"{request.method} {request.path} pede {' ou '.join(chaves)}")
     return _negar(usuario, chaves)
 
 
@@ -288,6 +294,8 @@ def salvar_matriz(form, por=""):
     db.session.commit()
     for chave, antes, depois in mudou:
         log.info("Permissão %s mudou de %s para %s, por %s", chave, antes, depois, por or "?")
+    if mudou:
+        auditoria.registrar("permissao.alterar", detalhe="; ".join(f"{chave}: {antes} → {depois}" for chave, antes, depois in mudou))
     return {}, len(mudou)
 
 

@@ -22,6 +22,7 @@ Telas:
                                     primeiro é o do administrador, e só ele altera os níveis
     /cadastros/permissoes           o que cada nível pode fazer (nível mínimo de cada permissão); só o administrador altera
     /cadastros/backup               (administrador) o backup do dia, os pen-drives em rodízio e o teste de restauração
+    /cadastros/auditoria            (administrador) a trilha de auditoria: quem fez o quê e quando, com filtros e CSV
     /internacoes/<id>/prontuario    baixa o .docx
     /internacoes/<id>/impressos     os impressos da triagem (pedido de exames, enxoval) e da internação (prontuário, manual
                                     de orientação, ficha multiprofissional, capa do envelope, relatório do Serviço Social)
@@ -41,6 +42,7 @@ Organização:
     avisos.py      quadro de avisos
     copia_externa.py  cópia criptografada do backup em pen-drives em rodízio (usada pelo backup.py)
     permissoes.py  o que cada nível de acesso pode fazer e a regra de cada rota (nega por padrão)
+    auditoria.py   a trilha de auditoria (quem fez o quê e quando); só se acrescenta
     catalogo.py    o que o sistema sabe de cada convênio (lido do cadastro, uma vez por requisição)
     cadastros.py   cadastros de convênios e de funcionários
     fichas.py      pedido de exames, enxoval, capa do envelope e ficha multiprofissional (em branco)
@@ -67,10 +69,11 @@ verdade (gunicorn app:app) — `python app.py` é só para uso local.
 import os
 from datetime import date, datetime
 
-from flask import (Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file,
+from flask import (Flask, Response, abort, flash, g, jsonify, redirect, render_template, request, send_file,
                    session, url_for)
 from werkzeug.exceptions import HTTPException
 
+import auditoria
 import autenticacao
 import banco
 import cadastros as cadastros_
@@ -117,6 +120,7 @@ with app.app_context():
     autenticacao.criar_usuario_inicial()
 
 app.before_request(autenticacao.exigir_login)
+app.after_request(auditoria.depois_da_requisicao)       # leituras (auditoria.LEITURAS); as alterações são registradas onde dão certo
 app.before_request(permissoes.exigir_permissao)     # depois do login: a rota pede uma permissão e a pessoa tem? (permissoes.REGRAS)
 app.after_request(autenticacao.cabecalhos_de_seguranca)
 autenticacao.registrar_comandos(app)
@@ -201,9 +205,11 @@ def login():
     if request.method == "POST":
         usuario, erro = autenticacao.entrar(request.form.get("usuario"), request.form.get("senha"))
         if usuario and cadastros_.acesso_desativado(usuario):     # a senha confere, mas o funcionário foi desativado
+            auditoria.registrar("login.desativado", usuario=usuario.nome)
             usuario, erro = None, "Este acesso foi desativado. Procure o administrador."
         if usuario:
             autenticacao.abrir_sessao(usuario)
+            auditoria.registrar("login.ok", usuario=usuario.nome)
             return redirect(autenticacao.destino_seguro(proximo, url_for("home")))
         return render_template("login.html", erro=erro, proximo=proximo), 401
     return render_template("login.html", erro=None, proximo=proximo)
@@ -211,6 +217,7 @@ def login():
 
 @app.post("/sair")
 def sair():
+    auditoria.registrar("sair")
     session.clear()
     return redirect(url_for("login"))
 
@@ -223,6 +230,7 @@ def alterar_senha():
                                          request.form.get("nova"), request.form.get("confirmacao"))
         if not erro:
             autenticacao.abrir_sessao(g.usuario)   # a sessão de agora continua valendo
+            auditoria.registrar("senha.trocada")
             flash("Senha alterada.")
             return redirect(url_for("home"))
     return render_template("senha.html", erro=erro, minimo=autenticacao.SENHA_MINIMA)
@@ -248,12 +256,28 @@ def aviso_ciente():
     if not db.session.get(AvisoDispensado, chave):
         db.session.add(AvisoDispensado(chave=chave))
         db.session.commit()
+    _registrar_ciente(chave)
     return redirect(url_for("home") + "#avisos")
+
+
+def _registrar_ciente(chave):
+    """O 'Ciente' de um aviso: guarda o tipo do aviso e de quem é, nunca o que a chave traz (pode ser um CPF)."""
+    tipo, _, resto = chave.partition(":")
+    numero = resto.partition(":")[0]
+    id_ = int(numero) if numero.isdigit() else None
+    if tipo in exclusao.AVISOS_DA_PESSOA:
+        auditoria.registrar("aviso.ciente", "pessoa", id_, id_, f"aviso: {tipo}")
+    elif tipo in exclusao.AVISOS_DA_INTERNACAO:
+        internacao = db.session.get(Internacao, id_) if id_ else None
+        auditoria.registrar("aviso.ciente", "internacao", id_, internacao.pessoa_id if internacao else None, f"aviso: {tipo}")
+    else:
+        auditoria.registrar("aviso.ciente", detalhe=f"aviso: {tipo}")
 
 
 @app.post("/pessoas/<int:manter>/unificar/<int:remover>")
 def unificar_pessoas(manter, remover):
     servicos.unificar(_buscar(Pessoa, manter), _buscar(Pessoa, remover))
+    auditoria.registrar("pessoa.unificar", "pessoa", manter, manter, f"o cadastro {remover} foi unificado no {manter}")
     flash("Cadastros unificados.")
     return redirect(url_for("home") + "#avisos")
 
@@ -291,13 +315,33 @@ def nova_triagem():
 
 @app.post("/triagens/salvar")
 def salvar_triagem():
+    antes = _antes_de_salvar(request.form)
     internacao, erros = servicos.salvar_triagem(request.form)
     if erros:
         pessoa = db.session.get(Pessoa, request.form.get("pessoa_id", type=int) or 0)
         return render_template("triagem_form.html", d=request.form, erros=erros, pessoa=pessoa,
                                **servicos.opcoes_formulario(request.form.get("convenio", ""))), 400
+    _registrar_gravacao("triagem", internacao, antes, request.form)
     # internação marcada: a lista pergunta se é para imprimir o pedido de exames e o enxoval (até alguém imprimir)
     return redirect(url_for("lista_triagens", novo=internacao.id, imprimir=1 if _perguntar_impressao(internacao) else None))
+
+
+def _antes_de_salvar(form):
+    """O que o registro tinha antes de salvar, só para a trilha de auditoria dizer QUAIS campos mudaram (nunca os valores)."""
+    id_ = form.get("internacao_id", type=int)
+    internacao = db.session.get(Internacao, id_) if id_ else None
+    return internacao.dados_completos() if internacao else None
+
+
+def _registrar_gravacao(tipo, internacao, antes, form):
+    """Trilha de auditoria de uma triagem ou prontuário gravado: criou (paciente novo ou já cadastrado) ou editou (quais campos)."""
+    if antes is None:
+        auditoria.registrar(f"{tipo}.criar", "internacao", internacao.id, internacao.pessoa_id,
+                            "paciente já cadastrado" if form.get("pessoa_id") else "paciente novo")
+        return
+    depois = internacao.dados_completos()
+    campos = sorted(campo for campo in depois if antes.get(campo) != depois[campo])
+    auditoria.registrar(f"{tipo}.editar", "internacao", internacao.id, internacao.pessoa_id, ("campos: " + ", ".join(campos)) if campos else "sem mudança")
 
 
 def _perguntar_impressao(internacao):
@@ -314,6 +358,7 @@ def mudar_status(id):
     erros = servicos.mudar_status(internacao, request.get_json(force=True))
     if erros:
         return jsonify(ok=False, erros=erros), 400
+    auditoria.registrar("status.mudar", "internacao", id, internacao.pessoa_id, f"para {internacao.status}")
     return jsonify(ok=True, status=internacao.status, ficha=url_for("ficha", id=id), editar=url_for("editar_internacao", id=id),
                    acolhimento=url_for("relatorio_social", id=id) if _pode_servico_social() else None)
 
@@ -340,6 +385,7 @@ def baixa_interno(id):
     erros = servicos.dar_baixa(internacao, request.get_json(force=True))
     if erros:
         return jsonify(ok=False, erros=erros), 400
+    auditoria.registrar("baixa.dar", "internacao", id, internacao.pessoa_id, f"saída em {fmt_data(internacao.termino)}; motivo: {internacao.motivo or 'não informado'}")
     return jsonify(ok=True, status=internacao.status_txt, saida=fmt_data(internacao.termino),
                    envelope=internacao.envelope, ficha=url_for("ficha", id=id))
 
@@ -350,6 +396,8 @@ def registrar_envelope(id):
     e pelo cartão da ficha."""
     internacao = _buscar(Internacao, id)
     erro = servicos.registrar_envelope(internacao, request.form.get("situacao"))
+    if not erro:
+        auditoria.registrar("envelope.registrar", "internacao", id, internacao.pessoa_id, f"situação: {internacao.envelope or 'sem registro'}")
     if erro:
         flash(erro)
     elif internacao.envelope == ENVELOPE_RECEBIDO:
@@ -371,11 +419,13 @@ def formulario():
 
 @app.post("/prontuario/salvar")
 def gerar():
+    antes = _antes_de_salvar(request.form)
     internacao, erros = servicos.salvar_prontuario(request.form)
     if erros:
         pessoa = db.session.get(Pessoa, request.form.get("pessoa_id", type=int) or 0)
         return render_template("formulario.html", d=request.form, erros=erros, pessoa=pessoa,
                                anterior=None, **servicos.opcoes_formulario(request.form.get("convenio", ""))), 400
+    _registrar_gravacao("prontuario", internacao, antes, request.form)
     # Post/Redirect/Get: a lista destaca a linha e, se foi "Salvar e baixar", baixa o .docx
     baixar = 1 if request.form.get("acao") == "baixar" and permissoes.pode("documentos") else None
     return redirect(url_for("lista_internos", novo=internacao.id, baixar=baixar))
@@ -443,7 +493,10 @@ def baixar_prontuario(id):
 
 @app.post("/internacoes/<int:id>/parcelas")
 def lancar_parcela(id):
-    erro = servicos.lancar_parcela(_buscar(Internacao, id), request.form)
+    internacao = _buscar(Internacao, id)
+    erro = servicos.lancar_parcela(internacao, request.form)
+    if not erro:
+        auditoria.registrar("parcela.lancar", "internacao", id, internacao.pessoa_id)
     flash(erro or "Parcela lançada.")
     return redirect(url_for("ficha", id=id) + "#parcelas")
 
@@ -451,9 +504,10 @@ def lancar_parcela(id):
 @app.post("/parcelas/<int:id>/excluir")
 def excluir_parcela(id):
     parcela = _buscar(Parcela, id)
-    internacao_id = parcela.internacao_id
+    internacao_id, pessoa_id = parcela.internacao_id, parcela.internacao.pessoa_id
     db.session.delete(parcela)
     db.session.commit()
+    auditoria.registrar("parcela.excluir", "internacao", internacao_id, pessoa_id)
     flash("Parcela excluída.")
     return redirect(url_for("ficha", id=internacao_id) + "#parcelas")
 
@@ -589,6 +643,8 @@ def relatorio_social(id):
                                                     assinatura=cadastros_.assinatura_do_usuario(g.get("usuario")))
         if erros:
             return _tela_relatorio(internacao, request.form, erros, 400)
+        auditoria.registrar("acolhimento.finalizar" if acao == "finalizar" else "acolhimento.salvar", "internacao", id, internacao.pessoa_id,
+                            "a triagem foi marcada como rejeitada" if acao == "finalizar" and internacao.status == "rejeitado" else "")
         if acao == "finalizar":
             flash("Acolhimento social finalizado." + (f" {internacao.pessoa.nome} foi marcado como rejeitado na triagem."
                                                       if internacao.status == "rejeitado" else ""))
@@ -609,6 +665,8 @@ def adendo_social(id):
         flash(cadastros_.MENSAGEM_SEM_CRESS)
         return redirect(url_for("ficha", id=id) + "#acolhimento")
     erro = servicos.adicionar_adendo(internacao, request.form.get("texto"), cadastros_.assinatura_do_usuario(g.get("usuario")))
+    if not erro:
+        auditoria.registrar("acolhimento.adendo", "internacao", id, internacao.pessoa_id)
     flash(erro or "Adendo registrado.")
     return redirect(url_for("ficha", id=id) + "#acolhimento")
 
@@ -629,16 +687,18 @@ def _nome_do_usuario():
 @app.post("/internacoes/<int:id>/excluir")
 def excluir_registro(id):
     internacao = _buscar(Internacao, id)
-    nome, volta = internacao.pessoa.nome, "lista_triagens" if internacao.e_triagem else "lista_internos"
+    nome, volta, pessoa_id = internacao.pessoa.nome, "lista_triagens" if internacao.e_triagem else "lista_internos", internacao.pessoa_id
     if request.form.get("acao") == "apagar":
         if not _e_administrador():
             flash("Só o administrador pode apagar um registro do banco.")
             return redirect(url_for("ficha", id=id))
         with exclusao.vendo_tudo():
             exclusao.apagar(internacao)
+        auditoria.registrar("registro.apagar", "internacao", id, pessoa_id, "apagado direto da ficha")
         flash(f"Registro de {nome} apagado do banco.")
     else:
         exclusao.excluir(internacao, _nome_do_usuario())
+        auditoria.registrar("registro.excluir", "internacao", id, pessoa_id)
         flash(f"Registro de {nome} excluído.")
     return redirect(url_for(volta))
 
@@ -666,8 +726,9 @@ def restaurar_registro(id):
     if (internacao := _registro_excluido(id)) is None:
         return redirect(url_for("home"))
     with exclusao.vendo_tudo():
-        nome = internacao.pessoa.nome
+        nome, pessoa_id = internacao.pessoa.nome, internacao.pessoa_id
         exclusao.restaurar(internacao)
+    auditoria.registrar("registro.restaurar", "internacao", id, pessoa_id)
     flash(f"Registro de {nome} restaurado.")
     return redirect(url_for("lixeira"))
 
@@ -677,8 +738,9 @@ def apagar_registro(id):
     if (internacao := _registro_excluido(id)) is None:
         return redirect(url_for("home"))
     with exclusao.vendo_tudo():
-        nome = internacao.pessoa.nome
+        nome, pessoa_id = internacao.pessoa.nome, internacao.pessoa_id
         exclusao.apagar(internacao)
+    auditoria.registrar("registro.apagar", "internacao", id, pessoa_id, "apagado da lixeira")
     flash(f"Registro de {nome} apagado do banco.")
     return redirect(url_for("lixeira"))
 
@@ -771,6 +833,7 @@ def novo_convenio():
     if request.method == "POST":
         convenio, erros = cadastros_.salvar_convenio(request.form)
         if not erros:
+            auditoria.registrar("convenio.criar", "convenio", convenio.id, detalhe=convenio.nome_tela)
             flash(f"Convênio {convenio.nome_tela} cadastrado. Ele já aparece nos formulários, nas vagas e nos relatórios.")
             return redirect(url_for("lista_convenios"))
         return render_template("cadastro_convenio_form.html", d=request.form, erros=erros, convenio=None,
@@ -785,6 +848,7 @@ def editar_convenio(id):
     if request.method == "POST":
         _, erros = cadastros_.salvar_convenio(request.form, convenio)
         if not erros:
+            auditoria.registrar("convenio.editar", "convenio", convenio.id, detalhe=convenio.nome_tela)
             flash(f"Convênio {convenio.nome_tela} atualizado.")
             return redirect(url_for("lista_convenios"))
         return render_template("cadastro_convenio_form.html", d=request.form, erros=erros, convenio=convenio,
@@ -797,6 +861,26 @@ def editar_convenio(id):
 @app.get("/cadastros/funcionarios")
 def lista_funcionarios():
     return render_template("cadastro_funcionarios.html", funcionarios=cadastros_.funcionarios())
+
+
+CAMPOS_DO_FUNCIONARIO = ("nome", "cargo", "ativo", "padrao", "usuario", "nivel_id", "servico_social", "registro_profissional")
+
+
+def _foto_do_funcionario(funcionario):
+    return {campo: getattr(funcionario, campo) for campo in CAMPOS_DO_FUNCIONARIO}
+
+
+def _registrar_funcionario(funcionario, antes, form, pode):
+    """Trilha de auditoria do cadastro de funcionário: criou ou editou (quais campos), e o usuário/senha que o administrador definiu."""
+    if antes is None:
+        auditoria.registrar("funcionario.criar", "funcionario", funcionario.id, detalhe=f"nível {funcionario.nivel.nome if funcionario.nivel else 'nenhum'}")
+    else:
+        campos = [campo for campo in CAMPOS_DO_FUNCIONARIO if antes[campo] != getattr(funcionario, campo)]
+        auditoria.registrar("funcionario.editar", "funcionario", funcionario.id, detalhe=("campos: " + ", ".join(campos)) if campos else "sem mudança")
+    if pode and (form.get("novo_usuario") or "").strip():
+        auditoria.registrar("usuario.criar", "funcionario", funcionario.id, detalhe=f"usuário {funcionario.usuario}")
+    elif pode and form.get("senha"):
+        auditoria.registrar("senha.redefinida", "funcionario", funcionario.id, detalhe=f"usuário {funcionario.usuario}")
 
 
 def _tela_funcionario(funcionario, dados, erros, status=200):
@@ -817,6 +901,7 @@ def novo_funcionario():
         pode = cadastros_.pode_gerenciar_acessos(g.usuario)
         funcionario, erros = cadastros_.salvar_funcionario(request.form, por=g.usuario)
         if not erros:
+            _registrar_funcionario(funcionario, None, request.form, pode)
             flash(f"{funcionario.nome} cadastrado(a)." + cadastros_.frase_do_acesso(request.form, pode, funcionario.usuario))
             return redirect(url_for("lista_funcionarios"))
         return _tela_funcionario(None, request.form, erros, 400)
@@ -828,8 +913,10 @@ def editar_funcionario(id):
     funcionario = _buscar(Funcionario, id)
     if request.method == "POST":
         pode = cadastros_.pode_gerenciar_acessos(g.usuario)
+        antes = _foto_do_funcionario(funcionario)
         _, erros = cadastros_.salvar_funcionario(request.form, funcionario, por=g.usuario)
         if not erros:
+            _registrar_funcionario(funcionario, antes, request.form, pode)
             if pode and request.form.get("senha") and funcionario.usuario == g.usuario.nome:
                 autenticacao.abrir_sessao(g.usuario)    # trocou a própria senha: a sessão de agora continua valendo
             flash(f"{funcionario.nome} atualizado(a)." + cadastros_.frase_do_acesso(request.form, pode, funcionario.usuario))
@@ -848,6 +935,26 @@ def lista_niveis():
         db.select(Funcionario.nivel_id, db.func.count()).filter(Funcionario.ativo.is_(True)).group_by(Funcionario.nivel_id))}
     return render_template("cadastro_niveis.html", niveis=cadastros_.niveis(), funcionarios_por_nivel=em_uso,
                            pode_acessos=cadastros_.pode_gerenciar_acessos(g.usuario))
+
+
+# A trilha de auditoria (só o administrador): quem fez o quê e quando, com filtros e exportação (auditoria.py). Consultar e exportar
+# também ficam registrados.
+@app.get("/cadastros/auditoria")
+def pagina_auditoria():
+    filtros = auditoria.filtros_da_requisicao(request.args)
+    auditoria.registrar("auditoria.ver", detalhe=auditoria.resumo_dos_filtros(filtros))
+    eventos, total, mais = auditoria.consultar(filtros)
+    return render_template("cadastro_auditoria.html", linhas=auditoria.descrever(eventos), total=total, mais=mais, filtros=filtros,
+                           usuarios=auditoria.usuarios_com_eventos(), categorias=auditoria.CATEGORIAS, por_pagina=auditoria.POR_PAGINA,
+                           consulta={k: v for k, v in request.args.items() if k != "pagina" and v})
+
+
+@app.get("/cadastros/auditoria.csv")
+def exportar_auditoria():
+    filtros = auditoria.filtros_da_requisicao(request.args)
+    conteudo, quantas = auditoria.csv_da_trilha(filtros)
+    auditoria.registrar("auditoria.exportar", detalhe=f"{quantas} linhas; {auditoria.resumo_dos_filtros(filtros)}")
+    return Response(conteudo, mimetype="text/csv", headers={"Content-Disposition": f'attachment; filename="auditoria-{date.today():%Y-%m-%d}.csv"'})
 
 
 # A situação do backup (só o administrador): o do dia, os pen-drives em rodízio e o teste de restauração (copia_externa.py).
@@ -895,6 +1002,7 @@ def novo_nivel():
     if request.method == "POST":
         nivel, erros = cadastros_.salvar_nivel(request.form)
         if not erros:
+            auditoria.registrar("nivel.criar", "nivel", nivel.id, detalhe=nivel.nome)
             flash(f"Nível {nivel.nome} cadastrado, no fim da cascata (o de menos acesso).")
             return redirect(url_for("lista_niveis"))
         return render_template("cadastro_nivel_form.html", d=request.form, erros=erros, nivel=None), 400
@@ -909,6 +1017,7 @@ def editar_nivel(id):
     if request.method == "POST":
         _, erros = cadastros_.salvar_nivel(request.form, nivel)
         if not erros:
+            auditoria.registrar("nivel.editar", "nivel", nivel.id, detalhe=nivel.nome)
             flash(f"Nível {nivel.nome} atualizado.")
             return redirect(url_for("lista_niveis"))
         return render_template("cadastro_nivel_form.html", d=request.form, erros=erros, nivel=nivel), 400
@@ -922,6 +1031,7 @@ def mover_nivel(id):
     if negado := _so_administrador("lista_niveis"):
         return negado
     if cadastros_.mover_nivel(nivel, request.form.get("sentido", "")):
+        auditoria.registrar("nivel.mover", "nivel", nivel.id, detalhe=f"{nivel.nome} {'subiu' if request.form['sentido'] == 'cima' else 'desceu'}")
         flash(f"{nivel.nome} {'subiu' if request.form['sentido'] == 'cima' else 'desceu'} na cascata.")
     return redirect(url_for("lista_niveis"))
 
