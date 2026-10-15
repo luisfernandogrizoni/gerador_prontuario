@@ -30,7 +30,7 @@ com banco SQLite, sem custo de hospedagem. Isso tem uma vantagem de segurança (
 | Rastro | Só o registro técnico do servidor (erros e, agora, acessos negados) | **Sem trilha de auditoria**: não dá para responder "quem abriu/alterou/baixou isto?" |
 | Rede | Porta aberta só para a sub-rede local (firewall); sem acesso externo | **HTTP sem criptografia**: senha e ficha trafegam em texto puro pela rede interna |
 | Navegador | Cookie HttpOnly e SameSite=Lax; nosniff; X-Frame-Options; sem cache das páginas | Sem token CSRF; sem CSP |
-| Dados | Excluir é em duas etapas (lixeira); banco fora do git; hook que barra dado real no repositório | Backup diário com 30 cópias, **mas no mesmo computador e sem criptografia** |
+| Dados | Excluir é em duas etapas (lixeira); banco fora do git; hook que barra dado real no repositório; **fase 5**: cópia externa criptografada em pen-drives em rodízio, conferida na hora, com aviso, tela de situação e teste de restauração | Depende de alguém trocar o pen-drive toda semana (o sistema avisa) e de a frase de recuperação estar em papel; o backup do dia (`.db`) segue sem criptografia no computador |
 | Servidor | Tarefas agendadas, firewall, pasta `instance/` protegida | Roda como SYSTEM; disco sem criptografia (a verificar); roteador e Windows sem checklist |
 | Papel | — | Sem inventário de dados, política de retenção, termo de sigilo nem plano de resposta a incidente |
 
@@ -56,10 +56,10 @@ fase 10 (VPN), nunca abrindo porta no roteador.
 | Fase | O que entrega | Quem faz | Situação |
 |---|---|---|---|
 | 1 | Cascata de acesso por nível | Sistema | **Feita** (nesta entrega) |
-| 2 | Trilha de auditoria | Sistema | A fazer |
-| 3 | Contas e sessões mais fortes (+ segundo fator do administrador) | Sistema + usuário (celular com app autenticador) | A fazer |
+| 2 | Trilha de auditoria (com tela dentro do sistema, só administrador) | Sistema | A fazer; decidido registrar tudo |
+| 3 | Contas e sessões mais fortes: tempo ocioso, e-mail validado, "esqueci minha senha" e segundo fator do administrador | Sistema + usuário (e-mail institucional e celular com app autenticador) | A fazer; **depende de saber qual serviço de e-mail a casa usa** |
 | 4 | HTTPS (celular e todos os navegadores) | Sistema + usuário (instalar a VPN) | A fazer; decidido usar o certificado da VPN |
-| 5 | Backup que sobrevive ao computador | Sistema + usuário (pen-drives e rotina) | A fazer |
+| 5 | Backup que sobrevive ao computador | Sistema + usuário (pen-drives e rotina) | **Feita** (2026-10-15); falta o usuário configurar |
 | 6 | Servidor Windows, rede e roteador | Quase tudo o usuário (roteiro passo a passo) | A fazer |
 | 7 | Token CSRF e CSP | Sistema | A fazer |
 | 8 | LGPD no papel | Usuário, com modelos prontos do sistema | A fazer |
@@ -112,6 +112,7 @@ com o operador) e que o nível **Consulta** passa a só consultar:
 | Cadastrar convênios e funcionários (sem usuário e senha) | ✓ | – | – |
 | Criar usuários, trocar senhas, definir níveis e permissões | ✓ | – | – |
 | Lixeira: restaurar e apagar de vez | ✓ | – | – |
+| Ver a situação do backup e dos pen-drives (fase 5) | ✓ | – | – |
 | Acolhimento social (sigiloso) | ✓ | só com a marca | só com a marca |
 
 Quem tem a permissão de cadastros vê também as abas Níveis de acesso e Permissões, só para ler; sem ela a área Cadastros inteira
@@ -148,8 +149,9 @@ sensíveis.
 pessoa, por acolhido e por período. Retenção definida na fase 8 (sugestão: 12 meses, depois resumida). Índice no banco para
 não pesar.
 
-**Decisão do usuário**: registrar **toda abertura de ficha** (mais útil, mais linhas) ou só documentos, acolhimento social e
-alterações? Sugestão: registrar tudo; são poucas centenas de linhas por dia.
+**Decisão do usuário (2026-10-15)**: registrar **tudo**, inclusive toda abertura de ficha, e poder **ver os registros dentro do
+sistema**: um botão (Cadastros > Auditoria) que só o administrador enxerga e abre, como a lixeira e o backup (permissão fixa do
+administrador). A própria consulta à auditoria também fica registrada.
 
 ### Fase 3 — Contas e sessões
 
@@ -159,12 +161,26 @@ alterações? Sugestão: registrar tudo; são poucas centenas de linhas por dia.
   guia antes de fixar.
 - **Senha provisória**: a que o administrador cria vale só para o primeiro acesso; o sistema pede a troca antes de qualquer
   outra tela.
-- **Tempo ocioso**: sai sozinho depois de 30 minutos sem uso (ajustável), com aviso antes. Computador de escritório fica
-  desbloqueado quando alguém levanta.
-- **Limite por endereço**, além do limite por usuário (hoje o atacante troca de usuário a cada 5 erros).
+- **Tempo ocioso** (decidido: sim): sai sozinho depois de 30 minutos sem uso (ajustável), com aviso antes. Computador de
+  escritório fica desbloqueado quando alguém levanta.
+- **Bloqueio por tentativas** (já existe: 5 erros, 10 minutos) **mais** limite por endereço, porque hoje quem erra troca de
+  usuário a cada 5 erros.
+- **E-mail validado** (decidido: sim, a casa tem e-mails institucionais): cada funcionário tem um e-mail no cadastro, confirmado
+  por um código enviado a ele antes de valer. O e-mail serve para o "esqueci minha senha" e para avisos de segurança ("sua senha
+  foi trocada", "entrada de um computador novo").
+- **"Esqueci minha senha"**: a pessoa informa o usuário e o sistema manda um **link de uso único, que vale 30 minutos**, para o
+  e-mail confirmado. A mensagem na tela é a mesma exista ou não o usuário (não revela quem tem cadastro); o link é guardado só
+  como resumo (hash) no banco; usar o link derruba as outras sessões. **Administrador não redefine sozinho pelo e-mail: exige
+  também o segundo fator**, porque quem invade o e-mail não pode virar administrador. Continua valendo a redefinição pelo
+  administrador (Cadastros > Funcionários).
 - **Segundo fator opcional (TOTP) para o administrador**, com app autenticador no celular (Google/Microsoft Authenticator ou
   similar) e códigos de recuperação impressos. SMS fica de fora: o NIST deixou de aceitá-lo.
 - Sessão derrubada quando o nível muda.
+
+**O que a parte do e-mail exige** (e por isso depende de resposta): o servidor precisa **enviar** e-mail, então precisa de uma
+conta de envio do serviço que a casa usa. Google Workspace permite senha de app ou OAuth; o Microsoft 365 vem desativando o envio
+simples (SMTP com senha) e pede OAuth, que dá mais trabalho. O link do e-mail aponta para o endereço do sistema, então só abre
+dentro do escritório ou pela VPN (fase 10), o que é o desejado.
 
 ### Fase 4 — HTTPS na rede interna
 
@@ -190,19 +206,50 @@ segundo polo vai precisar de VPN de qualquer jeito (fase 10), a recomendação �
 (Tailscale: `tailscale cert`, certificado público válido para o nome do computador na VPN), que todos os navegadores e celulares
 aceitam sem instalar nada. A confirmar na hora de fazer: limites do plano gratuito e o funcionamento no Windows 11 Home.
 
-### Fase 5 — Backup que sobrevive ao computador
+### Fase 5 — Backup que sobrevive ao computador (entregue em 2026-10-15)
 
-Hoje `backup.py` faz uma cópia consistente do banco todo dia às 18:30 e guarda as últimas 30 **no mesmo computador**, sem
-criptografia. Se o disco morrer, o computador for roubado ou um programa malicioso criptografar a pasta, as cópias vão junto.
+**Antes.** `backup.py` fazia uma cópia consistente do banco todo dia às 18:30 e guardava as últimas 30 no computador (ou num HD
+sempre ligado), sem criptografia. Disco queimado, roubo ou vírus levavam o banco e as cópias juntos.
 
-Plano (regra 3-2-1 adaptada): 3 cópias, 2 lugares, 1 fora do escritório.
+**Por que dois pen-drives, e não um.** Um só fica plugado e cai junto (vírus, roubo, incêndio); pen-drive barato falha sem
+avisar; e, enquanto grava, ele é a única cópia fora do computador. Por isso **dois em rodízio**: um plugado no servidor, o outro
+**guardado trancado**, trocados toda semana. O usuário decidiu guardar o segundo **na gaveta trancada do escritório** (2026-10-15):
+isso protege de vírus, de erro e de pen-drive que estraga, mas **não de incêndio, alagamento ou roubo do escritório inteiro**
+(fica registrado como risco aceito; levar o pen-drive guardado para casa uma vez por mês fecha essa lacuna).
 
-- Cópia **criptografada** (arquivo com senha, AES-256) gerada logo depois do backup diário, para um **pen-drive ou HD externo** em
-  **rodízio de 3 mídias**, sempre uma guardada **fora do escritório** (casa do coordenador).
-- A **senha da criptografia fica anotada em papel, em lugar seguro**, nunca no mesmo computador. Perdê-la é perder o backup.
-- **Teste de restauração** a cada 3 meses, num computador à parte, com checklist. Backup que nunca foi restaurado é uma esperança.
-- Aviso na página inicial quando a cópia externa passar de N dias sem ser trocada (já existe o aviso do backup local).
-- Custo: 3 pen-drives (cerca de R$ 60 cada).
+**O que foi feito** (`copia_externa.py`, `backup.py`, `implantacao/configurar-backup-externo.ps1`):
+
+- A cópia vai **criptografada** (AES-256-GCM, chave tirada de uma frase de recuperação pelo scrypt) e comprimida; trocar um byte
+  ou errar a frase é detectado. Quem achar o pen-drive não lê nada.
+- A **frase de recuperação** (24 letras e números sem ambiguidade) é gerada uma vez, aparece uma vez na tela para ser anotada **em
+  papel** e fica guardada no servidor (`instance/backup_chave.txt`, acesso só do SISTEMA e dos administradores) para a tarefa
+  automática poder criptografar. Para restaurar em outro computador basta o arquivo e a frase do papel; o sistema novo guarda a
+  mesma frase com `-FraseExistente`, conferindo que ela abre uma cópia do rodízio.
+- **Conferida na hora**: depois de gravar, o arquivo é aberto de novo, descriptografado e o banco de dentro é conferido
+  (integridade e número de registros). Cópia que não abre é apagada do pen-drive.
+- **Rodízio reconhecido pelo sistema**: cada pen-drive é *preparado* uma vez (pastinha `prontuario-backup` com um código próprio) e
+  é reconhecido em qualquer porta ou letra. A cópia externa nunca vai para o disco do próprio computador. O sistema anota desde
+  quando cada um está plugado.
+- **Histórico**: em cada pen-drive ficam as cópias dos últimos 14 dias, uma por semana nas 8 semanas seguintes e uma por mês até
+  1 ano.
+- **Tarefas**: o backup das 18:30 leva a cópia externa junto; a tarefa *Prontuario - copia externa* roda de hora em hora das 8h às
+  20h e cobre o pen-drive plugado depois. **Falha da cópia externa nunca cancela o backup do dia nem a atualização.**
+- **Avisos na página inicial** (no servidor do escritório): cópia externa não configurada; nenhum pen-drive preparado; mais de 3
+  dias sem cópia ("o pen-drive está plugado?"); mesmo pen-drive plugado há 7 dias ou mais ("leve o A para fora e plugue o B");
+  os dois plugados ao mesmo tempo; teste de restauração por fazer (depois de 7 dias) e a cada ~100 dias.
+- **Cadastros > Backup** (só administrador): cada pen-drive, desde quando está plugado, última cópia, backup do dia, teste de
+  restauração e pendências.
+- **Teste de restauração** (`backup.py --testar-restauracao`): abre a cópia mais nova com a frase **digitada do papel**, o que
+  prova que o papel está certo e que o backup serve, e anota a data. **Restaurar** (`--restaurar ARQ.pbk --para NOVO.db`) só
+  grava se o banco de dentro estiver íntegro. O passo a passo para imprimir está em `implantacao/RESTAURAR.md`.
+
+**Limites** (por isso as outras fases): quem ganhar acesso de administrador no servidor lê a frase guardada nele (a criptografia
+protege o pen-drive perdido ou roubado, não o servidor invadido); o backup do dia (`.db`) continua sem criptografia no
+computador ou no HD fixo; e depende de uma pessoa trocar o pen-drive toda semana (o sistema avisa, mas não troca sozinho).
+
+**Como conferir.** `teste_copia_externa.py` (118 verificações: ida e volta byte a byte, byte trocado em cada parte, frase errada,
+arquivo cortado, banco grande, pen-drive clonado, disco cheio, cópia que não abre, retenção, rodízio, avisos, comandos
+interativos) e `teste_backup_externo_app.py` (25: página inicial e tela de backup).
 
 ### Fase 6 — Servidor Windows, rede e roteador
 
@@ -283,7 +330,8 @@ fazer, porque depende das fases 2, 3 e 4 (pré-requisitos acima) e do backup ext
 | Agora | Revisar a grade de **Cadastros > Permissões** e ajustar o que cada nível pode; conferir que cada pessoa está no nível certo |
 | Agora | Conferir se algum login ainda é compartilhado ("escritório", "recepção"). Um usuário por pessoa |
 | Agora | Desativar o funcionário de quem saiu da casa (o login deixa de entrar na hora) |
-| Fase 5 | Comprar 3 pen-drives (ou HDs), definir quem troca e quem guarda a mídia fora do escritório; guardar a senha do backup em papel |
+| Fase 5 | Comprar **2 pen-drives** (marca conhecida, 32 GB bastam), rodar `configurar-backup-externo.ps1`, **anotar a frase em papel e guardar fora do computador**, preparar cada pen-drive e combinar quem troca na sexta (o pen-drive que sai do computador vai para a gaveta trancada) |
+| Fase 5 | A cada 3 meses, fazer o teste de restauração (2 minutos, `implantacao/RESTAURAR.md`) |
 | Fase 6 | Seguir o roteiro do Windows e do roteador |
 | Fase 4 | Instalar o certificado em cada computador (e celular, se houver) |
 | Fase 10 | Instalar a VPN no computador do escritório e em cada aparelho que for acessar de fora |
@@ -294,16 +342,22 @@ fazer, porque depende das fases 2, 3 e 4 (pré-requisitos acima) e do backup ext
 **Respondidas em 2026-10-15**
 
 1. Os polos compartilham exatamente as mesmas informações (fase 10, opção A, sem campo "polo"); o polo 2 tem computadores e internet.
-2. Celular e todos os navegadores: o HTTPS usa o certificado da VPN (fase 4).
-3. Grade de fábrica: unificar e cadastros só do administrador; parcelas ficam com o operador.
-4. Níveis: ficam Administrador, Operador e Consulta; o administrador reorganiza na tela quando precisar.
+2. Celular e todos os navegadores: o HTTPS usa o certificado da VPN (fase 4). A VPN terá **3 aparelhos**: 2 computadores (um por
+   polo) e 1 celular móvel; cabe no plano gratuito (conferir os limites atuais na hora).
+3. Grade de fábrica: unificar e cadastros só do administrador; parcelas ficam com o operador. Níveis: Administrador, Operador e
+   Consulta; o administrador reorganiza na tela quando precisar.
+4. Auditoria: registrar tudo, com tela dentro do sistema que só o administrador vê (fase 2).
+5. Tempo ocioso: sim (fase 3). Validação de e-mail, "esqueci minha senha" e bloqueio após 5 erros: sim (fase 3; o bloqueio já existe).
+6. O pen-drive que sai do computador fica **na gaveta trancada do escritório** (risco aceito: não protege de incêndio nem de roubo do
+   escritório inteiro).
+7. O e-mail institucional é da **Hostinger** (envio por SMTP com senha: mais simples que o Microsoft 365).
 
 **Em aberto**
 
-1. Fase 2: registrar **toda abertura de ficha**, ou só documentos, acolhimento social e alterações? (Sugestão: tudo.)
-2. Fase 3: **tempo ocioso** de 30 minutos serve? **Segundo fator** para o administrador, sim ou não?
-3. Fase 5: existe um lugar fora do escritório para guardar uma das mídias de backup?
-4. Fase 10: quantos aparelhos vão entrar na VPN (computadores dos dois polos e celulares)? Define se o plano gratuito basta.
+1. Qual **caixa de e-mail** o sistema usa para enviar (por exemplo, sistema@seudominio) e quem recebe o lembrete de troca do
+   pen-drive? (A senha dela é digitada por você no servidor, nunca no código nem no repositório.)
+2. Fase 3: **segundo fator** (app autenticador no celular) para o administrador, sim ou não? A recomendação é sim, e passa a ser
+   necessário para redefinir a senha do administrador pelo e-mail.
 
 ## 7. Referências
 

@@ -14,6 +14,7 @@ from datetime import date, datetime, timedelta
 
 from flask import current_app, url_for
 
+import copia_externa
 import servico_social
 from banco import arquivo_ultimo_backup
 from modelos import ENVELOPE_PENDENTE, AvisoDispensado, Internacao, Pessoa, db
@@ -31,6 +32,8 @@ CATEGORIA_ACOLHIMENTO = "Acolhimento social a finalizar"        # a triagem já 
 # prazo sem backup, a página inicial avisa. 3 dias cobrem um fim de semana prolongado com o computador desligado.
 PRAZO_BACKUP = timedelta(days=3)
 CATEGORIA_BACKUP = "Backup do banco"
+# Cópia criptografada em pen-drives em rodízio (copia_externa.py): não configurada, pen-drive fora, hora de trocar, teste por fazer
+CATEGORIA_BACKUP_EXTERNO = "Cópia externa do backup"
 
 
 @dataclass
@@ -149,12 +152,13 @@ def gerar_avisos(pode_servico_social=False):
     dispensados = set(db.session.execute(db.select(AvisoDispensado.chave)).scalars())
     avisos = [a for a in avisos if a.chave not in dispensados]
     avisos.extend(a for a in (_aviso_do_backup(),) if a)
+    avisos.extend(_avisos_do_backup_externo())
 
     grupos = defaultdict(list)
     for a in avisos:
         grupos[a.categoria].append(a)
     # o backup, o envelope pendente e o acolhimento social são tarefas, não correções de cadastro: vêm primeiro
-    tarefas = (CATEGORIA_BACKUP, CATEGORIA_ENVELOPE, CATEGORIA_REJEICAO, CATEGORIA_ACOLHIMENTO)
+    tarefas = (CATEGORIA_BACKUP, CATEGORIA_BACKUP_EXTERNO, CATEGORIA_ENVELOPE, CATEGORIA_REJEICAO, CATEGORIA_ACOLHIMENTO)
     return dict(sorted(grupos.items(), key=lambda g: (g[0] not in tarefas, g[0])))
 
 
@@ -172,6 +176,14 @@ def _aviso_do_backup():
         texto = (f"O último backup do banco foi em {ultimo:%d/%m/%Y %H:%M}. "
                  "Confira a tarefa de backup do Windows e o disco de destino (veja implantacao/LEIA-ME.md).")
     return Aviso(CATEGORIA_BACKUP, texto, "", "backup", dispensavel=False)
+
+
+def _avisos_do_backup_externo():
+    """Só no servidor do escritório (AVISAR_BACKUP=1), como o aviso do backup do dia: o que falta na cópia externa criptografada."""
+    if os.environ.get("AVISAR_BACKUP") != "1":
+        return []
+    return [Aviso(CATEGORIA_BACKUP_EXTERNO, texto, "", chave, dispensavel=False)        # sem botão: o botão dos avisos é "Abrir ficha"
+            for chave, _, texto in copia_externa.pendencias(current_app.instance_path)]
 
 
 def dias_de_espera(internacao, hoje=None):

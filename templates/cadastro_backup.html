@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% from "_abas_cadastros.html" import abas with context %}
+{% from "_voltar.html" import linha_voltar with context %}
+{% from "_cartao.html" import cartao %}
+
+{% block titulo %}Cadastros · Backup{% endblock %}
+
+{% block estilo %}
+  .backup-grade { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 0 var(--e4); align-items: start; }
+  @media (max-width: 1000px) { .backup-grade { grid-template-columns: minmax(0, 1fr); } }
+  .situacao-linha { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .situacao-linha span:not(.selo) { color: var(--suave); font-size: .9rem; }
+  .pendencias { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+  .pendencias li { padding: 10px 12px; background: var(--atencao-suave); border: 1px solid var(--atencao-borda); border-radius: var(--r-sm); color: var(--texto); font-size: .9rem; }
+  .pen-lista { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  .pen-lista th { text-align: left; padding: 8px 10px; color: var(--suave); font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--borda); white-space: nowrap; }
+  .pen-lista td { padding: 11px 10px; border-bottom: 1px solid var(--borda); vertical-align: top; }
+  .pen-lista tr:last-child td { border-bottom: 0; }
+  .pen-lista .nome { font-weight: 600; }
+  .pen-lista small { display: block; color: var(--suave); font-size: .8rem; margin-top: 2px; word-break: break-all; }
+  .rolagem { overflow-x: auto; }
+  .contagem { margin: 8px 0 0; color: var(--suave); font-size: .84rem; }
+  @media (max-width: 760px) {
+    .pen-lista thead { display: none; }
+    .pen-lista, .pen-lista tbody, .pen-lista tr { display: block; }
+    .pen-lista tr { padding: 10px 0; border-bottom: 1px solid var(--borda); }
+    .pen-lista tr:last-child { border-bottom: 0; }
+    .pen-lista td { display: block; padding: 3px 0; border: 0; }
+    .pen-lista td[data-rotulo]::before { content: attr(data-rotulo) ": "; color: var(--suave); font-size: .8rem; }
+  }
+{% endblock %}
+
+{% block conteudo %}
+<main class="largo">
+  {{ linha_voltar(url_for('home')) }}
+  <div class="pagina-topo">
+    <div class="titulo">
+      <h1>Cadastros</h1>
+    </div>
+  </div>
+
+  {% with msgs = get_flashed_messages() %}
+    {% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
+  {% endwith %}
+
+  {{ abas('backup') }}
+
+  <div class="backup-grade">
+    <div>
+      {% call cartao('Pen-drives em rodízio', 'baixar', 'azul') %}
+        {% if not externo.configurado %}
+          <div class="vazio"><span class="icone-vazio"><svg class="icone"><use href="#i-baixar"/></svg></span>A cópia externa criptografada ainda não foi configurada.</div>
+        {% elif not externo.midias %}
+          <div class="vazio"><span class="icone-vazio"><svg class="icone"><use href="#i-baixar"/></svg></span>Nenhum pen-drive foi preparado ainda.</div>
+        {% else %}
+          <div class="rolagem">
+          <table class="pen-lista">
+            <thead><tr><th>Pen-drive</th><th>No computador desde</th><th>Última cópia</th><th>Arquivo</th></tr></thead>
+            <tbody>
+              {% for m in externo.midias %}
+              <tr>
+                <td class="nome" data-rotulo="Pen-drive">{{ m.nome }}
+                  <small>{% if m.no_computador %}<span class="selo ativo">Plugado agora</span>{% else %}<span class="selo">Fora do computador</span>{% endif %}</small></td>
+                <td data-rotulo="No computador desde">{% if m.atual and m.desde %}{{ m.desde.strftime('%d/%m/%Y') }} · {{ m.dias_no_computador }} dia{{ '' if m.dias_no_computador == 1 else 's' }}{% else %}—{% endif %}</td>
+                <td data-rotulo="Última cópia">{{ m.ultima_copia.strftime('%d/%m/%Y %H:%M') if m.ultima_copia else 'nenhuma' }}</td>
+                <td data-rotulo="Arquivo">{{ m.arquivo or '—' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          </div>
+          {% if externo.vistas_em %}<p class="contagem">Pen-drives conferidos pela última vez em {{ externo.vistas_em.strftime('%d/%m/%Y às %H:%M') }}.</p>{% endif %}
+        {% endif %}
+      {% endcall %}
+    </div>
+
+    <aside>
+      {% call cartao('Backup do dia', 'ok', 'verde' if ultimo_backup and (agora - ultimo_backup).days <= 3 else 'amarelo') %}
+        <div class="situacao-linha">
+          {% if ultimo_backup and (agora - ultimo_backup).days <= 3 %}<span class="selo ativo">Em dia</span>
+          {% elif ultimo_backup %}<span class="selo desistiu">Atrasado</span>
+          {% else %}<span class="selo desistiu">Sem registro</span>{% endif %}
+          {% if ultimo_backup %}<span>último em {{ ultimo_backup.strftime('%d/%m/%Y às %H:%M') }}</span>{% endif %}
+        </div>
+      {% endcall %}
+
+      {% call cartao('Teste de restauração', 'documento', 'verde' if externo.ultimo_teste else 'amarelo') %}
+        <div class="situacao-linha">
+          {% if externo.ultimo_teste %}<span class="selo ativo">Feito</span><span>em {{ externo.ultimo_teste.strftime('%d/%m/%Y às %H:%M') }}</span>
+          {% else %}<span class="selo lista_espera">Nunca feito</span>{% endif %}
+        </div>
+        {% if externo.ultimo_teste %}
+          <p class="contagem">Abriu {{ externo.ultimo_teste_arquivo }}{% if externo.ultimo_teste_registros %} · {{ externo.ultimo_teste_registros.get('pessoas', 0) }} pessoas, {{ externo.ultimo_teste_registros.get('internacoes', 0) }} internações{% endif %}.</p>
+        {% endif %}
+      {% endcall %}
+
+      {% call cartao('Pendências', 'alerta', 'amarelo' if externo.pendencias else 'verde') %}
+        {% if externo.pendencias %}
+          <ul class="pendencias">{% for p in externo.pendencias %}<li>{{ p.texto }}</li>{% endfor %}</ul>
+        {% else %}
+          <div class="situacao-linha"><span class="selo ativo">Tudo em dia</span></div>
+        {% endif %}
+      {% endcall %}
+    </aside>
+  </div>
+</main>
+{% endblock %}

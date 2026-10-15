@@ -74,6 +74,7 @@ GRUPOS = (
     Grupo("Só o administrador", "cadeado", "neutro", (
         Permissao("acessos", "Criar usuários, trocar senhas e definir níveis e permissões", "Cadastros > Funcionários, Níveis e Permissões", padrao=0, fixa=True),
         Permissao("lixeira", "Restaurar da lixeira e apagar de vez", "O que os outros excluíram", padrao=0, fixa=True),
+        Permissao("backup", "Ver a situação do backup e dos pen-drives", "Cadastros > Backup", padrao=0, fixa=True),
     )),
 )
 
@@ -197,7 +198,7 @@ REGRAS = {
     "lista_niveis": "cadastros", "lista_permissoes": "cadastros",
 
     "novo_nivel": "acessos", "editar_nivel": "acessos", "mover_nivel": "acessos", "salvar_permissoes": "acessos",
-    "lixeira": "lixeira", "restaurar_registro": "lixeira", "apagar_registro": "lixeira",
+    "lixeira": "lixeira", "restaurar_registro": "lixeira", "apagar_registro": "lixeira", "pagina_backup": "backup",
 }
 
 

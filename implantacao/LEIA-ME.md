@@ -74,11 +74,65 @@ registros (`logs`) ficam com acesso só do SISTEMA, dos administradores e de que
 - **A página inicial avisa** ("Backup do banco") se passarem mais de 3 dias sem backup. Quando aparecer, veja
   `C:\prontuario\logs\backup.log`: o motivo mais comum é o HD externo desconectado.
 - Para fazer um backup na hora: `.\.venv\Scripts\python.exe backup.py`.
-- Os arquivos de backup têm **dados pessoais** e não são criptografados: guarde o HD em lugar fechado e não envie para
-  Drive/OneDrive sem criptografar.
+- Os arquivos desta pasta (`internos-*.db`) têm **dados pessoais** e **não são criptografados**: guarde o HD em lugar
+  fechado e não envie para Drive/OneDrive. Eles protegem de erro e de arquivo estragado; **não** protegem de roubo, incêndio
+  ou vírus que atinjam o computador e o HD juntos. Para isso existe a cópia externa, abaixo.
 - **Nunca copie `internos.db` na mão** com o sistema ligado; use o `backup.py`.
 
-**Restaurar** (com o sistema parado):
+### Cópia externa criptografada, em dois pen-drives em rodízio
+
+Um pen-drive só não basta: se ele fica plugado, um vírus, um roubo ou um incêndio levam o banco e a cópia juntos; pen-drive
+barato falha sem avisar; e, enquanto grava, ele é a única cópia fora do computador. Por isso são **dois**: um fica plugado
+no servidor e o outro **guardado, trancado** (a gaveta trancada do escritório foi a escolha da casa), e **trocam de lugar toda
+semana**. A gaveta protege de vírus, de erro e de pen-drive que estraga; **não protege de incêndio, alagamento nem de roubo do
+escritório inteiro**. Se um dia der, levar o pen-drive guardado para casa uma vez por mês resolve isso.
+
+- A cópia vai **criptografada** (AES-256) e **conferida na hora**: o sistema abre o arquivo de novo e confere o banco. Quem
+  achar o pen-drive não lê nada. Ficam as cópias dos últimos 14 dias, uma por semana nas 8 semanas seguintes e uma por mês
+  até 1 ano.
+- A chave é uma **frase de recuperação** de 24 letras e números. Ela aparece **uma única vez**, na configuração: anote **em
+  papel** e guarde fora do computador (não tire foto, não salve em arquivo). **Sem ela as cópias dos pen-drives não abrem.**
+
+**Configurar (uma vez)**, no servidor, com o PowerShell **como administrador**:
+
+```powershell
+cd C:\prontuario
+powershell -ExecutionPolicy Bypass -File implantacao\configurar-backup-externo.ps1
+```
+
+Ele mostra a frase (anote!), guarda uma cópia dela no servidor (só o SISTEMA e os administradores leem; é o que deixa a tarefa
+automática criptografar) e cria a tarefa **Prontuario - copia externa** (das 8h às 20h, de hora em hora). Depois, **prepare
+cada pen-drive**, um de cada vez, com ele plugado (veja a letra no Explorador de Arquivos):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File implantacao\configurar-backup-externo.ps1 -PrepararMidia E: -Nome A
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File implantacao\configurar-backup-externo.ps1 -PrepararMidia F: -Nome B
+```
+
+O sistema reconhece cada pen-drive pelo código da pastinha `prontuario-backup` que ele ganha, em qualquer porta ou letra.
+Nunca é usado o disco do próprio computador.
+
+**Rotina semanal (5 minutos):** na **sexta, depois das 18:30**, tire o pen-drive que está plugado, guarde-o na gaveta trancada e
+plugue o outro. Quem troca não precisa lembrar sozinho: a **página inicial** avisa quando o mesmo pen-drive passa de 7 dias
+plugado, quando falta plugar o pen-drive (mais de 3 dias sem cópia) e quando os dois estão plugados ao mesmo tempo. A tela
+**Cadastros > Backup** (só o administrador) mostra cada pen-drive, desde quando está plugado e a última cópia.
+
+**Teste de restauração (a cada 3 meses):** com um pen-drive plugado, no servidor:
+
+```powershell
+cd C:\prontuario
+.\.venv\Scripts\python.exe backup.py --testar-restauracao
+```
+
+Digite a frase **do papel**. O teste abre a cópia mais nova e confere o banco: prova que o papel está certo e que o backup
+serve. A página inicial cobra o primeiro teste depois de 7 dias e um novo a cada ~100 dias.
+
+**Se o computador morrer**, ou para restaurar: `implantacao\RESTAURAR.md` (imprima e guarde junto da folha da frase).
+
+**Restaurar** do backup do dia (com o sistema parado; para restaurar de um pen-drive, veja `RESTAURAR.md`):
 
 ```powershell
 Stop-ScheduledTask "Prontuario - servidor"

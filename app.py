@@ -21,6 +21,7 @@ Telas:
     /cadastros/niveis               níveis de acesso, em cascata (do que tem mais acesso para o que tem menos); o
                                     primeiro é o do administrador, e só ele altera os níveis
     /cadastros/permissoes           o que cada nível pode fazer (nível mínimo de cada permissão); só o administrador altera
+    /cadastros/backup               (administrador) o backup do dia, os pen-drives em rodízio e o teste de restauração
     /internacoes/<id>/prontuario    baixa o .docx
     /internacoes/<id>/impressos     os impressos da triagem (pedido de exames, enxoval) e da internação (prontuário, manual
                                     de orientação, ficha multiprofissional, capa do envelope, relatório do Serviço Social)
@@ -38,6 +39,7 @@ Organização:
     modelos.py     tabelas (pessoas, internacoes, parcelas)
     servicos.py    regras de negócio: validar, gravar, mudar status, parcelas
     avisos.py      quadro de avisos
+    copia_externa.py  cópia criptografada do backup em pen-drives em rodízio (usada pelo backup.py)
     permissoes.py  o que cada nível de acesso pode fazer e a regra de cada rota (nega por padrão)
     catalogo.py    o que o sistema sabe de cada convênio (lido do cadastro, uma vez por requisição)
     cadastros.py   cadastros de convênios e de funcionários
@@ -63,7 +65,7 @@ verdade (gunicorn app:app) — `python app.py` é só para uso local.
 """
 
 import os
-from datetime import date
+from datetime import date, datetime
 
 from flask import (Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file,
                    session, url_for)
@@ -73,6 +75,7 @@ import autenticacao
 import banco
 import cadastros as cadastros_
 import catalogo
+import copia_externa
 import declaracoes
 import documentos
 import exclusao
@@ -83,6 +86,7 @@ import relatorios
 import servico_social
 import servicos
 from avisos import dias_de_espera, gerar_avisos, tempo_decorrido
+from banco import arquivo_ultimo_backup
 from modelos import (ENVELOPE_RECEBIDO, STATUS_INTERNACAO, STATUS_TRIAGEM, AvisoDispensado, Convenio, Funcionario,
                      Internacao, NivelAcesso, Parcela, Pessoa, db)
 from migracoes import migrar
@@ -832,6 +836,16 @@ def lista_niveis():
         db.select(Funcionario.nivel_id, db.func.count()).filter(Funcionario.ativo.is_(True)).group_by(Funcionario.nivel_id))}
     return render_template("cadastro_niveis.html", niveis=cadastros_.niveis(), funcionarios_por_nivel=em_uso,
                            pode_acessos=cadastros_.pode_gerenciar_acessos(g.usuario))
+
+
+# A situação do backup (só o administrador): o do dia, os pen-drives em rodízio e o teste de restauração (copia_externa.py).
+@app.get("/cadastros/backup")
+def pagina_backup():
+    try:
+        ultimo = datetime.fromisoformat(arquivo_ultimo_backup(app.instance_path).read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        ultimo = None
+    return render_template("cadastro_backup.html", externo=copia_externa.resumo(app.instance_path), ultimo_backup=ultimo, agora=datetime.now())
 
 
 # O que cada nível pode fazer (permissoes.py). Quem tem "cadastros" vê; só o administrador ("acessos") altera.
