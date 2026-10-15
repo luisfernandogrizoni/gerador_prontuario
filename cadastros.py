@@ -209,10 +209,12 @@ def validar_funcionario(form, funcionario=None, pode_acessos=True):
     if funcionario is not None and funcionario.padrao and not padrao:
         erros["padrao"] = "Para trocar quem assina por padrão, marque a outra pessoa como padrão."
     registro = (form.get("registro_profissional") or "").strip()
+    # quem é (ou vai ser) assistente social: o administrador decide pela marca; para os outros vale a que já está no cadastro
+    eh_social = form.get("servico_social") == "1" if pode_acessos else bool(funcionario is not None and funcionario.servico_social)
     if len(registro) > 30:
         erros["registro_profissional"] = "O registro pode ter até 30 caracteres."
-    elif pode_acessos and form.get("servico_social") == "1" and not registro:
-        erros["registro_profissional"] = "Informe o registro profissional (CRESS): ele assina o relatório."
+    elif eh_social and not registro:
+        erros["registro_profissional"] = "Informe o registro profissional (CRESS): ele assina os documentos e o relatório da assistente social."
     if pode_acessos:
         erros.update(_validar_acesso(form, funcionario, ativo))
     return erros
@@ -281,9 +283,36 @@ def frase_do_acesso(form, pode, login):
     return ""
 
 
+class ErroDeAssinatura(Exception):
+    """Quem ia assinar é assistente social e está sem o CRESS no cadastro: o documento não sai sem ele."""
+
+
+MENSAGEM_SEM_CRESS = ("O seu CRESS não está no cadastro de funcionários, e a assistente social assina com ele. "
+                      "Peça ao administrador para preenchê-lo em Cadastros > Funcionários.")
+
+
+def sem_registro(funcionario):
+    """Assistente social (marca 'Assina o Serviço Social') sem o registro profissional (CRESS) no cadastro."""
+    return bool(funcionario is not None and funcionario.servico_social and not (funcionario.registro_profissional or "").strip())
+
+
+def registro_pendente(usuario):
+    """Quem está logado é assistente social e está sem o CRESS no cadastro (não pode finalizar nem escrever adendo)."""
+    return sem_registro(funcionario_do_usuario(usuario))
+
+
+def rotulo_do_emissor(funcionario):
+    """Como a pessoa aparece na lista de quem assina: 'Nome — cargo · CRESS' (e o aviso, se for assistente social sem o CRESS)."""
+    texto = f"{funcionario.nome} — {funcionario.cargo}"
+    if (funcionario.registro_profissional or "").strip():
+        texto += f" · {funcionario.registro_profissional.strip()}"
+    return texto + (" (falta o CRESS)" if sem_registro(funcionario) else "")
+
+
 def emissor_para(usuario=None, escolhido_id=None):
     """Quem assina o documento: o escolhido na tela; senão o funcionário do usuário que está logado; senão o
-    padrão; senão o primeiro ativo; senão o de fábrica. Devolve (Emissor, id do funcionário ou None)."""
+    padrão; senão o primeiro ativo; senão o de fábrica. Devolve (Emissor, id do funcionário ou None). Quem tem registro
+    profissional assina com ele; assistente social sem o CRESS no cadastro não assina (ErroDeAssinatura)."""
     ativos = db.session.execute(db.select(Funcionario).filter_by(ativo=True).order_by(Funcionario.id)).scalars().all()
     escolhido = next((f for f in ativos if f.id == escolhido_id), None) if escolhido_id else None
     if escolhido is None and usuario is not None:
@@ -292,7 +321,10 @@ def emissor_para(usuario=None, escolhido_id=None):
         escolhido = next((f for f in ativos if f.padrao), ativos[0] if ativos else None)
     if escolhido is None:
         return Emissor(), None
-    return Emissor(escolhido.nome, escolhido.cargo), escolhido.id
+    if sem_registro(escolhido):
+        raise ErroDeAssinatura(f"O cadastro de {escolhido.nome} (Serviço Social) está sem o CRESS, que assina junto do nome. "
+                               "Preencha em Cadastros > Funcionários (o administrador) ou escolha outra pessoa para assinar.")
+    return Emissor(escolhido.nome, escolhido.cargo, (escolhido.registro_profissional or "").strip()), escolhido.id
 
 
 # ================================================================ níveis de acesso

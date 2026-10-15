@@ -166,6 +166,12 @@ def pagina_de_erro(erro):
     return render_template("erro.html", codigo=erro.code, titulo=titulo, texto=texto), erro.code
 
 
+@app.errorhandler(cadastros_.ErroDeAssinatura)
+def assinatura_sem_registro(erro):
+    """A assistente social escolhida para assinar está sem o CRESS no cadastro: o documento não sai sem ele."""
+    return render_template("erro.html", codigo=409, titulo="Falta o CRESS na assinatura", texto=str(erro)), 409
+
+
 @app.errorhandler(Exception)
 def erro_interno(erro):
     """Erro de verdade (um bug): registra o que aconteceu e mostra a página, sem detalhe técnico. Em desenvolvimento
@@ -471,7 +477,7 @@ def _barra(emissor_id, colunas=()):
     e os botões de colunas do relatório anual. `colunas` = [(convênio, ativa, endereço de quem clicar), ...]."""
     ativos = [f for f in cadastros_.funcionarios() if f.ativo]
     return {"emissor_id": emissor_id,
-            "emissores": [(f.id, f"{f.nome} — {f.cargo}") for f in ativos] if len(ativos) > 1 else [],
+            "emissores": [(f.id, cadastros_.rotulo_do_emissor(f), cadastros_.sem_registro(f)) for f in ativos] if len(ativos) > 1 else [],
             "colunas": [{"nome": c.nome_tela, "tipo": c.cor, "ativa": ativa, "url": url} for c, ativa, url in colunas],
             "manter": {k: v for k, v in request.args.items() if k == "colunas"}}
 
@@ -577,6 +583,8 @@ def relatorio_social(id):
         return redirect(url_for("ver_impressos", id=id, itens="relatorio-social"))
     if request.method == "POST":
         acao = request.form.get("acao")
+        if acao == "finalizar" and cadastros_.registro_pendente(g.get("usuario")):       # finalizar assina com o CRESS: sem ele, não
+            return _tela_relatorio(internacao, request.form, {"_": cadastros_.MENSAGEM_SEM_CRESS}, 400)
         _, erros = servicos.salvar_relatorio_social(internacao, request.form, _nome_do_usuario(), finalizar=acao == "finalizar",
                                                     assinatura=cadastros_.assinatura_do_usuario(g.get("usuario")))
         if erros:
@@ -597,6 +605,9 @@ def adendo_social(id):
     internacao = _buscar(Internacao, id)
     if not _pode_servico_social():
         return _so_servico_social(id)
+    if cadastros_.registro_pendente(g.get("usuario")):          # o adendo também leva a assinatura, com o CRESS
+        flash(cadastros_.MENSAGEM_SEM_CRESS)
+        return redirect(url_for("ficha", id=id) + "#acolhimento")
     erro = servicos.adicionar_adendo(internacao, request.form.get("texto"), cadastros_.assinatura_do_usuario(g.get("usuario")))
     flash(erro or "Adendo registrado.")
     return redirect(url_for("ficha", id=id) + "#acolhimento")

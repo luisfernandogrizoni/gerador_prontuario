@@ -6,8 +6,8 @@
 {% block titulo %}{{ 'Editar funcionário' if funcionario else 'Novo funcionário' }}{% endblock %}
 
 {% block estilo %}
-  .botoes-form { margin-top: 4px; }
-  .caixas { display: grid; gap: 10px; }
+  .caixas { display: grid; gap: 12px; }
+  .grade + .caixas { margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--borda); }      /* as opções ficam à parte dos campos, sem encostar neles */
 {% endblock %}
 
 {% block conteudo %}
@@ -15,7 +15,8 @@
   {{ linha_voltar(url_for('lista_funcionarios')) }}
   <h1>{{ 'Editar funcionário' if funcionario else 'Novo funcionário' }}</h1>
 
-  <form class="estreito" method="post" autocomplete="off">
+  <div class="form-grade">
+  <form data-indice method="post" autocomplete="off">
     {% if erros %}<div class="caixa-erros"><strong>Confira os campos marcados em vermelho.</strong></div>{% endif %}
     <fieldset class="tom-azul">
       {{ legenda('Funcionário', 'usuario') }}
@@ -29,8 +30,9 @@
       {{ legenda('Acesso ao sistema', 'cadeado') }}
       {% if pode_acessos %}
       <div class="grade">
-        {{ f.escolha('nivel_id', 'Nível de acesso', niveis, 'c2', obrig=true, vazio=none) }}
-        {{ f.escolha('usuario', 'Usuário de login', usuarios, 'c2', vazio='Sem acesso') }}
+        {# a linha de cima sempre fecha em 6 colunas: com login já criado não há "Criar um usuário novo", e os dois campos dividem a linha #}
+        {{ f.escolha('nivel_id', 'Nível de acesso', niveis, 'c3' if login_atual else 'c2', obrig=true, vazio=none) }}
+        {{ f.escolha('usuario', 'Usuário de login', usuarios, 'c3' if login_atual else 'c2', vazio='Sem acesso') }}
         {% if not login_atual %}
           {{ f.entrada('novo_usuario', 'Criar um usuário novo', 'c2', attrs={'maxlength': 50, 'autocapitalize': 'none', 'spellcheck': 'false', 'autocomplete': 'off'}) }}
         {% endif %}
@@ -68,9 +70,12 @@
       </div>
     </fieldset>
 
-    <div class="botoes-form">
+    <div class="barra-salvar">
       <button class="botao" type="submit">{{ 'Salvar alterações' if funcionario else 'Cadastrar funcionário' }}</button>
+      <span class="estado-form" hidden>Alterações não salvas</span>
     </div>
   </form>
+  </div>
 </main>
+<script src="{{ url_for('static', filename='secoes.js') }}"></script>
 {% endblock %}

@@ -190,6 +190,7 @@ class Assinatura:
     cargo: str = EMISSOR_CARGO
     papel: str = "Responsável pela emissão"
     antes: float = 40
+    registro: str = ""                 # registro profissional (CRESS...): sai embaixo do cargo sempre que a pessoa tem
 
 
 @dataclass
@@ -285,6 +286,7 @@ class Emissor:
     """Quem assina como responsável pela emissão (vem do cadastro de funcionários)."""
     nome: str = EMISSOR_NOME
     cargo: str = EMISSOR_CARGO
+    registro: str = ""                 # registro profissional (CRESS da assistente social): assina junto do nome
 
 
 def fecho(hoje, emissor=None):
@@ -292,7 +294,7 @@ def fecho(hoje, emissor=None):
     (`emissor`; sem ele, o de fábrica)."""
     emissor = emissor or Emissor()
     return [Paragrafo([f"{CIDADE}, {data_por_extenso(hoje)}."], "direita", antes=26, unido_ao_proximo=True),
-            Assinatura(nome=emissor.nome, cargo=emissor.cargo)]
+            Assinatura(nome=emissor.nome, cargo=emissor.cargo, registro=emissor.registro)]
 
 
 # ============================================================ gerador do Word
@@ -578,6 +580,8 @@ def _assinatura_docx(d, doc, bloco):
     texto("_" * 44, antes=bloco.antes)
     texto(bloco.nome, negrito=True)
     texto(bloco.cargo)
+    if bloco.registro:
+        texto(bloco.registro)
     texto(bloco.papel, italico=True).paragraph_format.keep_with_next = False
 
 
