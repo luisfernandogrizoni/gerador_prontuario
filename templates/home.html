@@ -175,6 +175,11 @@
   .atalhos a:hover .ico { background: var(--vermelho-claro); color: var(--vermelho); }
   .atalhos strong { display: block; font-size: .92rem; }
   .atalhos .seta { margin-left: auto; color: var(--mais-suave); }
+
+  /* ---- lembrete da troca do pen-drive ---- */
+  .lembrete h2 { display: flex; align-items: center; gap: 12px; font-size: 1.1rem; }
+  .lembrete .icone-lembrete { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border-radius: var(--r-md); background: var(--atencao-suave); color: var(--atencao); }
+  .lembrete p { margin: 0 0 18px; color: var(--texto); }
 {% endblock %}
 
 {% block conteudo %}
@@ -393,4 +398,14 @@
     </aside>
   </div>
 </main>
+
+{# lembrete da troca semanal do pen-drive do backup (copia_externa.lembrete_de_troca): aparece uma vez por dia em cada navegador, até a troca ser feita #}
+{% if lembrete_da_troca %}
+<dialog id="lembrete-troca" class="lembrete" data-chave="{{ lembrete_da_troca.chave }}" aria-labelledby="titulo-lembrete">
+  <h2 id="titulo-lembrete"><span class="icone-lembrete"><svg class="icone"><use href="#i-alerta"/></svg></span>{{ lembrete_da_troca.titulo }}</h2>
+  <p>{{ lembrete_da_troca.texto }}</p>
+  <div class="botoes"><button type="button" class="botao" id="lembrete-ok">Entendi</button></div>
+</dialog>
+<script src="{{ url_for('static', filename='lembrete.js') }}"></script>
+{% endif %}
 {% endblock %}

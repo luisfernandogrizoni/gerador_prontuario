@@ -116,8 +116,10 @@ O sistema reconhece cada pen-drive pelo código da pastinha `prontuario-backup` 
 Nunca é usado o disco do próprio computador.
 
 **Rotina semanal (5 minutos):** na **sexta, depois das 18:30**, tire o pen-drive que está plugado, guarde-o na gaveta trancada e
-plugue o outro. Quem troca não precisa lembrar sozinho: a **página inicial** avisa quando o mesmo pen-drive passa de 7 dias
-plugado, quando falta plugar o pen-drive (mais de 3 dias sem cópia) e quando os dois estão plugados ao mesmo tempo. A tela
+plugue o outro. Quem troca não precisa lembrar sozinho: na sexta (e em qualquer dia, se a troca ficou para trás) a **página
+inicial** abre um pop-up **"Hora de trocar o pen-drive do backup"**, uma vez por dia em cada computador, até a troca ser feita;
+na sexta de manhã ele manda esperar até as 18:45, quando o backup do dia termina. Além disso, a página inicial avisa quando o
+mesmo pen-drive passa de 7 dias plugado, quando falta plugar o pen-drive (mais de 3 dias sem cópia) e quando os dois estão plugados ao mesmo tempo. A tela
 **Cadastros > Backup** (só o administrador) mostra cada pen-drive, desde quando está plugado e a última cópia.
 
 **Teste de restauração (a cada 3 meses):** com um pen-drive plugado, no servidor:

@@ -58,7 +58,10 @@ TABELAS_ESPERADAS = ("pessoas", "internacoes", "parcelas", "usuarios")
 
 # prazos dos avisos da página inicial
 DIAS_SEM_COPIA = 3                    # sem cópia externa há mais que isso: o pen-drive está plugado?
-DIAS_PARA_TROCAR = 7                  # o mesmo pen-drive plugado há mais que isso: troque (tire-o, guarde-o trancado e plugue o outro)
+DIAS_PARA_TROCAR = 7                  # o mesmo pen-drive plugado há 7 dias (de calendário) ou mais: troque (tire-o, guarde-o trancado e plugue o outro)
+DIA_DA_TROCA = 4                      # sexta-feira (weekday(): segunda = 0): o dia combinado da troca semanal
+DIAS_MINIMOS_NA_SEXTA = 4             # na sexta, o lembrete vale para um pen-drive plugado há pelo menos 4 dias
+HORA_DA_TROCA = (18, 45)              # depois do backup das 18:30 e da cópia externa que vai junto
 DIAS_SEM_TESTE = 100                  # teste de restauração: a cada ~3 meses
 DIAS_ATE_O_PRIMEIRO_TESTE = 7
 MANTER_DIARIAS, MANTER_SEMANAS, GUARDAR_ATE_DIAS = 14, 8, 366     # cópias: todas por 14 dias, 1 por semana por 8 semanas, 1 por mês até 1 ano
@@ -510,6 +513,11 @@ def _dias(agora, quando):
     return max((agora - quando).days, 0)
 
 
+def _dias_de_calendario(agora, quando):
+    """Quantos dias do calendário se passaram (plugado na sexta às 18:50, na outra sexta de manhã já são 7)."""
+    return max((agora.date() - quando.date()).days, 0)
+
+
 def pendencias(instance=PASTA_INSTANCE, agora=None):
     """O que está faltando na cópia externa, para o quadro de avisos: lista de (chave, categoria, texto)."""
     agora = agora or datetime.now()
@@ -532,10 +540,10 @@ def pendencias(instance=PASTA_INSTANCE, agora=None):
                       f"A última cópia para o pen-drive {quando}. Ele está plugado no computador do servidor?"))
     else:
         desde = _quando(atual.get("desde"))
-        if desde and (agora - desde).days >= DIAS_PARA_TROCAR:
+        if desde and _dias_de_calendario(agora, desde) >= DIAS_PARA_TROCAR:
             outras = [m["nome"] for k, m in midias.items() if k != estado["ultima_midia"]]
             lista.append(("externo:trocar", "Cópia externa do backup",
-                          f"O pen-drive {atual.get('nome', '?')} está plugado há {_dias(agora, desde)} dias. Troque: tire-o, guarde-o trancado e plugue "
+                          f"O pen-drive {atual.get('nome', '?')} está plugado há {_dias_de_calendario(agora, desde)} dias. Troque: tire-o, guarde-o trancado e plugue "
                           + (f"o {outras[0]}." if outras else "outro: falta preparar o segundo pen-drive para o rodízio.")))
     vistas = _quando(estado["vistas_em"])
     if len(estado["vistas"]) >= 2 and vistas and (agora - vistas).days <= DIAS_SEM_COPIA:
@@ -551,6 +559,35 @@ def pendencias(instance=PASTA_INSTANCE, agora=None):
         lista.append(("externo:teste", "Cópia externa do backup",
                       f"O último teste de restauração foi em {teste:%d/%m/%Y} (há {_dias(agora, teste)} dias). Faça outro: implantacao\\RESTAURAR.md, parte Treino."))
     return lista
+
+
+def lembrete_de_troca(instance=PASTA_INSTANCE, agora=None):
+    """O pop-up da página inicial: hoje é dia de trocar o pen-drive? É na sexta (com o pen-drive plugado há 4 dias ou mais) e, se a
+    troca ficou para trás, em qualquer dia a partir do 7º. Devolve {"titulo", "texto", "chave"} ou None. A `chave` é a data de hoje: a
+    tela mostra o pop-up uma vez por dia em cada navegador, até a troca ser feita. Sem cópia recente (pen-drive fora) quem cobra é o
+    aviso 'atrasada'; sem frase ou sem pen-drive preparado, os avisos de configurar/preparar."""
+    agora = agora or datetime.now()
+    estado = carregar(instance)
+    ultima = _quando(estado["ultima_copia"])
+    if not frase_guardada(instance) or not estado["midias"] or ultima is None or (agora - ultima).days > DIAS_SEM_COPIA:
+        return None
+    atual = estado["midias"].get(estado["ultima_midia"] or "", {})
+    desde = _quando(atual.get("desde"))
+    if desde is None:
+        return None
+    dias = _dias_de_calendario(agora, desde)
+    sexta = agora.weekday() == DIA_DA_TROCA and dias >= DIAS_MINIMOS_NA_SEXTA
+    if not (sexta or dias >= DIAS_PARA_TROCAR):
+        return None
+    nome = atual.get("nome", "?")
+    outras = [m["nome"] for k, m in estado["midias"].items() if k != estado["ultima_midia"]]
+    quem = f"o pen-drive {outras[0]}" if outras else "o outro pen-drive (falta preparar o segundo para o rodízio)"
+    if (agora.hour, agora.minute) < HORA_DA_TROCA and agora.weekday() == DIA_DA_TROCA:
+        texto = (f"Hoje é dia da troca semanal. Depois das {HORA_DA_TROCA[0]}:{HORA_DA_TROCA[1]:02d}, quando o backup do dia terminar, "
+                 f"tire o pen-drive {nome}, guarde-o trancado e plugue {quem}.")
+    else:
+        texto = f"Tire o pen-drive {nome} (plugado há {dias} dias), guarde-o trancado e plugue {quem}."
+    return {"titulo": "Hora de trocar o pen-drive do backup", "texto": texto, "chave": f"{agora:%Y-%m-%d}"}
 
 
 def resumo(instance=PASTA_INSTANCE, agora=None):

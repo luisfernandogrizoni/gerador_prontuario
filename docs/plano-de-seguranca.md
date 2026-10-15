@@ -173,14 +173,18 @@ administrador). A própria consulta à auditoria também fica registrada.
   como resumo (hash) no banco; usar o link derruba as outras sessões. **Administrador não redefine sozinho pelo e-mail: exige
   também o segundo fator**, porque quem invade o e-mail não pode virar administrador. Continua valendo a redefinição pelo
   administrador (Cadastros > Funcionários).
-- **Segundo fator opcional (TOTP) para o administrador**, com app autenticador no celular (Google/Microsoft Authenticator ou
-  similar) e códigos de recuperação impressos. SMS fica de fora: o NIST deixou de aceitá-lo.
+- **Segundo fator opcional (TOTP) para o administrador**. **Não é um aplicativo para criar**: é um app gratuito que já existe
+  (Google Authenticator, Microsoft Authenticator, Authy...) e que o administrador instala no celular. O sistema mostra um QR code
+  uma vez, o app passa a gerar um número de 6 dígitos que muda a cada 30 segundos, e o sistema pede esse número depois da senha.
+  Códigos de recuperação impressos cobrem o celular perdido. SMS fica de fora: o NIST deixou de aceitá-lo.
 - Sessão derrubada quando o nível muda.
 
-**O que a parte do e-mail exige** (e por isso depende de resposta): o servidor precisa **enviar** e-mail, então precisa de uma
-conta de envio do serviço que a casa usa. Google Workspace permite senha de app ou OAuth; o Microsoft 365 vem desativando o envio
-simples (SMTP com senha) e pede OAuth, que dá mais trabalho. O link do e-mail aponta para o endereço do sistema, então só abre
-dentro do escritório ou pela VPN (fase 10), o que é o desejado.
+**O que a parte do e-mail exige**: o servidor precisa **enviar** e-mail. A casa usa a **Hostinger**, que oferece envio por SMTP
+com usuário e senha (servidor `smtp.hostinger.com`, porta 465 com SSL ou 587 com STARTTLS; conferir os dados no painel da
+Hostinger na hora): é o caso simples, sem OAuth. Precisa de uma **caixa de envio** (por exemplo `sistema@seudominio`), cuja senha
+o administrador digita **uma vez no servidor** (guardada em `instance/`, com acesso só do SISTEMA e dos administradores, nunca no
+código nem no repositório). O link do e-mail aponta para o endereço do sistema, então só abre dentro do escritório ou pela VPN
+(fase 10), o que é o desejado. A mesma estrutura manda o **lembrete da troca do pen-drive por e-mail** (fase 5).
 
 ### Fase 4 — HTTPS na rede interna
 
@@ -232,6 +236,9 @@ isso protege de vírus, de erro e de pen-drive que estraga, mas **não de incên
   quando cada um está plugado.
 - **Histórico**: em cada pen-drive ficam as cópias dos últimos 14 dias, uma por semana nas 8 semanas seguintes e uma por mês até
   1 ano.
+- **Lembrete da troca (pop-up)**: na sexta (com o pen-drive plugado há 4 dias ou mais) e, se a troca ficou para trás, em qualquer dia a
+  partir do 7º, a página inicial abre um pop-up "Hora de trocar o pen-drive do backup", uma vez por dia em cada computador até a troca
+  ser feita; na sexta de manhã manda esperar até as 18:45. A versão por **e-mail** vem com a estrutura de e-mail da fase 3.
 - **Tarefas**: o backup das 18:30 leva a cópia externa junto; a tarefa *Prontuario - copia externa* roda de hora em hora das 8h às
   20h e cobre o pen-drive plugado depois. **Falha da cópia externa nunca cancela o backup do dia nem a atualização.**
 - **Avisos na página inicial** (no servidor do escritório): cópia externa não configurada; nenhum pen-drive preparado; mais de 3
@@ -356,8 +363,8 @@ fazer, porque depende das fases 2, 3 e 4 (pré-requisitos acima) e do backup ext
 
 1. Qual **caixa de e-mail** o sistema usa para enviar (por exemplo, sistema@seudominio) e quem recebe o lembrete de troca do
    pen-drive? (A senha dela é digitada por você no servidor, nunca no código nem no repositório.)
-2. Fase 3: **segundo fator** (app autenticador no celular) para o administrador, sim ou não? A recomendação é sim, e passa a ser
-   necessário para redefinir a senha do administrador pelo e-mail.
+2. Fase 3: **segundo fator** para o administrador, sim ou não? (Usa um app gratuito que já existe no celular, não um app novo.)
+   A recomendação é sim, e passa a ser necessário para redefinir a senha do administrador pelo e-mail.
 
 ## 7. Referências
 
