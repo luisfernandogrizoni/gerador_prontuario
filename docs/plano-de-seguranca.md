@@ -25,7 +25,7 @@ com banco SQLite, sem custo de hospedagem. Isso tem uma vantagem de segurança (
 
 | Área | O que já existe | Lacuna |
 |---|---|---|
-| Entrada | Login obrigatório em toda rota; senha só como hash (scrypt); 5 erros bloqueiam o usuário por 10 min; mensagem igual para usuário inexistente e senha errada; sessão de 10 h que não renova; trocar a senha derruba as outras sessões | Sem lista de senhas fracas; senha provisória não precisa ser trocada; sem tempo ocioso; sem limite por IP; sem segundo fator |
+| Entrada | Login obrigatório em toda rota; senha só como hash (scrypt); **fase 3**: senhas fáceis barradas, senha provisória, sessão que termina em 30 min sem uso, limite por endereço, e-mail confirmado, "esqueci minha senha" e segundo fator (aplicativo autenticador); 5 erros bloqueiam o usuário por 10 min; mensagem igual para usuário inexistente e senha errada; trocar a senha derruba as outras sessões | O segundo fator é opcional (o sistema cobra do administrador, mas não obriga); o e-mail é um canal que a casa não controla por inteiro |
 | Quem pode o quê | **Fase 1 (esta entrega)**: cascata de níveis com permissões configuráveis, nega por padrão, funcionário desativado perde o acesso | Quem tem "ver" vê todas as fichas; não há registro de quem viu o quê |
 | Rastro | **Fase 2**: trilha de auditoria com tela só do administrador (entradas, leituras, alterações, administração e acessos negados); mais o registro técnico do servidor | Quem controla o computador e o banco consegue mexer na tabela (a trilha não protege do dono da máquina); sem política de retenção ainda (fase 8) |
 | Rede | Porta aberta só para a sub-rede local (firewall); sem acesso externo | **HTTP sem criptografia**: senha e ficha trafegam em texto puro pela rede interna |
@@ -57,7 +57,7 @@ fase 10 (VPN), nunca abrindo porta no roteador.
 |---|---|---|---|
 | 1 | Cascata de acesso por nível | Sistema | **Feita** (nesta entrega) |
 | 2 | Trilha de auditoria (com tela dentro do sistema, só administrador) | Sistema | **Feita** (2026-10-15) |
-| 3 | Contas e sessões mais fortes: tempo ocioso, e-mail validado, "esqueci minha senha" e segundo fator do administrador | Sistema + usuário (e-mail institucional e celular com app autenticador) | A fazer; **depende de saber qual serviço de e-mail a casa usa** |
+| 3 | Contas e sessões mais fortes: tempo ocioso, e-mail validado, "esqueci minha senha" e segundo fator | Sistema + usuário (senha da caixa de envio no servidor, e-mail de cada funcionário e celular com app autenticador) | **Feita** (2026-10-15); falta o usuário configurar |
 | 4 | HTTPS (celular e todos os navegadores) | Sistema + usuário (instalar a VPN) | A fazer; decidido usar o certificado da VPN |
 | 5 | Backup que sobrevive ao computador | Sistema + usuário (pen-drives e rotina) | **Feita** (2026-10-15); falta o usuário configurar |
 | 6 | Servidor Windows, rede e roteador | Quase tudo o usuário (roteiro passo a passo) | A fazer |
@@ -174,38 +174,76 @@ fase 8; por ora nada é apagado. Leitura que não passa pelo sistema (alguém ab
 registrar, nada sensível no registro, filtros, paginação, CSV, falha de gravação) e `teste_auditoria_pg.py` (Postgres e
 `copiar_banco.py`).
 
-### Fase 3 — Contas e sessões
+### Fase 3 — Contas e sessões (entregue em 2026-10-15)
 
-- **Lista de senhas fracas** embutida (sem depender de internet): barra "1234567890", "senha123", o nome do usuário, o nome da
-  casa. Segue a orientação do NIST SP 800-63B de **bloquear senhas conhecidas em vez de exigir símbolos**, e de **não exigir
-  troca periódica** (só quando houver suspeita). O mínimo atual (10 caracteres) pode subir; conferir os números da revisão 4 do
-  guia antes de fixar.
-- **Senha provisória**: a que o administrador cria vale só para o primeiro acesso; o sistema pede a troca antes de qualquer
-  outra tela.
-- **Tempo ocioso** (decidido: sim): sai sozinho depois de 30 minutos sem uso (ajustável), com aviso antes. Computador de
-  escritório fica desbloqueado quando alguém levanta.
-- **Bloqueio por tentativas** (já existe: 5 erros, 10 minutos) **mais** limite por endereço, porque hoje quem erra troca de
-  usuário a cada 5 erros.
-- **E-mail validado** (decidido: sim, a casa tem e-mails institucionais): cada funcionário tem um e-mail no cadastro, confirmado
-  por um código enviado a ele antes de valer. O e-mail serve para o "esqueci minha senha" e para avisos de segurança ("sua senha
-  foi trocada", "entrada de um computador novo").
-- **"Esqueci minha senha"**: a pessoa informa o usuário e o sistema manda um **link de uso único, que vale 30 minutos**, para o
-  e-mail confirmado. A mensagem na tela é a mesma exista ou não o usuário (não revela quem tem cadastro); o link é guardado só
-  como resumo (hash) no banco; usar o link derruba as outras sessões. **Administrador não redefine sozinho pelo e-mail: exige
-  também o segundo fator**, porque quem invade o e-mail não pode virar administrador. Continua valendo a redefinição pelo
-  administrador (Cadastros > Funcionários).
-- **Segundo fator opcional (TOTP) para o administrador**. **Não é um aplicativo para criar**: é um app gratuito que já existe
-  (Google Authenticator, Microsoft Authenticator, Authy...) e que o administrador instala no celular. O sistema mostra um QR code
-  uma vez, o app passa a gerar um número de 6 dígitos que muda a cada 30 segundos, e o sistema pede esse número depois da senha.
-  Códigos de recuperação impressos cobrem o celular perdido. SMS fica de fora: o NIST deixou de aceitá-lo.
-- Sessão derrubada quando o nível muda.
+**Para quê.** A senha é a porta de tudo. Esta fase fecha as formas mais comuns de ela falhar: senha fácil de adivinhar, senha que
+ninguém trocou, computador esquecido logado, tentativa em massa de um mesmo computador, senha perdida resolvida na base do
+"manda a senha pelo WhatsApp" e administrador sem nada além da senha entre o invasor e a casa inteira.
 
-**O que a parte do e-mail exige**: o servidor precisa **enviar** e-mail. A casa usa a **Hostinger**, que oferece envio por SMTP
-com usuário e senha (servidor `smtp.hostinger.com`, porta 465 com SSL ou 587 com STARTTLS; conferir os dados no painel da
-Hostinger na hora): é o caso simples, sem OAuth. Precisa de uma **caixa de envio** (por exemplo `sistema@seudominio`), cuja senha
-o administrador digita **uma vez no servidor** (guardada em `instance/`, com acesso só do SISTEMA e dos administradores, nunca no
-código nem no repositório). O link do e-mail aponta para o endereço do sistema, então só abre dentro do escritório ou pela VPN
-(fase 10), o que é o desejado. A mesma estrutura manda o **lembrete da troca do pen-drive por e-mail** (fase 5).
+**O que foi feito**
+
+- **Senhas fáceis de adivinhar são barradas** (`senhas_fracas.py`, sem depender de internet): as mais usadas (inclusive as com o nome
+  da casa e do sistema), sequências ("1234567890", "qwerty"), repetições ("aaaa1111"), o nome do usuário, o nome da pessoa e as
+  trocas óbvias ("p@ssw0rd123", "S3nha2024"). Segue o NIST SP 800-63B: **bloquear o conhecido em vez de exigir símbolos**, e **sem troca
+  periódica**. O mínimo continua 10 caracteres. A mensagem sugere uma frase de várias palavras.
+- **Senha provisória**: a que o administrador define para outra pessoa (cadastro novo ou redefinição) vale só para entrar e trocar:
+  até a troca, nenhuma outra tela abre (nem os dados) e o menu fica escondido. A do próprio administrador, definida por ele, não é
+  provisória.
+- **Tempo ocioso** (decidido: sim): **30 minutos** sem uso encerram a sessão; aos 25 abre um aviso com a contagem ("Manter conectado" ou
+  "Sair agora"). Digitar, clicar, rolar e tocar contam como uso, em qualquer aba do navegador; **a lista que se atualiza sozinha a cada
+  30 segundos não conta** (senão uma lista esquecida aberta seguraria a sessão para sempre). O teto absoluto de 10 horas continua. A
+  entrada explica "a sua sessão terminou por falta de uso" e o encerramento fica na auditoria (`sessao.expirada`).
+- **Limite por endereço**: mais de 15 senhas ou códigos errados em 10 minutos vindos do mesmo computador bloqueiam as tentativas **dele**
+  (até com a senha certa), além dos 5 erros por usuário que já existiam (quem errava trocava de usuário a cada 5).
+- **E-mail do funcionário, confirmado**: só o administrador cadastra (Cadastros > Funcionários) e só vale depois de a própria pessoa
+  digitar, em **Minha segurança**, o código de 6 dígitos que o sistema mandou para ele (30 minutos, 5 tentativas, no máximo 5 e-mails
+  por hora e 1 por minuto). Trocar o e-mail pede a confirmação de novo. A tela mostra o endereço mascarado.
+- **"Esqueci minha senha"** (link na entrada): a pessoa informa o usuário; se ele existe, está ativo e tem e-mail confirmado, recebe um
+  **link de uso único, que vale 30 minutos**. **A resposta na tela é a mesma exista ou não o usuário**, e o envio é em segundo plano (o
+  tempo de resposta também não revela). O link é guardado só como resumo; abrir o link não o gasta (leitores de e-mail abrem links); só
+  o envio da senha nova; senha fraca ou código errado não gastam o link. Usar o link **derruba as outras sessões**, avisa por e-mail e
+  vai para a auditoria. O endereço do link vem da **configuração**, nunca do cabeçalho Host do pedido (um pedido forjado não faz o
+  e-mail apontar para outro site). Limite de 10 pedidos por hora por computador. **Administrador sem o segundo fator não redefine
+  pela caixa de e-mail** (recebe só uma explicação): quem invadir a caixa de e-mail não vira administrador.
+- **Segundo fator (aplicativo autenticador no celular)**, opcional para todos e **cobrado no quadro de avisos do administrador**.
+  Não é um app para criar: é o Google Authenticator, Microsoft Authenticator, Authy ou outro gratuito. Em **Minha segurança > Ativar o
+  aplicativo autenticador** o sistema mostra um QR code (e a chave, para quem estiver no próprio celular), a pessoa digita o primeiro
+  código para provar que funcionou e recebe **8 códigos de recuperação, mostrados uma única vez** (imprimir e guardar fora do
+  computador). É o TOTP da RFC 6238. Depois da senha, a entrada pede o código; **cada código vale uma vez** (repetição é recusada) e 5
+  códigos errados bloqueiam o usuário por 10 minutos. O segredo fica **cifrado** no banco (a chave está em `instance/secret.key`,
+  fora do banco: um backup do banco sozinho não dá o segundo fator de ninguém); os códigos de recuperação, só como resumo. SMS fica de
+  fora de propósito (o NIST deixou de aceitá-lo). Desativar pede a senha e um código; **celular perdido**: o administrador desativa
+  no cadastro da pessoa (caixa "Desativar o aplicativo autenticador desta pessoa"), ou no servidor com
+  `flask --app app desativar-segundo-fator USUARIO`.
+- **Avisos de segurança por e-mail** (para o e-mail confirmado da pessoa): senha trocada ou redefinida, segundo fator ligado ou
+  desligado. A mesma estrutura manda ao **e-mail principal da casa** (`financeiro@restauracao.org.br`) o **lembrete da troca do
+  pen-drive**, a cópia externa atrasada, os dois pen-drives plugados e o teste de restauração que falta: no máximo **um por dia** por
+  assunto (o do teste, um por semana), pela tarefa do backup, sem nunca derrubá-la.
+- **Quadro de avisos** ganhou "Sua conta": e-mail ainda não confirmado, segundo fator que o administrador ainda não ligou, poucos
+  códigos de recuperação.
+- **Minha segurança** (o nome de quem entrou, no topo; no celular, a inicial): e-mail, aplicativo autenticador e a troca de senha.
+
+**Como o e-mail funciona** (`email_envio.py`). A caixa de envio é `sistema@restauracao.org.br` (Hostinger, `smtp.hostinger.com`,
+porta 465 com SSL; 587 com STARTTLS também funciona). Configuração em `instance/email.json`, que só o SISTEMA, os administradores do
+Windows e quem instalou leem. **A senha dessa caixa é digitada uma única vez, no servidor, e não aparece na tela**:
+`implantacao\configurar-email.ps1` (ou `flask --app app configurar-email`), que depois manda um e-mail de teste. **Nunca vai para o
+código, o repositório, o chat nem os registros.** O certificado do servidor de e-mail é sempre conferido. O texto dos e-mails (que traz
+códigos e links) e a senha **nunca** vão para o registro do servidor. Sem a configuração, o sistema funciona normalmente e as telas
+avisam que o envio ainda não foi configurado.
+
+**O que muda para cada pessoa.** Quem já tinha usuário continua entrando como antes (ninguém é forçado a trocar a senha). Quem receber
+senha nova do administrador troca no primeiro acesso. A sessão agora termina por falta de uso.
+
+**Limites.** O segundo fator não protege de quem controla o computador do servidor. A sessão é por navegador (o cookie), então vale o
+mesmo cuidado com computador compartilhado de sempre. E-mail comum não é canal seguro: por isso o link vale 30 minutos e uma vez, e
+o administrador precisa do segundo fator. O token CSRF e a política de conteúdo do navegador ficam para a fase 7.
+
+**Como conferir.** `teste_contas.py` (227 verificações: senhas, provisória, tempo ocioso, limite por endereço, e-mail, "esqueci minha
+senha" com todos os casos de recusa, segundo fator com repetição, recuperação e bloqueio, comandos do servidor), `teste_email.py` (63:
+servidores SMTP de mentira com SSL, STARTTLS e certificado autoassinado; certificado recusado; senha recusada; servidor travado;
+injeção de cabeçalho; nada de segredo no registro), `teste_aviso_email.py` (32: avisos do pen-drive), `teste_migracao_contas.py` e
+`teste_contas_pg.py` (banco antigo aberto pelo código novo, no SQLite e no Postgres, e `copiar_banco.py` com banco de origem antigo).
+Também foi conferido no navegador (computador e celular), inclusive o aviso de tempo ocioso com os tempos encurtados.
 
 ### Fase 4 — HTTPS na rede interna
 
@@ -259,7 +297,7 @@ isso protege de vírus, de erro e de pen-drive que estraga, mas **não de incên
   1 ano.
 - **Lembrete da troca (pop-up)**: na sexta (com o pen-drive plugado há 4 dias ou mais) e, se a troca ficou para trás, em qualquer dia a
   partir do 7º, a página inicial abre um pop-up "Hora de trocar o pen-drive do backup", uma vez por dia em cada computador até a troca
-  ser feita; na sexta de manhã manda esperar até as 18:45. A versão por **e-mail** vem com a estrutura de e-mail da fase 3.
+  ser feita; na sexta de manhã manda esperar até as 18:45. A versão por **e-mail** (fase 3) sai pela tarefa do backup, uma vez por dia, para o e-mail principal.
 - **Tarefas**: o backup das 18:30 leva a cópia externa junto; a tarefa *Prontuario - copia externa* roda de hora em hora das 8h às
   20h e cobre o pen-drive plugado depois. **Falha da cópia externa nunca cancela o backup do dia nem a atualização.**
 - **Avisos na página inicial** (no servidor do escritório): cópia externa não configurada; nenhum pen-drive preparado; mais de 3
@@ -361,6 +399,7 @@ fazer, porque depende das fases 2, 3 e 4 (pré-requisitos acima) e do backup ext
 | Fase 5 | Comprar **2 pen-drives** (marca conhecida, 32 GB bastam), rodar `configurar-backup-externo.ps1`, **anotar a frase em papel e guardar fora do computador**, preparar cada pen-drive e combinar quem troca na sexta (o pen-drive que sai do computador vai para a gaveta trancada) |
 | Fase 5 | A cada 3 meses, fazer o teste de restauração (2 minutos, `implantacao/RESTAURAR.md`) |
 | Fase 6 | Seguir o roteiro do Windows e do roteador |
+| Fase 3 | Rodar `implantacao\configurar-email.ps1` no servidor e **digitar a senha da caixa `sistema@`** (e trocá-la, se já apareceu em conversa); cadastrar o **e-mail de cada funcionário** (Cadastros > Funcionários); cada pessoa confirma o seu em **Minha segurança**; o administrador **liga o aplicativo autenticador** no celular e guarda os 8 códigos de recuperação em papel |
 | Fase 4 | Instalar o certificado em cada computador (e celular, se houver) |
 | Fase 10 | Instalar a VPN no computador do escritório e em cada aparelho que for acessar de fora |
 | Fase 8 | Preencher e assinar os modelos |
@@ -379,13 +418,12 @@ fazer, porque depende das fases 2, 3 e 4 (pré-requisitos acima) e do backup ext
 6. O pen-drive que sai do computador fica **na gaveta trancada do escritório** (risco aceito: não protege de incêndio nem de roubo do
    escritório inteiro).
 7. O e-mail institucional é da **Hostinger** (envio por SMTP com senha: mais simples que o Microsoft 365).
+8. Caixa de envio `sistema@restauracao.org.br`; e-mail principal, que recebe os avisos do sistema, `financeiro@restauracao.org.br`.
+9. Segundo fator (aplicativo autenticador no celular): sim, para o administrador; vale para quem quiser. Passa a ser necessário para o administrador redefinir a senha pelo e-mail.
 
 **Em aberto**
 
-1. Qual **caixa de e-mail** o sistema usa para enviar (por exemplo, sistema@seudominio) e quem recebe o lembrete de troca do
-   pen-drive? (A senha dela é digitada por você no servidor, nunca no código nem no repositório.)
-2. Fase 3: **segundo fator** para o administrador, sim ou não? (Usa um app gratuito que já existe no celular, não um app novo.)
-   A recomendação é sim, e passa a ser necessário para redefinir a senha do administrador pelo e-mail.
+_(nada em aberto desta fase)_
 
 ## 7. Referências
 

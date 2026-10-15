@@ -38,7 +38,17 @@
         {% endif %}
         {{ f.entrada('senha', 'Nova senha' if login_atual else 'Senha', 'c3', 'password', attrs={'autocomplete': 'new-password', 'placeholder': 'em branco: mantém a atual' if login_atual else ''}) }}
         {{ f.entrada('confirmacao', 'Repita a senha', 'c3', 'password', attrs={'autocomplete': 'new-password'}) }}
+        {{ f.entrada('email', 'E-mail', 'c4', 'email', attrs={'maxlength': 200, 'autocapitalize': 'none', 'spellcheck': 'false', 'placeholder': 'nome@restauracao.org.br'}) }}
+        {% if funcionario %}
+        <label class="c2">Situação do e-mail
+          <input readonly value="{{ 'Sem e-mail' if not funcionario.email else ('Confirmado' if funcionario.email_confirmado_em else 'Não confirmado') }}"></label>
+        {% endif %}
       </div>
+      {% if totp_ativo %}
+      <div class="caixas">
+        <label class="caixa"><input type="checkbox" name="desativar_totp" value="1">Desativar o aplicativo autenticador desta pessoa (celular perdido)</label>
+      </div>
+      {% endif %}
       {% else %}
       <div class="grade">
         <label class="c3">Nível de acesso<input value="{{ nivel_atual }}" readonly></label>

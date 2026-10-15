@@ -590,6 +590,48 @@ def lembrete_de_troca(instance=PASTA_INSTANCE, agora=None):
     return {"titulo": "Hora de trocar o pen-drive do backup", "texto": texto, "chave": f"{agora:%Y-%m-%d}"}
 
 
+# ----------------------------------------------------------------------------- avisos por e-mail (a tarefa agendada do servidor)
+ARQUIVO_DOS_AVISOS_POR_EMAIL = "avisos_por_email.json"
+AVISOS_POR_EMAIL = {                      # chave: (assunto, dias entre um aviso e outro)
+    "externo:troca": ("Hora de trocar o pen-drive do backup", 1),
+    "externo:atrasada": ("A cópia externa do backup está atrasada", 1),
+    "externo:duas": ("Os dois pen-drives do backup estão plugados", 1),
+    "externo:teste": ("Falta testar a restauração do backup", 7),
+}
+
+
+def _avisados(instance):
+    try:
+        dados = json.loads((Path(instance) / ARQUIVO_DOS_AVISOS_POR_EMAIL).read_text(encoding="utf-8"))
+        return dados if isinstance(dados, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def avisos_para_enviar_por_email(instance=PASTA_INSTANCE, agora=None):
+    """O que a cópia externa está pedindo e merece e-mail, que ainda não foi avisado no período: lista de (chave, assunto, texto). Os avisos de
+    "configurar" e "preparar" não vão por e-mail (é a instalação, feita com o administrador ao lado). Depois de enviar, marcar_avisado()."""
+    agora = agora or datetime.now()
+    achados = [(chave, texto) for chave, _, texto in pendencias(instance, agora) if chave in ("externo:atrasada", "externo:duas", "externo:teste")]
+    lembrete = lembrete_de_troca(instance, agora)
+    if lembrete:
+        achados.append(("externo:troca", lembrete["texto"]))
+    avisados = _avisados(instance)
+    saida = []
+    for chave, texto in achados:
+        assunto, dias = AVISOS_POR_EMAIL[chave]
+        ultimo = _quando(avisados.get(chave))
+        if ultimo is None or _dias_de_calendario(agora, ultimo) >= dias:
+            saida.append((chave, assunto, texto))
+    return saida
+
+
+def marcar_avisado(chave, instance=PASTA_INSTANCE, agora=None):
+    avisados = _avisados(instance)
+    avisados[chave] = (agora or datetime.now()).isoformat(timespec="seconds")
+    (Path(instance) / ARQUIVO_DOS_AVISOS_POR_EMAIL).write_text(json.dumps(avisados, indent=1), encoding="utf-8")
+
+
 def resumo(instance=PASTA_INSTANCE, agora=None):
     """Para a tela Cadastros > Backup: tudo o que o estado sabe, já em palavras."""
     agora = agora or datetime.now()

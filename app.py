@@ -23,6 +23,9 @@ Telas:
     /cadastros/permissoes           o que cada nível pode fazer (nível mínimo de cada permissão); só o administrador altera
     /cadastros/backup               (administrador) o backup do dia, os pen-drives em rodízio e o teste de restauração
     /cadastros/auditoria            (administrador) a trilha de auditoria: quem fez o quê e quando, com filtros e CSV
+    /senha/esqueci, /senha/redefinir/<link>   "esqueci minha senha": o link vai por e-mail e vale uma vez, por 30 minutos
+    /login/codigo                   segunda etapa da entrada de quem ativou o segundo fator (aplicativo autenticador)
+    /seguranca                      Minha segurança: confirmar o e-mail e ativar ou desativar o segundo fator
     /internacoes/<id>/prontuario    baixa o .docx
     /internacoes/<id>/impressos     os impressos da triagem (pedido de exames, enxoval) e da internação (prontuário, manual
                                     de orientação, ficha multiprofissional, capa do envelope, relatório do Serviço Social)
@@ -43,6 +46,8 @@ Organização:
     copia_externa.py  cópia criptografada do backup em pen-drives em rodízio (usada pelo backup.py)
     permissoes.py  o que cada nível de acesso pode fazer e a regra de cada rota (nega por padrão)
     auditoria.py   a trilha de auditoria (quem fez o quê e quando); só se acrescenta
+    contas.py      e-mail confirmado, "esqueci minha senha" e segundo fator; email_envio.py envia; totp.py é o código do autenticador;
+                   senhas_fracas.py barra as senhas fáceis de adivinhar
     catalogo.py    o que o sistema sabe de cada convênio (lido do cadastro, uma vez por requisição)
     cadastros.py   cadastros de convênios e de funcionários
     fichas.py      pedido de exames, enxoval, capa do envelope e ficha multiprofissional (em branco)
@@ -72,15 +77,18 @@ from datetime import date, datetime
 from flask import (Flask, Response, abort, flash, g, jsonify, redirect, render_template, request, send_file,
                    session, url_for)
 from werkzeug.exceptions import HTTPException
+from werkzeug.security import check_password_hash
 
 import auditoria
 import autenticacao
 import banco
 import cadastros as cadastros_
 import catalogo
+import contas
 import copia_externa
 import declaracoes
 import documentos
+import email_envio
 import exclusao
 import impressos
 import painel
@@ -88,10 +96,11 @@ import permissoes
 import relatorios
 import servico_social
 import servicos
+import totp
 from avisos import dias_de_espera, gerar_avisos, tempo_decorrido
 from banco import arquivo_ultimo_backup
 from modelos import (ENVELOPE_RECEBIDO, STATUS_INTERNACAO, STATUS_TRIAGEM, AvisoDispensado, Convenio, Funcionario,
-                     Internacao, NivelAcesso, Parcela, Pessoa, db)
+                     Internacao, NivelAcesso, Parcela, Pessoa, Usuario, db)
 from migracoes import migrar
 from prontuario import (calcular_idade, faixas_do_particular, fmt_data, fmt_reais, gerar_docx, montar_documento,
                         previsao_termino)
@@ -124,6 +133,7 @@ app.after_request(auditoria.depois_da_requisicao)       # leituras (auditoria.LE
 app.before_request(permissoes.exigir_permissao)     # depois do login: a rota pede uma permissão e a pessoa tem? (permissoes.REGRAS)
 app.after_request(autenticacao.cabecalhos_de_seguranca)
 autenticacao.registrar_comandos(app)
+contas.registrar_comandos(app)
 def _e_administrador():
     """O usuário logado é o administrador? (cadastros.pode_gerenciar_acessos: enquanto nenhum administrador tem usuário
     vinculado, vale para quem está logado.) Guardado por requisição: as telas perguntam várias vezes."""
@@ -141,7 +151,8 @@ def _pode_servico_social():
 # pode('triagem') nos templates esconde o que a pessoa não pode usar; permissoes_js() leva o mesmo ao JavaScript das listas
 app.context_processor(lambda: {"usuario_atual": g.get("usuario"), "e_administrador": _e_administrador(),
                                "pode_servico_social": _pode_servico_social(),
-                               "pode": permissoes.pode, "permissoes_js": permissoes.do_usuario})
+                               "pode": permissoes.pode, "permissoes_js": permissoes.do_usuario,
+                               "ocioso_segundos": int(autenticacao.OCIOSO.total_seconds()), "aviso_de_ocioso_segundos": int(autenticacao.AVISO_DE_OCIOSO.total_seconds())})
 
 # filtros usados nos templates: {{ p.cpf | cpf }}, {{ i.inicio | data }} ...
 app.jinja_env.filters.update(cpf=fmt_cpf, rg=fmt_rg, cep=fmt_cep, data=fmt_data, hora=fmt_hora,
@@ -202,17 +213,72 @@ def login():
     if g.usuario:
         return redirect(url_for("home"))
     proximo = request.values.get("next", "")
+    aviso = {"ocioso": "A sua sessão terminou por falta de uso. Entre de novo."}.get(request.args.get("encerrada")) \
+        or ("Senha alterada. Entre com a senha nova." if request.args.get("redefinida") else None)
     if request.method == "POST":
         usuario, erro = autenticacao.entrar(request.form.get("usuario"), request.form.get("senha"))
         if usuario and cadastros_.acesso_desativado(usuario):     # a senha confere, mas o funcionário foi desativado
             auditoria.registrar("login.desativado", usuario=usuario.nome)
             usuario, erro = None, "Este acesso foi desativado. Procure o administrador."
+        if usuario and usuario.totp_ativo:                        # senha certa; falta o código do aplicativo autenticador
+            autenticacao.iniciar_segundo_fator(usuario, proximo)
+            return redirect(url_for("login_codigo"))
         if usuario:
             autenticacao.abrir_sessao(usuario)
             auditoria.registrar("login.ok", usuario=usuario.nome)
             return redirect(autenticacao.destino_seguro(proximo, url_for("home")))
-        return render_template("login.html", erro=erro, proximo=proximo), 401
-    return render_template("login.html", erro=None, proximo=proximo)
+        return render_template("login.html", erro=erro, proximo=proximo, aviso=None), 401
+    return render_template("login.html", erro=None, proximo=proximo, aviso=aviso)
+
+
+@app.route("/login/codigo", methods=["GET", "POST"])
+def login_codigo():
+    """Segunda etapa da entrada de quem ativou o segundo fator: o código do aplicativo autenticador (ou um de recuperação)."""
+    if g.usuario:
+        return redirect(url_for("home"))
+    usuario = autenticacao.usuario_aguardando_codigo()
+    if usuario is None:
+        return redirect(url_for("login"))
+    erro = None
+    if request.method == "POST":
+        como = contas.verificar_segundo_fator(usuario, request.form.get("codigo"))
+        if como:
+            proximo = session["mfa"].get("proximo", "")
+            autenticacao.abrir_sessao(usuario)
+            auditoria.registrar("login.ok", usuario=usuario.nome, detalhe="com o código do aplicativo" if como == "app" else "com um código de recuperação")
+            return redirect(autenticacao.destino_seguro(proximo, url_for("home")))
+        bloqueou = autenticacao.registrar_falha(usuario, "login.codigo_errado")
+        if bloqueou or autenticacao.errou_o_codigo() >= autenticacao.MAX_FALHAS:
+            session.pop("mfa", None)
+            return render_template("login.html", erro="Muitos códigos errados. Espere 10 minutos e entre de novo." if bloqueou else "Muitos códigos errados. Entre de novo com a senha.",
+                                   proximo="", aviso=None), 401
+        erro = "Esse código não confere. Digite o que o aplicativo mostra agora (ele muda a cada 30 segundos) ou um código de recuperação."
+    return render_template("login_codigo.html", erro=erro)
+
+
+@app.route("/senha/esqueci", methods=["GET", "POST"])
+def esqueci_senha():
+    """O pedido de "esqueci minha senha": a resposta é igual exista ou não o usuário (contas.pedir_redefinicao)."""
+    if g.usuario:
+        return redirect(url_for("alterar_senha"))
+    if request.method == "POST":
+        problema = contas.pedir_redefinicao(request.form.get("usuario"), request.remote_addr or "")
+        return render_template("esqueci_senha.html", enviado=problema is None, problema=problema)
+    return render_template("esqueci_senha.html", enviado=False, problema=None)
+
+
+@app.route("/senha/redefinir/<token>", methods=["GET", "POST"])
+def redefinir_senha(token):
+    """O link do e-mail: escolher a senha nova. Abrir o link não gasta nada; só o envio do formulário (que os leitores de e-mail não fazem)."""
+    achado = contas.link_valido(token)
+    if achado is None:
+        return render_template("redefinir_senha.html", valido=False, erro=None, pede_codigo=False, minimo=autenticacao.SENHA_MINIMA), 410
+    erro = None
+    if request.method == "POST":
+        erro = contas.concluir_redefinicao(token, request.form.get("nova"), request.form.get("confirmacao"), request.form.get("codigo", ""))
+        if not erro:
+            return redirect(url_for("login", redefinida=1))
+    return render_template("redefinir_senha.html", valido=True, erro=erro, pede_codigo=achado[1].totp_ativo, minimo=autenticacao.SENHA_MINIMA)
 
 
 @app.post("/sair")
@@ -226,14 +292,75 @@ def sair():
 def alterar_senha():
     erro = None
     if request.method == "POST":
-        erro = autenticacao.trocar_senha(g.usuario, request.form.get("atual"),
-                                         request.form.get("nova"), request.form.get("confirmacao"))
+        funcionario = cadastros_.funcionario_do_usuario(g.usuario)
+        erro = autenticacao.trocar_senha(g.usuario, request.form.get("atual"), request.form.get("nova"), request.form.get("confirmacao"),
+                                         nomes=[funcionario.nome] if funcionario else ())
         if not erro:
             autenticacao.abrir_sessao(g.usuario)   # a sessão de agora continua valendo
             auditoria.registrar("senha.trocada")
+            contas.avisar_senha_trocada(g.usuario)
             flash("Senha alterada.")
             return redirect(url_for("home"))
     return render_template("senha.html", erro=erro, minimo=autenticacao.SENHA_MINIMA)
+
+
+# ----------------------------------------------------------------- Minha segurança: e-mail e segundo fator
+@app.get("/seguranca")
+def seguranca():
+    funcionario = cadastros_.funcionario_do_usuario(g.usuario)
+    return render_template("seguranca.html", funcionario=funcionario, e_administrador=_e_administrador(), totp_ativo=g.usuario.totp_ativo,
+                           restam=totp.quantos_codigos_de_recuperacao(g.usuario.totp_recuperacao), envio_configurado=email_envio.configurado(app.instance_path),
+                           email_mascarado=email_envio.mascarar(funcionario.email) if funcionario and funcionario.email else "")
+
+
+@app.post("/seguranca/email/codigo")
+def enviar_codigo_email():
+    erro = contas.enviar_codigo_de_email(g.usuario)
+    funcionario = cadastros_.funcionario_do_usuario(g.usuario)
+    flash(erro or f"Enviamos um código para {email_envio.mascarar(funcionario.email)}. Ele vale por 30 minutos.")
+    return redirect(url_for("seguranca") + "#email")
+
+
+@app.post("/seguranca/email/confirmar")
+def confirmar_email():
+    flash(contas.confirmar_email(g.usuario, request.form.get("codigo")) or "E-mail confirmado.")
+    return redirect(url_for("seguranca") + "#email")
+
+
+@app.route("/seguranca/autenticador", methods=["GET", "POST"])
+def ativar_autenticador():
+    """Ativar o segundo fator: mostra o QR code, a pessoa digita o primeiro código do aplicativo, e os códigos de recuperação aparecem uma única vez."""
+    if g.usuario.totp_ativo:
+        return redirect(url_for("seguranca") + "#autenticador")
+    erro = None
+    if request.method == "POST" and request.form.get("acao") == "novo":
+        contas.iniciar_ativacao(g.usuario)
+    elif request.method == "POST":
+        codigos = contas.confirmar_ativacao(g.usuario, request.form.get("codigo"))
+        if codigos:
+            return render_template("autenticador.html", codigos=codigos, dados=None, erro=None)
+        erro = "Esse código não confere. Confira se o relógio do celular está certo e digite o código que o aplicativo mostra agora."
+    dados = contas.ativacao_pendente(g.usuario) or contas.iniciar_ativacao(g.usuario)
+    return render_template("autenticador.html", codigos=None, dados=dados, erro=erro)
+
+
+@app.post("/seguranca/autenticador/desativar")
+def desativar_autenticador():
+    """A própria pessoa desliga o segundo fator: pede a senha e um código (do aplicativo ou de recuperação), para ninguém desligar por ela."""
+    if not g.usuario.totp_ativo:
+        return redirect(url_for("seguranca"))
+    if not check_password_hash(g.usuario.senha_hash, request.form.get("senha") or "") or contas.verificar_segundo_fator(g.usuario, request.form.get("codigo")) is None:
+        flash("A senha ou o código não conferem: o segundo fator continua ativo.")
+    else:
+        contas.desativar(g.usuario)
+        flash("Segundo fator desativado.")
+    return redirect(url_for("seguranca") + "#autenticador")
+
+
+@app.post("/sessao/ping")
+def sessao_ping():
+    """A página avisa que a pessoa continua usando o sistema (usuario_da_sessao já renovou o tempo de inatividade)."""
+    return jsonify(ok=True)
 
 
 # ===================================================================== home
@@ -241,7 +368,7 @@ def alterar_senha():
 def home():
     hoje = date.today()
     lista_de_vagas = gerar_vagas()
-    return render_template("home.html", avisos=gerar_avisos(_pode_servico_social()), vagas=lista_de_vagas, vagas_total=totais(lista_de_vagas),
+    return render_template("home.html", avisos=gerar_avisos(_pode_servico_social(), contas.pendencias_da_conta(g.usuario)), vagas=lista_de_vagas, vagas_total=totais(lista_de_vagas),
                            resumo=painel.resumo(), agenda=painel.agenda(hoje=hoje),
                            para_imprimir=painel.impressos_da_internacao(hoje=hoje) if permissoes.pode("documentos") else {"total": 0, "itens": []},
                            dias_da_agenda=painel.DIAS_DA_AGENDA, fim_do_tratamento=painel.tratamentos_a_finalizar(hoje=hoje),
@@ -860,7 +987,9 @@ def editar_convenio(id):
 
 @app.get("/cadastros/funcionarios")
 def lista_funcionarios():
-    return render_template("cadastro_funcionarios.html", funcionarios=cadastros_.funcionarios())
+    lista = cadastros_.funcionarios()
+    logins = {u.nome: u for u in db.session.execute(db.select(Usuario)).scalars()}
+    return render_template("cadastro_funcionarios.html", funcionarios=lista, logins=logins)
 
 
 CAMPOS_DO_FUNCIONARIO = ("nome", "cargo", "ativo", "padrao", "usuario", "nivel_id", "servico_social", "registro_profissional")
@@ -890,9 +1019,11 @@ def _tela_funcionario(funcionario, dados, erros, status=200):
     if funcionario is None:
         nivel = next((n for i, n in cadastros_.niveis_para_escolher() if i == cadastros_.nivel_para_novo_funcionario()), "")
     dados = {k: v for k, v in dados.items() if k not in ("senha", "confirmacao")}
+    login_do_usuario = autenticacao.buscar_usuario(login) if login else None
     return render_template("cadastro_funcionario_form.html", d=dados, erros=erros, funcionario=funcionario,
                            usuarios=cadastros_.usuarios_para_vincular(funcionario), niveis=cadastros_.niveis_para_escolher(funcionario),
-                           pode_acessos=cadastros_.pode_gerenciar_acessos(g.usuario), login_atual=login, nivel_atual=nivel), status
+                           pode_acessos=cadastros_.pode_gerenciar_acessos(g.usuario), login_atual=login, nivel_atual=nivel,
+                           totp_ativo=bool(login_do_usuario and login_do_usuario.totp_ativo)), status
 
 
 @app.route("/cadastros/funcionarios/novo", methods=["GET", "POST"])
@@ -917,6 +1048,10 @@ def editar_funcionario(id):
         _, erros = cadastros_.salvar_funcionario(request.form, funcionario, por=g.usuario)
         if not erros:
             _registrar_funcionario(funcionario, antes, request.form, pode)
+            if pode and request.form.get("desativar_totp") == "1":          # celular perdido: o administrador desliga o segundo fator da pessoa
+                login = autenticacao.buscar_usuario(funcionario.usuario)
+                if login is not None and login.totp_ativo:
+                    contas.desativar(login, por=g.usuario.nome)
             if pode and request.form.get("senha") and funcionario.usuario == g.usuario.nome:
                 autenticacao.abrir_sessao(g.usuario)    # trocou a própria senha: a sessão de agora continua valendo
             flash(f"{funcionario.nome} atualizado(a)." + cadastros_.frase_do_acesso(request.form, pode, funcionario.usuario))
@@ -925,7 +1060,7 @@ def editar_funcionario(id):
     dados = {"nome": funcionario.nome, "cargo": funcionario.cargo, "usuario": funcionario.usuario,
              "nivel_id": str(funcionario.nivel_id or ""), "ativo": "1" if funcionario.ativo else "",
              "padrao": "1" if funcionario.padrao else "", "servico_social": "1" if funcionario.servico_social else "",
-             "registro_profissional": funcionario.registro_profissional}
+             "registro_profissional": funcionario.registro_profissional, "email": funcionario.email}
     return _tela_funcionario(funcionario, dados, {})
 
 

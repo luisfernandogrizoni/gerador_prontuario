@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "_voltar.html" import linha_voltar with context %}
+{% from "_cartao.html" import cartao, dados %}
+{% block titulo %}Minha segurança — Casa de Acolhida Restauração{% endblock %}
+
+{% block estilo %}
+  .seguranca { display: grid; gap: var(--e4); max-width: 720px; margin-top: var(--e4); }
+  .seguranca form { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-top: 14px; }
+  .seguranca form label { flex: 1 1 200px; }
+  .seguranca .estado { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+  .seguranca .selo.pendente { background: var(--amarelo); color: var(--ambar); }
+  .seguranca .acoes-cartao { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .seguranca .codigo { letter-spacing: .12em; text-align: center; }
+  @media (max-width: 640px) { .seguranca form .botao { flex: 1 1 100%; } }
+{% endblock %}
+
+{% block conteudo %}
+<main class="largo">
+  {{ linha_voltar(url_for('home')) }}
+  <h1>Minha segurança</h1>
+
+  {% with msgs = get_flashed_messages() %}
+    {% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
+  {% endwith %}
+
+  <div class="seguranca">
+    {% call cartao('E-mail', 'envelope', 'azul', id='email') %}
+      {% if funcionario and funcionario.email %}
+        <div class="estado">
+          <strong>{{ email_mascarado }}</strong>
+          {% if funcionario.email_confirmado_em %}<span class="selo ativo">Confirmado</span>{% else %}<span class="selo pendente">Não confirmado</span>{% endif %}
+        </div>
+        {% if funcionario.email_confirmado_em %}
+          <p class="nao-informado">Confirmado em {{ funcionario.email_confirmado_em.strftime('%d/%m/%Y às %H:%M') }}</p>
+        {% elif envio_configurado %}
+          <form method="post" action="{{ url_for('enviar_codigo_email') }}"><button class="botao secundario">Enviar o código de confirmação</button></form>
+          <form method="post" action="{{ url_for('confirmar_email') }}">
+            <label>Código recebido por e-mail
+              <input class="codigo" name="codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="10" required></label>
+            <button class="botao">Confirmar e-mail</button>
+          </form>
+        {% else %}
+          <p class="nao-informado">O envio de e-mail ainda não foi configurado no servidor.</p>
+        {% endif %}
+      {% else %}
+        <p class="nao-informado">Nenhum e-mail cadastrado para você. O administrador cadastra em Cadastros › Funcionários.</p>
+      {% endif %}
+    {% endcall %}
+
+    {% call cartao('Aplicativo autenticador', 'cadeado', 'roxo', id='autenticador') %}
+      {% if totp_ativo %}
+        <div class="estado">
+          <span class="selo ativo">Ativo</span>
+          <span>Códigos de recuperação restantes: <strong>{{ restam }}</strong></span>
+        </div>
+        <form method="post" action="{{ url_for('desativar_autenticador') }}" autocomplete="off">
+          <label>Senha
+            <input type="password" name="senha" autocomplete="current-password" required></label>
+          <label>Código do aplicativo (ou de recuperação)
+            <input class="codigo" name="codigo" autocomplete="one-time-code" autocapitalize="none" spellcheck="false" maxlength="20" required></label>
+          <button class="botao perigo">Desativar</button>
+        </form>
+      {% else %}
+        <div class="estado"><span class="selo inativo">Desativado</span></div>
+        {# um botão principal por tela: se há um e-mail a confirmar, é ele o principal #}
+        {% set confirmar_antes = funcionario and funcionario.email and not funcionario.email_confirmado_em and envio_configurado %}
+        <div class="acoes-cartao"><a class="botao{{ ' secundario' if confirmar_antes }}" href="{{ url_for('ativar_autenticador') }}">Ativar o aplicativo autenticador</a></div>
+      {% endif %}
+    {% endcall %}
+
+    {% call cartao('Senha', 'cadeado', 'neutro', id='senha') %}
+      <div class="acoes-cartao" style="margin-top: 0"><a class="botao secundario" href="{{ url_for('alterar_senha') }}">Alterar minha senha</a></div>
+    {% endcall %}
+  </div>
+</main>
+{% endblock %}

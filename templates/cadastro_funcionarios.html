@@ -7,6 +7,8 @@
 {% block estilo %}
   .lista .selo.desativado { background: #f2f4f7; color: #667085; }
   .lista .selo.padrao { background: var(--azul-claro); color: var(--azul); margin-left: 6px; }
+  .lista .selo.pendente { background: var(--amarelo); color: var(--ambar); }
+  .lista td.seguranca .selo { margin: 0 6px 4px 0; }
 {% endblock %}
 
 {% block conteudo %}
@@ -34,6 +36,7 @@
           <th>Usuário de login</th>
           <th>Nível de acesso</th>
           <th>Situação</th>
+          <th>Segurança</th>
           <th class="sem-ordem"></th>
         </tr>
       </thead>
@@ -45,6 +48,15 @@
           <td class="fixo" data-rotulo="Usuário de login">{{ p.usuario }}</td>
           <td class="fixo" data-rotulo="Nível de acesso">{{ p.nivel.nome if p.nivel else '' }}</td>
           <td class="fixo" data-rotulo="Situação"><span class="selo {{ 'ativo' if p.ativo else 'desativado' }}">{{ 'Ativo' if p.ativo else 'Desativado' }}</span>{% if p.padrao %}<span class="selo padrao" title="Assina quando ninguém escolhe outra pessoa">Assina por padrão</span>{% endif %}{% if p.servico_social %}<span class="selo padrao" title="Lê e escreve o acolhimento social">Serviço Social</span>{% endif %}</td>
+          <td class="fixo seguranca" data-rotulo="Segurança">
+            {%- set login = logins.get(p.usuario) if p.usuario else none -%}
+            {%- if login -%}
+              {%- if not p.email -%}<span class="selo pendente">Sem e-mail</span>
+              {%- elif p.email_confirmado_em -%}<span class="selo ativo">E-mail confirmado</span>
+              {%- else -%}<span class="selo pendente">E-mail não confirmado</span>{%- endif -%}
+              {%- if login.totp_ativo -%}<span class="selo ativo">Autenticador</span>{%- endif -%}
+            {%- endif -%}
+          </td>
           <td class="fixo acao"><a class="botao pequeno secundario" href="{{ url_for('editar_funcionario', id=p.id) }}">Editar</a></td>
         </tr>
         {% endfor %}

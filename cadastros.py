@@ -23,6 +23,7 @@ from sqlalchemy.exc import IntegrityError
 
 import autenticacao
 import catalogo
+import email_envio
 from catalogo import CATEGORIAS_RESERVADAS, CORES
 from documentos import Emissor
 from modelos import Convenio, Funcionario, NivelAcesso, Usuario, db
@@ -157,6 +158,9 @@ def pode_gerenciar_acessos(usuario):
 def _validar_acesso(form, funcionario, ativo):
     """Os campos de acesso do formulário do funcionário (só o administrador chega aqui)."""
     erros = {}
+    email = (form.get("email") or "").strip()
+    if email and not email_envio.endereco_valido(email):
+        erros["email"] = "Informe um e-mail válido (ex.: nome@restauracao.org.br)."
     if (form.get("nivel_id") or "") not in {i for i, _ in niveis_para_escolher(funcionario)}:
         erros["nivel_id"] = "Escolha o nível de acesso."
     escolhido, novo = (form.get("usuario") or "").strip(), (form.get("novo_usuario") or "").strip().lower()
@@ -175,7 +179,7 @@ def _validar_acesso(form, funcionario, ativo):
         if not (novo or escolhido):
             erros["senha"] = "Escolha ou crie um usuário para essa senha."
         elif "usuario" not in erros and "novo_usuario" not in erros:
-            if erro := autenticacao.validar_senha(senha):
+            if erro := autenticacao.validar_senha(senha, [novo or escolhido, form.get("nome") or ""]):
                 erros["senha"] = erro
             elif senha != confirmacao:
                 erros["confirmacao"] = "A confirmação não é igual à senha."
@@ -238,7 +242,10 @@ def salvar_funcionario(form, funcionario=None, por=None):
         if pode:
             funcionario.servico_social = form.get("servico_social") == "1"     # dar acesso ao sigilo é coisa do administrador
             funcionario.nivel_id = int(form["nivel_id"])
-            erro_de_acesso = _gravar_acesso(form, funcionario)
+            novo_email = (form.get("email") or "").strip().lower()
+            if novo_email != (funcionario.email or "").lower():       # e-mail novo ou trocado: só vale depois de confirmado de novo
+                funcionario.email, funcionario.email_confirmado_em = novo_email, None
+            erro_de_acesso = _gravar_acesso(form, funcionario, por)
             if erro_de_acesso:
                 db.session.rollback()
                 return None, erro_de_acesso
@@ -256,19 +263,21 @@ def salvar_funcionario(form, funcionario=None, por=None):
     return funcionario, {}
 
 
-def _gravar_acesso(form, funcionario):
-    """Usuário e senha do funcionário (sem confirmar a gravação: quem chama grava tudo junto). Devolve os erros, se houver."""
+def _gravar_acesso(form, funcionario, por=None):
+    """Usuário e senha do funcionário (sem confirmar a gravação: quem chama grava tudo junto). Devolve os erros, se houver. A senha que o
+    administrador define é **provisória** (a pessoa troca no primeiro acesso), menos a do próprio administrador."""
     escolhido, novo = (form.get("usuario") or "").strip(), (form.get("novo_usuario") or "").strip().lower()
     senha = form.get("senha") or ""
     if novo:
-        usuario, erro = autenticacao.criar_usuario(novo, senha, confirmar=False)
+        usuario, erro = autenticacao.criar_usuario(novo, senha, confirmar=False, provisoria=True, nomes=[funcionario.nome])
         if erro:
             return {"novo_usuario": erro}
         funcionario.usuario = usuario.nome
         return {}
     funcionario.usuario = escolhido
     if escolhido and senha:
-        autenticacao.definir_senha(autenticacao.buscar_usuario(escolhido), senha, confirmar=False)
+        usuario = autenticacao.buscar_usuario(escolhido)
+        autenticacao.definir_senha(usuario, senha, confirmar=False, provisoria=por is None or usuario.nome != por.nome, nomes=[funcionario.nome])
     return {}
 
 

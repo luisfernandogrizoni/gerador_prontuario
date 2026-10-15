@@ -81,7 +81,14 @@ Os usuários e as senhas ficam **dentro do banco**: voltam junto. Só as sessõe
    Depois prepare os pen-drives de novo, um de cada vez (`-PrepararMidia F: -Nome A`): eles continuam servindo, e as cópias
    que já estão neles continuam abrindo com a mesma frase.
 
-6. Veja o endereço novo que o instalador mostrou e avise as pessoas; reserve o IP no roteador.
+6. **E-mail e segundo fator.** O envio de e-mail (`instance\email.json`) e a chave que abre o segundo fator (`instance\secret.key`)
+   **não vão no backup do banco**, de propósito (um backup sozinho não dá a senha da caixa de e-mail nem o segundo fator de
+   ninguém). No computador novo, ligue o e-mail de novo (`implantacao\configurar-email.ps1`, digitando a senha da caixa). Quem tinha
+   o aplicativo autenticador ligado **não consegue usar o código do app** (a chave nova não abre o segredo antigo): entra com um
+   **código de recuperação** (os que a pessoa guardou em papel) e liga o app de novo em *Minha segurança*, ou o administrador roda
+   `.\.venv\Scripts\python.exe -m flask --app app desativar-segundo-fator USUARIO` e a pessoa entra só com a senha e liga de novo.
+   (Se você ainda tiver a pasta `instance` do computador antigo, copiar o `secret.key` dela para o novo evita isso.)
+7. Veja o endereço novo que o instalador mostrou e avise as pessoas; reserve o IP no roteador.
 
 ## Se a frase de recuperação foi perdida
 

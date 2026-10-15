@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "_voltar.html" import linha_voltar with context %}
+{% from "_cartao.html" import cartao %}
+{% block titulo %}Aplicativo autenticador — Casa de Acolhida Restauração{% endblock %}
+
+{% block estilo %}
+  .ativacao { max-width: 720px; margin-top: var(--e4); }
+  .ativacao .qr { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 22px; align-items: center; }
+  .ativacao .qr-imagem { background: #fff; border: 1px solid var(--borda); border-radius: var(--r-md); padding: 6px; line-height: 0; }
+  .ativacao .qr-imagem svg { width: 190px; height: 190px; display: block; }
+  .ativacao .segredo { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 1.05rem; letter-spacing: .06em; word-break: break-all; }
+  .ativacao form { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-top: 18px; }
+  .ativacao form label { flex: 1 1 200px; }
+  .ativacao .codigo { letter-spacing: .12em; font-size: 1.15rem; text-align: center; }
+  .codigos { list-style: none; padding: 0; margin: 0 0 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .codigos li { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 1.1rem; letter-spacing: .08em; text-align: center;
+                background: var(--neutro-suave); border: 1px solid var(--neutro-borda); border-radius: var(--r-md); padding: 10px 6px; }
+  .ativacao .acoes-cartao { display: flex; gap: 10px; flex-wrap: wrap; }
+  @media (max-width: 640px) {
+    .ativacao .qr { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+    .ativacao form .botao { flex: 1 1 100%; }
+  }
+  @media print { .ativacao .qr-imagem { display: none; } }
+{% endblock %}
+
+{% block conteudo %}
+<main class="largo">
+  {{ linha_voltar(url_for('seguranca')) }}
+  <h1>Aplicativo autenticador</h1>
+
+  <div class="ativacao">
+  {% if codigos %}
+    {% call cartao('Códigos de recuperação', 'cadeado', 'amarelo') %}
+      <p class="caixa-info" role="status">Segundo fator ativado. Guarde estes códigos agora: eles não aparecem de novo. Cada um vale uma vez e substitui o aplicativo se o celular se perder.</p>
+      <ul class="codigos">{% for c in codigos %}<li>{{ c }}</li>{% endfor %}</ul>
+      <div class="acoes-cartao">
+        <button type="button" class="botao secundario" onclick="window.print()"><svg class="icone"><use href="#i-impressora"/></svg>Imprimir</button>
+        <a class="botao" href="{{ url_for('seguranca') }}#autenticador">Já guardei os códigos</a>
+      </div>
+    {% endcall %}
+  {% else %}
+    {% call cartao('1. Adicione a conta no aplicativo', 'telefone', 'azul') %}
+      <div class="qr">
+        {% if dados.qr %}<div class="qr-imagem">{{ dados.qr | safe }}</div>{% endif %}
+        <div>
+          <p class="nao-informado" style="margin-top:0">{{ 'Ou digite a chave no aplicativo:' if dados.qr else 'Digite a chave no aplicativo:' }}</p>
+          <p class="segredo">{{ dados.segredo }}</p>
+        </div>
+      </div>
+    {% endcall %}
+    <div style="height: var(--e4)"></div>
+    {% call cartao('2. Digite o código que o aplicativo mostra', 'ok', 'verde') %}
+      {% if erro %}<p class="caixa-erros erro" role="alert">{{ erro }}</p>{% endif %}
+      <form method="post" autocomplete="off">
+        <label>Código de 6 dígitos
+          <input class="codigo" name="codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="10" required autofocus></label>
+        <button class="botao">Ativar</button>
+      </form>
+    {% endcall %}
+  {% endif %}
+  </div>
+</main>
+{% endblock %}

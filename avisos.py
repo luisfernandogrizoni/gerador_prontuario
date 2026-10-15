@@ -34,6 +34,7 @@ PRAZO_BACKUP = timedelta(days=3)
 CATEGORIA_BACKUP = "Backup do banco"
 # Cópia criptografada em pen-drives em rodízio (copia_externa.py): não configurada, pen-drive fora, hora de trocar, teste por fazer
 CATEGORIA_BACKUP_EXTERNO = "Cópia externa do backup"
+CATEGORIA_CONTA = "Sua conta"                    # o que a própria pessoa ainda precisa fazer na segurança dela (contas.pendencias_da_conta)
 
 
 @dataclass
@@ -48,6 +49,7 @@ class Aviso:
     acao: dict | None = None
     etiqueta: tuple[str, str] | None = None   # (cor, texto) ao lado do aviso: cor = proximo | urgente | vencido
     dispensavel: bool = True                  # False = não tem "Ciente": só some quando resolvido
+    rotulo_url: str = "Abrir ficha"           # o texto do botão que leva a `url`
 
 
 def _ficha(internacao):
@@ -58,7 +60,7 @@ def tempo_decorrido(dias):
     return "hoje" if dias == 0 else f"há {dias} dia{'' if dias == 1 else 's'}"
 
 
-def gerar_avisos(pode_servico_social=False):
+def gerar_avisos(pode_servico_social=False, da_conta=()):
     """`pode_servico_social`: quem olha é do Serviço Social (ou administrador); só para ele o aviso do acolhimento social
     leva direto ao formulário (os outros vão à ficha, onde veem se já foi feito, sem o conteúdo)."""
     avisos = []
@@ -153,12 +155,13 @@ def gerar_avisos(pode_servico_social=False):
     avisos = [a for a in avisos if a.chave not in dispensados]
     avisos.extend(a for a in (_aviso_do_backup(),) if a)
     avisos.extend(_avisos_do_backup_externo())
+    avisos.extend(Aviso(CATEGORIA_CONTA, texto, url_for("seguranca"), chave, dispensavel=False, rotulo_url="Abrir Minha segurança") for chave, texto in da_conta)
 
     grupos = defaultdict(list)
     for a in avisos:
         grupos[a.categoria].append(a)
     # o backup, o envelope pendente e o acolhimento social são tarefas, não correções de cadastro: vêm primeiro
-    tarefas = (CATEGORIA_BACKUP, CATEGORIA_BACKUP_EXTERNO, CATEGORIA_ENVELOPE, CATEGORIA_REJEICAO, CATEGORIA_ACOLHIMENTO)
+    tarefas = (CATEGORIA_CONTA, CATEGORIA_BACKUP, CATEGORIA_BACKUP_EXTERNO, CATEGORIA_ENVELOPE, CATEGORIA_REJEICAO, CATEGORIA_ACOLHIMENTO)
     return dict(sorted(grupos.items(), key=lambda g: (g[0] not in tarefas, g[0])))
 
 
