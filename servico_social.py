@@ -409,18 +409,27 @@ def _campos_da_linha(campos, v):
     return Paragrafo(partes[:-1], antes=4)
 
 
+def _assinante(relatorio):
+    """(nome, cargo — registro) de quem finalizou, como ficou gravado na assinatura ('Nome — cargo — CRESS')."""
+    partes = [p.strip() for p in (relatorio.assinatura or "").split(" — ") if p.strip()]
+    if not partes:
+        return relatorio.finalizado_por or "", ""
+    return partes[0], " — ".join(partes[1:])
+
+
 def _fecho(relatorio):
-    """O fecho: quando e por quem foi finalizado no sistema (ou que ainda é rascunho) e a linha da assinatura no papel."""
+    """O fecho: quando e por quem foi finalizado no sistema (ou que ainda é rascunho) e a linha da assinatura no papel, que
+    depois de finalizado leva o nome e o CRESS de quem assinou."""
     if relatorio is not None and relatorio.finalizado and relatorio.finalizado_em:
         em = relatorio.finalizado_em
         situacao = Paragrafo([f"Finalizado no sistema em {em:%d/%m/%Y} às {em:%H:%M} por ", N(relatorio.assinatura or relatorio.finalizado_por)],
                              antes=26)
+        nome, resto = _assinante(relatorio)
+        legenda = [Paragrafo([N(nome)], "centro", unido_ao_proximo=True), Paragrafo([resto or "Assistente Social"], "centro", unido_ao_proximo=True)]
     else:
         situacao = Paragrafo(["Rascunho: ainda não finalizado no sistema."], antes=26)
-    return [situacao,
-            Paragrafo(["_" * 38], "centro", antes=24, unido_ao_proximo=True),
-            Paragrafo(["Assistente Social"], "centro", unido_ao_proximo=True),
-            Paragrafo(["Carimbo/Assinatura"], "centro")]
+        legenda = [Paragrafo(["Assistente Social"], "centro", unido_ao_proximo=True)]
+    return [situacao, Paragrafo(["_" * 38], "centro", antes=24, unido_ao_proximo=True), *legenda, Paragrafo(["Carimbo/Assinatura"], "centro")]
 
 
 def _adendos(relatorio):

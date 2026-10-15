@@ -156,6 +156,7 @@
         <div class="traco"></div>
         <div class="nome">{{ b.nome }}</div>
         <div>{{ b.cargo }}</div>
+        {% if b.registro %}<div>{{ b.registro }}</div>{% endif %}
         <div class="papel-de-quem">{{ b.papel }}</div>
       </div>
     {% elif b.tipo == 'imagem' %}
@@ -205,7 +206,7 @@
       {% for chave, valor in barra.manter.items() %}<input type="hidden" name="{{ chave }}" value="{{ valor }}">{% endfor %}
       <label><span class="rotulo">Responsável pela emissão</span>
         <select name="emissor" onchange="trocarEmissor(this.form)">
-          {% for id, rotulo in barra.emissores %}<option value="{{ id }}"{{ ' selected' if id == barra.emissor_id }}>{{ rotulo }}</option>{% endfor %}
+          {% for id, rotulo, sem_registro in barra.emissores %}<option value="{{ id }}"{{ ' selected' if id == barra.emissor_id }}{{ ' disabled' if sem_registro and id != barra.emissor_id }}>{{ rotulo }}</option>{% endfor %}
         </select></label>
       <noscript><button class="botao pequeno secundario">Aplicar</button></noscript>
     </form>
