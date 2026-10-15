@@ -1,0 +1,319 @@
+# Plano de segurança
+
+Combinado com o usuário em 2026-10-15 (decisões da mesma data nas seções 4 e 6). Serve de mapa: o que já existe, o que falta, em que ordem fazer, o que o sistema faz
+sozinho e o que só uma pessoa na casa pode fazer. Cada fase é entregue num PR pequeno, com testes, e esta página é atualizada
+no mesmo PR.
+
+> Não é parecer jurídico. As referências da última seção devem ser conferidas nos textos oficiais antes de fixar prazos e
+> números. Para a parte da LGPD, vale uma conversa com quem cuida do jurídico ou da contabilidade da associação.
+
+## 1. O que o sistema guarda e por que isso importa
+
+- **Dados pessoais de acolhidos e responsáveis**: nome, CPF, RG, endereço, telefones, filiação.
+- **Dados de saúde e de situação social**: convênio, motivo da internação, exames, e o **acolhimento social** (uso de
+  substâncias, tentativa de suicídio, violência, situação jurídica, rede de apoio). Na LGPD isso é **dado pessoal sensível**
+  (art. 5º, II, e art. 11), com cuidado redobrado, e vem de pessoas em um momento de fragilidade.
+- **Financeiro**: contribuição e parcelas de cada internação.
+- A LGPD (art. 46) exige medidas técnicas e administrativas para proteger esses dados de acesso não autorizado e de perda, e
+  (art. 48) a comunicação de incidente à ANPD e ao titular quando houver risco ou dano relevante.
+
+Como o sistema roda: um computador do escritório (Windows 11 Home, `C:\prontuario`) serve os 3 computadores da rede interna,
+com banco SQLite, sem custo de hospedagem. Isso tem uma vantagem de segurança (o dado não está na internet) e riscos próprios
+(um computador só, na mão de quem trabalha ali, sem ninguém de TI).
+
+## 2. Onde estamos hoje
+
+| Área | O que já existe | Lacuna |
+|---|---|---|
+| Entrada | Login obrigatório em toda rota; senha só como hash (scrypt); 5 erros bloqueiam o usuário por 10 min; mensagem igual para usuário inexistente e senha errada; sessão de 10 h que não renova; trocar a senha derruba as outras sessões | Sem lista de senhas fracas; senha provisória não precisa ser trocada; sem tempo ocioso; sem limite por IP; sem segundo fator |
+| Quem pode o quê | **Fase 1 (esta entrega)**: cascata de níveis com permissões configuráveis, nega por padrão, funcionário desativado perde o acesso | Quem tem "ver" vê todas as fichas; não há registro de quem viu o quê |
+| Rastro | Só o registro técnico do servidor (erros e, agora, acessos negados) | **Sem trilha de auditoria**: não dá para responder "quem abriu/alterou/baixou isto?" |
+| Rede | Porta aberta só para a sub-rede local (firewall); sem acesso externo | **HTTP sem criptografia**: senha e ficha trafegam em texto puro pela rede interna |
+| Navegador | Cookie HttpOnly e SameSite=Lax; nosniff; X-Frame-Options; sem cache das páginas | Sem token CSRF; sem CSP |
+| Dados | Excluir é em duas etapas (lixeira); banco fora do git; hook que barra dado real no repositório | Backup diário com 30 cópias, **mas no mesmo computador e sem criptografia** |
+| Servidor | Tarefas agendadas, firewall, pasta `instance/` protegida | Roda como SYSTEM; disco sem criptografia (a verificar); roteador e Windows sem checklist |
+| Papel | — | Sem inventário de dados, política de retenção, termo de sigilo nem plano de resposta a incidente |
+
+## 3. Ameaças que o plano cobre (da mais provável para a menos)
+
+| # | Ameaça | Exemplo na casa | Medida | Fase |
+|---|---|---|---|---|
+| 1 | **Perder tudo** | O disco do computador queima, ransomware, o computador é roubado, alguém apaga a pasta | Backup criptografado fora do computador, com rodízio e teste de restauração | 5 |
+| 2 | **Quem tem login vê ou faz o que não devia** | Funcionário curioso, estagiário com acesso total, ex-funcionário que ainda entra | Cascata de acesso, bloqueio de desativado, trilha de auditoria | **1**, 2 |
+| 3 | **Senha fraca, repetida, compartilhada ou anotada** | "Todo mundo usa o login do escritório" | Um usuário por pessoa, lista de senhas fracas, troca da provisória, segundo fator para administrador | 3 |
+| 4 | **Alguém escuta a rede** | Wi-Fi do escritório com senha conhecida por muita gente; visitante conectado | HTTPS na rede interna, Wi-Fi separado para visitante | 4, 6 |
+| 5 | **Acesso físico ao computador servidor** | Roubo, pessoa de passagem mexendo na máquina | Disco criptografado, bloqueio de tela, sala fechada | 6 |
+| 6 | **Ataque pelo navegador** | Link malicioso faz o navegador de um funcionário logado executar uma ação | Token CSRF, CSP | 7 |
+| 7 | **Dado que sai do sistema** | Prontuário baixado em pen-drive e esquecido; impressão deixada na impressora | Permissão própria para documentos, trilha de quem baixou, termo de sigilo | **1**, 2, 8 |
+| 8 | **Sistema exposto na internet sem querer** | Alguém libera uma porta no roteador "para acessar de casa" | Checklist do roteador, firewall só para a rede local | 6 |
+| 9 | **Falha em uma biblioteca** | Vulnerabilidade conhecida no Flask, Werkzeug, python-docx | Auditoria mensal das dependências | 9 |
+
+Acesso de fora do escritório (de casa, do celular, de um segundo polo) **muda o risco todo** e por isso não vale sem a
+fase 10 (VPN), nunca abrindo porta no roteador.
+
+## 4. As fases
+
+| Fase | O que entrega | Quem faz | Situação |
+|---|---|---|---|
+| 1 | Cascata de acesso por nível | Sistema | **Feita** (nesta entrega) |
+| 2 | Trilha de auditoria | Sistema | A fazer |
+| 3 | Contas e sessões mais fortes (+ segundo fator do administrador) | Sistema + usuário (celular com app autenticador) | A fazer |
+| 4 | HTTPS (celular e todos os navegadores) | Sistema + usuário (instalar a VPN) | A fazer; decidido usar o certificado da VPN |
+| 5 | Backup que sobrevive ao computador | Sistema + usuário (pen-drives e rotina) | A fazer |
+| 6 | Servidor Windows, rede e roteador | Quase tudo o usuário (roteiro passo a passo) | A fazer |
+| 7 | Token CSRF e CSP | Sistema | A fazer |
+| 8 | LGPD no papel | Usuário, com modelos prontos do sistema | A fazer |
+| 9 | Manutenção contínua | Sistema (avisos) + usuário | A fazer |
+| 10 | Segundo polo e acesso de fora do escritório (VPN) | Sistema + usuário (instalar a VPN) | A fazer; decidido: mesmo banco, opção A |
+
+Ordem sugerida: 1 → 5 → 2 → 3 → 4 + 10 (juntas: HTTPS pela VPN e o segundo polo) → 7 → 6 → 8 → 9. O backup (5) sobe na frente porque
+perder tudo é a ameaça mais provável e a mais cara, e passa a ser obrigatório quando o polo 2 depender do computador do escritório.
+
+### Fase 1 — Cascata de acesso por nível (entregue)
+
+**Ideia.** Os níveis (Cadastros > Níveis de acesso) já formam uma cascata: o primeiro é o do administrador e cada nível tem
+tudo o que os de baixo têm. Agora cada **permissão** tem um **nível mínimo**: quem está nele, ou acima, pode. O administrador
+escolhe isso em **Cadastros > Permissões**, numa grade de permissões × níveis. Mover um nível na cascata muda quem passa, sem
+refazer nada.
+
+**Regras.**
+
+1. **Nega por padrão.** Toda rota precisa estar em `permissoes.REGRAS`. Rota nova sem regra fica fechada para todos (até para o
+   administrador) e o servidor registra o aviso. Um teste confere que não sobrou rota sem regra.
+2. **Conferido num lugar só**, antes da rota rodar (`permissoes.exigir_permissao`), nunca espalhado pelas telas. As telas só
+   **escondem** o que a pessoa não pode usar, para não oferecer botão que não funciona (`pode('triagem')` nos templates; as listas
+   recebem as permissões por `permissoes_js()`).
+3. **Administrador pode tudo.** Enquanto nenhum administrador tem usuário vinculado (sistema recém-instalado), quem está logado
+   conta como administrador, senão ninguém conseguiria vincular o primeiro.
+4. **Login sem funcionário ligado** cai no nível de menos acesso (o último da cascata).
+5. **Funcionário desativado perde o acesso**: não entra mais (a senha certa não basta) e a sessão aberta é derrubada na página
+   seguinte. Reativar devolve o acesso.
+6. **O que só o administrador faz é fixo**, não se configura: criar usuário e senha, mudar nível, mexer nas permissões, lixeira.
+7. **Acolhimento social fica fora da cascata**: é pela marca "Serviço Social" no cadastro do funcionário (e o administrador),
+   porque é uma função, não uma hierarquia.
+8. **Negar não quebra nada**: página (403) diz o nível da pessoa e o que faltou; ação do JavaScript recebe JSON 403; toda
+   negação vai para `logs/servidor.log` com quem, o quê e qual permissão. Mudar permissão também (quem, de qual nível para qual).
+
+**Padrão de fábrica** (o administrador muda na tela). Mantém o que o Operador já fazia, exceto que **unificar cadastros** e
+**cadastrar convênios e funcionários** passam a ser do administrador (decisão do usuário, 2026-10-15; lançar parcelas continua
+com o operador) e que o nível **Consulta** passa a só consultar:
+
+| Permissão | Administrador | Operador | Consulta |
+|---|:-:|:-:|:-:|
+| Ver triagens, internos, fichas e o início | ✓ | ✓ | ✓ |
+| Ver e baixar relatórios | ✓ | ✓ | ✓ |
+| Imprimir e baixar os documentos do acolhido | ✓ | ✓ | – |
+| Registrar e editar triagens (inclui mudar a situação e admitir) | ✓ | ✓ | – |
+| Registrar e editar prontuários | ✓ | ✓ | – |
+| Dar baixa e anotar o prontuário em papel | ✓ | ✓ | – |
+| Lançar e excluir parcelas | ✓ | ✓ | – |
+| Excluir registros (vão para a lixeira) | ✓ | ✓ | – |
+| Unificar cadastros duplicados | ✓ | – | – |
+| Cadastrar convênios e funcionários (sem usuário e senha) | ✓ | – | – |
+| Criar usuários, trocar senhas, definir níveis e permissões | ✓ | – | – |
+| Lixeira: restaurar e apagar de vez | ✓ | – | – |
+| Acolhimento social (sigiloso) | ✓ | só com a marca | só com a marca |
+
+Quem tem a permissão de cadastros vê também as abas Níveis de acesso e Permissões, só para ler; sem ela a área Cadastros inteira
+some do menu. O administrador pode devolver qualquer uma ao Operador na grade, a qualquer momento.
+
+**Limites desta fase** (por isso existem as seguintes):
+
+- Quem tem "ver" enxerga **todos** os acolhidos. Não há restrição por registro nem por convênio.
+- Documento baixado ou impresso sai do controle do sistema (por isso `documentos` é uma permissão própria, e a trilha da fase 2
+  e o termo de sigilo da fase 8 completam).
+- Não há registro de **quem viu** o quê (fase 2).
+
+**Como conferir.** `teste_permissoes.py` (74 verificações): sementes, cobertura das rotas, consulta/operador/administrador em
+cerca de 60 rotas, tela escondendo botões, edição da matriz (valor ruim, campo ausente, nível desativado, mover nível),
+acolhimento pela marca, funcionário desativado com sessão aberta, rota sem regra.
+
+### Fase 2 — Trilha de auditoria
+
+**Para quê.** Responder, depois do fato, "quem abriu, alterou, baixou ou apagou isto, e quando?". É o que a ANPD espera para
+investigar um incidente e o que dissuade o curioso.
+
+**O que registrar** (tabela `eventos`, só o administrador lê, nunca editável pela tela):
+
+- Entradas: login certo, login errado, bloqueio, saída, sessão derrubada.
+- **Leitura de dado sensível**: abrir ficha de acolhido, abrir o acolhimento social, baixar ou imprimir documento, relatório.
+- Alterações: criar, editar, excluir, restaurar, apagar de vez (de quem e qual registro).
+- Administração: usuário criado, senha trocada, nível ou permissão alterados, funcionário (des)ativado.
+- Acessos negados.
+
+**O que não registrar**: o conteúdo dos campos. Só *qual* campo mudou, para a trilha não virar uma segunda cópia dos dados
+sensíveis.
+
+**Detalhes.** Quando, usuário, ação, registro, endereço de rede do computador. Tela "Cadastros > Auditoria" com filtro por
+pessoa, por acolhido e por período. Retenção definida na fase 8 (sugestão: 12 meses, depois resumida). Índice no banco para
+não pesar.
+
+**Decisão do usuário**: registrar **toda abertura de ficha** (mais útil, mais linhas) ou só documentos, acolhimento social e
+alterações? Sugestão: registrar tudo; são poucas centenas de linhas por dia.
+
+### Fase 3 — Contas e sessões
+
+- **Lista de senhas fracas** embutida (sem depender de internet): barra "1234567890", "senha123", o nome do usuário, o nome da
+  casa. Segue a orientação do NIST SP 800-63B de **bloquear senhas conhecidas em vez de exigir símbolos**, e de **não exigir
+  troca periódica** (só quando houver suspeita). O mínimo atual (10 caracteres) pode subir; conferir os números da revisão 4 do
+  guia antes de fixar.
+- **Senha provisória**: a que o administrador cria vale só para o primeiro acesso; o sistema pede a troca antes de qualquer
+  outra tela.
+- **Tempo ocioso**: sai sozinho depois de 30 minutos sem uso (ajustável), com aviso antes. Computador de escritório fica
+  desbloqueado quando alguém levanta.
+- **Limite por endereço**, além do limite por usuário (hoje o atacante troca de usuário a cada 5 erros).
+- **Segundo fator opcional (TOTP) para o administrador**, com app autenticador no celular (Google/Microsoft Authenticator ou
+  similar) e códigos de recuperação impressos. SMS fica de fora: o NIST deixou de aceitá-lo.
+- Sessão derrubada quando o nível muda.
+
+### Fase 4 — HTTPS na rede interna
+
+**Por quê.** Hoje a senha e as fichas viajam em texto puro entre o computador de cada pessoa e o servidor. Quem estiver na mesma
+rede (Wi-Fi compartilhado, um visitante, um aparelho infectado) consegue ler com ferramentas gratuitas.
+
+**Como.** Um programa pequeno e gratuito (Caddy) fica na frente do sistema, com certificado de uma **autoridade certificadora
+local** criada na própria casa (`tls internal`). O `waitress` passa a ouvir só em `127.0.0.1`. O cookie de sessão volta a ser
+`Secure` (sai `SESSAO_SEM_HTTPS`) e entra HSTS.
+
+**O que o usuário precisa fazer** (uma vez por computador): instalar o certificado raiz da casa. No Windows, em
+`certlm.msc` → Autoridades de Certificação Raiz Confiáveis. **Firefox** tem repositório próprio: é preciso ligar
+`security.enterprise_roots.enabled` (ou política `ImportEnterpriseRoots`) para ele aceitar o certificado do Windows. **Celulares**
+exigem instalar o certificado manualmente e o Android mostra um aviso permanente.
+
+**Alternativa** que evita instalar certificado em cada máquina: registrar um domínio próprio (cerca de R$ 40 por ano) e usar um
+certificado público por desafio de DNS. O endereço interno passa a ter nome (`prontuario.casaacolhida.org.br`) e todos os
+navegadores e celulares aceitam sem configuração. Custa pouco e simplifica a vida; decidir junto com a resposta abaixo.
+
+**Decisão (2026-10-15)**: o usuário quer acesso pelo **celular** e por **qualquer navegador** (Chrome, Edge, Firefox, Safari).
+Isso pesa contra a autoridade certificadora local (instalar e configurar certificado em cada celular e no Firefox). Como o
+segundo polo vai precisar de VPN de qualquer jeito (fase 10), a recomendação é **usar o certificado que a própria VPN emite**
+(Tailscale: `tailscale cert`, certificado público válido para o nome do computador na VPN), que todos os navegadores e celulares
+aceitam sem instalar nada. A confirmar na hora de fazer: limites do plano gratuito e o funcionamento no Windows 11 Home.
+
+### Fase 5 — Backup que sobrevive ao computador
+
+Hoje `backup.py` faz uma cópia consistente do banco todo dia às 18:30 e guarda as últimas 30 **no mesmo computador**, sem
+criptografia. Se o disco morrer, o computador for roubado ou um programa malicioso criptografar a pasta, as cópias vão junto.
+
+Plano (regra 3-2-1 adaptada): 3 cópias, 2 lugares, 1 fora do escritório.
+
+- Cópia **criptografada** (arquivo com senha, AES-256) gerada logo depois do backup diário, para um **pen-drive ou HD externo** em
+  **rodízio de 3 mídias**, sempre uma guardada **fora do escritório** (casa do coordenador).
+- A **senha da criptografia fica anotada em papel, em lugar seguro**, nunca no mesmo computador. Perdê-la é perder o backup.
+- **Teste de restauração** a cada 3 meses, num computador à parte, com checklist. Backup que nunca foi restaurado é uma esperança.
+- Aviso na página inicial quando a cópia externa passar de N dias sem ser trocada (já existe o aviso do backup local).
+- Custo: 3 pen-drives (cerca de R$ 60 cada).
+
+### Fase 6 — Servidor Windows, rede e roteador
+
+Roteiro com o passo a passo, quase tudo manual, em `implantacao/`:
+
+- **Disco criptografado**: o Windows 11 Home tem a "Criptografia de dispositivo" se o computador tiver TPM e atender aos
+  requisitos (Configurações → Privacidade e segurança → Criptografia de dispositivo). Guardar a chave de recuperação em papel.
+- **Serviço com conta limitada** no lugar de SYSTEM: se alguém explorar o sistema, não ganha o computador inteiro.
+- **Windows**: atualizações automáticas ligadas; Microsoft Defender ligado; conta de administrador do Windows com senha forte e
+  conta comum para o dia a dia; bloqueio de tela por inatividade; computador em sala que se tranca.
+- **Rede**: perfil "Privada"; o firewall só abre a porta para a sub-rede (já está); sem encaminhamento de portas no roteador
+  (UPnP desligado); senha de administração do roteador trocada; Wi-Fi com WPA2/WPA3 e senha forte; **rede de visitantes separada**.
+- **Impressão**: a impressora fica onde só a equipe passa; documento com dado sensível não fica na bandeja.
+
+### Fase 7 — Defesa do navegador
+
+- **Token CSRF** em todo formulário e chamada de alteração (hoje só `SameSite=Lax`, que é bom, mas não substitui).
+- **CSP** (Content-Security-Policy) sem `unsafe-inline`: exige tirar os scripts e estilos que ainda estão dentro das páginas e
+  passá-los para arquivos (as telas novas já seguem isso, como `static/permissoes.js`).
+- Cabeçalhos extras: `Permissions-Policy`, `Cross-Origin-Opener-Policy`, `Content-Disposition` nos downloads.
+
+### Fase 8 — LGPD no papel
+
+Modelos prontos em `docs/lgpd/`, para a casa preencher e assinar:
+
+- **Inventário de dados**: o quê, para quê, base legal (tutela da saúde, obrigação legal, consentimento do responsável quando
+  for o caso), quem acessa, onde fica, por quanto tempo.
+- **Política de retenção**: por quanto tempo guardar prontuário de ex-interno e quanto tempo um registro fica na lixeira antes
+  de ser apagado de vez. Alinhar com as exigências do conselho profissional e da vigilância sanitária.
+- **Termo de sigilo** assinado por quem recebe um login.
+- **Plano de resposta a incidente**: quem avisa quem, em quanto tempo; a comunicação à ANPD e ao titular tem prazo (conferir a
+  Resolução CD/ANPD nº 15/2024). Inclui o que fazer se um computador for roubado ou um pen-drive de backup for perdido.
+- **Canal do titular** (art. 18): como a pessoa pede acesso, correção ou eliminação.
+- A associação provavelmente se enquadra como agente de tratamento de **pequeno porte** (Resolução CD/ANPD nº 2/2022), com
+  obrigações simplificadas, mas ainda precisa de canal de atendimento e das medidas acima. Confirmar com a contabilidade ou o jurídico.
+
+### Fase 9 — Manutenção contínua
+
+- **Auditoria mensal das dependências** (`pip-audit`) em um script de `implantacao/`, com aviso na página inicial se houver
+  vulnerabilidade conhecida.
+- **Revisão trimestral dos acessos**: lista de usuários × funcionários ativos × nível, com aviso no quadro de avisos.
+- **Teste de restauração do backup** trimestral (fase 5) e revisão deste plano a cada semestre.
+
+### Fase 10 — Segundo polo e acesso de fora do escritório
+
+**Pergunta de origem (2026-10-15).** Hoje o sistema só abre quando o computador está no Wi-Fi do escritório. Dá para instalar
+um servidor em outro polo e os dois usarem o mesmo banco?
+
+**Por que não dois servidores com o SQLite.** O SQLite é um arquivo, feito para um computador só; dois servidores abrindo o mesmo
+arquivo pela rede podem corrompê-lo. Manter um banco por polo e sincronizar traz conflitos (a mesma pessoa cadastrada nos dois
+lados, numeração repetida, internet que cai no meio) e não é recomendado.
+
+**Opção A (recomendada): um banco só, e o polo 2 entra no computador do escritório por VPN.**
+
+- Sem servidor novo e sem sincronização: os dois polos usam o mesmo sistema e veem o que o outro registrou na hora.
+- A VPN (por exemplo Tailscale, que tem plano gratuito; conferir os limites atuais) liga os aparelhos numa rede privada, **sem
+  abrir porta no roteador** e sem expor o sistema na internet. Serve também para o celular fora do escritório.
+- O HTTPS (fase 4) pode usar o certificado que a própria VPN oferece, sem instalar certificado em cada máquina (a confirmar).
+- Ponto fraco: o computador do escritório vira o ponto único. Se ele ou a internet de lá cair, o polo 2 para. O backup externo
+  (fase 5) passa a ser obrigatório.
+- **Pré-requisitos de segurança**, que passam a ser obrigatórios antes de liberar: HTTPS (4), segundo fator do administrador, tempo
+  ocioso (3), trilha de auditoria com o endereço de cada acesso (2) e o termo de sigilo (8).
+
+**Opção B: Postgres central e um servidor do sistema em cada polo.** O sistema já suporta (`DATABASE_URL`, testado nesta entrega,
+incluindo a cópia do SQLite com `copiar_banco.py`). O banco precisa ficar num lugar que os dois polos alcancem: a mesma VPN, ou um
+Postgres em nuvem (custo, e dado de saúde fora do país, com implicação de LGPD). Só compensa se o polo 2 precisar funcionar com o
+escritório fora do ar.
+
+**Decisões (2026-10-15)**: os polos compartilham **exatamente as mesmas informações**, como se o sistema estivesse na nuvem, e o
+polo 2 tem computadores e internet. Logo vale a **opção A**, sem campo "polo" e sem sincronização: um sistema, um banco, um
+endereço (o do computador do escritório na VPN) para os dois polos e para o celular. Falta só confirmar com o usuário a hora de
+fazer, porque depende das fases 2, 3 e 4 (pré-requisitos acima) e do backup externo (5).
+
+## 5. O que só uma pessoa na casa pode fazer
+
+| Quando | Tarefa |
+|---|---|
+| Agora | Revisar a grade de **Cadastros > Permissões** e ajustar o que cada nível pode; conferir que cada pessoa está no nível certo |
+| Agora | Conferir se algum login ainda é compartilhado ("escritório", "recepção"). Um usuário por pessoa |
+| Agora | Desativar o funcionário de quem saiu da casa (o login deixa de entrar na hora) |
+| Fase 5 | Comprar 3 pen-drives (ou HDs), definir quem troca e quem guarda a mídia fora do escritório; guardar a senha do backup em papel |
+| Fase 6 | Seguir o roteiro do Windows e do roteador |
+| Fase 4 | Instalar o certificado em cada computador (e celular, se houver) |
+| Fase 10 | Instalar a VPN no computador do escritório e em cada aparelho que for acessar de fora |
+| Fase 8 | Preencher e assinar os modelos |
+
+## 6. Decisões e perguntas
+
+**Respondidas em 2026-10-15**
+
+1. Os polos compartilham exatamente as mesmas informações (fase 10, opção A, sem campo "polo"); o polo 2 tem computadores e internet.
+2. Celular e todos os navegadores: o HTTPS usa o certificado da VPN (fase 4).
+3. Grade de fábrica: unificar e cadastros só do administrador; parcelas ficam com o operador.
+4. Níveis: ficam Administrador, Operador e Consulta; o administrador reorganiza na tela quando precisar.
+
+**Em aberto**
+
+1. Fase 2: registrar **toda abertura de ficha**, ou só documentos, acolhimento social e alterações? (Sugestão: tudo.)
+2. Fase 3: **tempo ocioso** de 30 minutos serve? **Segundo fator** para o administrador, sim ou não?
+3. Fase 5: existe um lugar fora do escritório para guardar uma das mídias de backup?
+4. Fase 10: quantos aparelhos vão entrar na VPN (computadores dos dois polos e celulares)? Define se o plano gratuito basta.
+
+## 7. Referências
+
+- Lei nº 13.709/2018 (LGPD), arts. 5º, 6º (VII e VIII), 11, 18, 46 a 49.
+- ANPD, *Guia orientativo de segurança da informação para agentes de tratamento de pequeno porte* (2021) — medidas
+  administrativas e técnicas, em linguagem simples. Resolução CD/ANPD nº 2/2022 (agentes de pequeno porte) e nº 15/2024
+  (comunicação de incidente de segurança).
+- OWASP ASVS, capítulo de controle de acesso (V4): nega por padrão, menor privilégio, regra aplicada no servidor e num ponto
+  central, falhar fechado, registrar decisões de autorização.
+- NIST SP 800-63B (autenticação): lista de senhas conhecidas bloqueada, sem regras de composição, sem troca periódica, segundo fator
+  por aplicativo (TOTP) em vez de SMS.
+- Mozilla, *Enterprise policies* — `ImportEnterpriseRoots` (Firefox usar o repositório de certificados do Windows). Microsoft,
+  *Device encryption in Windows* (Windows 11 Home). Caddy, *Automatic HTTPS* — `tls internal` (autoridade certificadora local).

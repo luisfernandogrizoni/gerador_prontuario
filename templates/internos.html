@@ -98,6 +98,7 @@
   const NOVO = {{ novo | tojson }};            // id da internação recém-gravada (ou null)
   const BAIXAR = {{ baixar | tojson }};        // 1 = veio de "Salvar e baixar prontuário"
   const PODE_SOCIAL = {{ pode_servico_social | tojson }};     // lê e escreve o acolhimento social (Serviço Social e administrador)
+  const PODE = {{ permissoes_js() | tojson }};     // o que o nível de acesso da pessoa permite (permissoes.py): o resto não aparece
   const filtro = new ControleSegmentado(document.getElementById("filtro"));
   const aviso = document.getElementById("aviso");
 
@@ -146,7 +147,7 @@
       { celula: celulaResponsavel, classe: "livre" },
       { celula: celulaSituacao, classe: "fixo" },
       // só quem está ativo pode receber baixa
-      { celula: i => i.status === "ativo" ? botao("Dar baixa", () => perguntarBaixa(i), "botao pequeno secundario", "saida") : "",
+      { celula: i => PODE.baixa && i.status === "ativo" ? botao("Dar baixa", () => perguntarBaixa(i), "botao pequeno secundario", "saida") : "",
         classe: "fixo acao" },
     ],
   });
@@ -204,6 +205,12 @@
     if (!NOVO) return;
     const item = tabela.itens.find(i => i.id === NOVO);
     if (item && filtro.value && item.status !== filtro.value) { filtro.value = ""; tabela.desenhar(); }
+    if (!PODE.documentos) {                     // sem permissão para imprimir: só confirma que gravou
+      mostrarAviso([`Prontuário de ${item ? item.nome : "novo interno"} salvo.`]);
+      tabela.limparParametros("novo", "baixar");
+      document.getElementById("linha-" + NOVO)?.scrollIntoView({ block: "center" });
+      return;
+    }
     const url = `/internacoes/${NOVO}/prontuario`;
     const conjunto = `/internacoes/${NOVO}/impressos`;      // o prontuário e os outros impressos da internação, num documento só
     const nome = item ? item.nome : "novo interno";

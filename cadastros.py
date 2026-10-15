@@ -8,9 +8,9 @@ Cadastros: convênios e funcionários.
     (marca 'Assina o Serviço Social' e registro profissional, o CRESS) lê e escreve o acolhimento social, que é sigiloso:
     pode_servico_social.
   * Níveis de acesso (Cadastros > Níveis de acesso): uma cascata, do que tem mais acesso para o que tem menos. O
-    primeiro da cascata é o do administrador. Por enquanto a única regra aplicada é a do próprio acesso (pode_gerenciar_
-    acessos: criar usuário e senha, vincular login, mudar o nível de alguém, mexer nos níveis); o resto do que cada nível
-    pode fazer será configurado depois (nivel_do_usuario é a base).
+    primeiro da cascata é o do administrador. A regra do próprio acesso é pode_gerenciar_acessos (criar usuário e senha,
+    vincular login, mudar o nível de alguém, mexer nos níveis e nas permissões). O que cada nível pode fazer no resto do
+    sistema está em permissoes.py (Cadastros > Permissões); nivel_do_usuario diz em que nível a pessoa está.
 
 Cada função de gravação devolve (objeto, erros), como em servicos.py: com `erros` preenchido, nada foi gravado e o
 formulário volta com a mensagem ao lado de cada campo.
@@ -322,9 +322,18 @@ def funcionario_do_usuario(usuario):
 
 def nivel_do_usuario(usuario):
     """O nível de acesso de quem está logado: o do funcionário ativo que tem o login dele (None se não houver).
-    Ainda não restringe nada: é a base da configuração da cascata."""
+    É com ele que permissoes.py decide o que a pessoa pode fazer."""
     funcionario = funcionario_do_usuario(usuario)
     return funcionario.nivel if funcionario else None
+
+
+def acesso_desativado(usuario):
+    """O login pertence a um funcionário que foi desativado (e a nenhum ativo): quem saiu da casa não entra mais, nem com
+    a sessão que já estava aberta. Login sem funcionário nenhum não conta (vale o nível de menos acesso)."""
+    if usuario is None:
+        return False
+    donos = db.session.execute(db.select(Funcionario.ativo).filter_by(usuario=usuario.nome)).scalars().all()
+    return bool(donos) and not any(donos)
 
 
 def pode_servico_social(usuario):

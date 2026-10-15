@@ -40,8 +40,8 @@ class Aviso:
     url: str          # onde resolver
     chave: str        # identifica o aviso para "Ciente"
     # ação extra, um botão que envia um formulário: {"rotulo", "url", "confirmar" (pergunta, opcional),
-    # "campos" (campos ocultos), "principal" (botão cheio em vez de branco)} — ex.: unificar cadastros,
-    # marcar o prontuário como recebido
+    # "campos" (campos ocultos), "principal" (botão cheio em vez de branco), "exige" (a permissão que a ação pede,
+    # permissoes.py: quem não a tem não vê o botão)} — ex.: unificar cadastros, marcar o prontuário como recebido
     acao: dict | None = None
     etiqueta: tuple[str, str] | None = None   # (cor, texto) ao lado do aviso: cor = proximo | urgente | vencido
     dispensavel: bool = True                  # False = não tem "Ciente": só some quando resolvido
@@ -144,7 +144,7 @@ def gerar_avisos(pode_servico_social=False):
                 f"dup:{manter.id}:{outro.id}",
                 acao={"rotulo": f"Unificar no cadastro {manter.id}",
                       "url": url_for("unificar_pessoas", manter=manter.id, remover=outro.id),
-                      "confirmar": "Unificar os dois cadastros? As internações passam para um só cadastro."}))
+                      "confirmar": "Unificar os dois cadastros? As internações passam para um só cadastro.", "exige": "unificar"}))
 
     dispensados = set(db.session.execute(db.select(AvisoDispensado.chave)).scalars())
     avisos = [a for a in avisos if a.chave not in dispensados]
@@ -192,4 +192,4 @@ def _aviso_do_envelope(i, hoje):
     etiqueta = None if dias is None else ("vencido" if atrasado else "proximo", tempo_decorrido(dias))
     return Aviso(CATEGORIA_ENVELOPE, texto, _ficha(i), f"envelope:{i.id}", etiqueta=etiqueta, dispensavel=False,
                  acao={"rotulo": "Chegou ao escritório", "url": url_for("registrar_envelope", id=i.id),
-                       "campos": {"situacao": "recebido", "voltar": "home"}, "principal": True})
+                       "campos": {"situacao": "recebido", "voltar": "home"}, "principal": True, "exige": "baixa"})

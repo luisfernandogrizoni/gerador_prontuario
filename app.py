@@ -20,6 +20,7 @@ Telas:
                                     o administrador também cria o usuário e a senha de cada um e escolhe o nível de acesso
     /cadastros/niveis               níveis de acesso, em cascata (do que tem mais acesso para o que tem menos); o
                                     primeiro é o do administrador, e só ele altera os níveis
+    /cadastros/permissoes           o que cada nível pode fazer (nível mínimo de cada permissão); só o administrador altera
     /internacoes/<id>/prontuario    baixa o .docx
     /internacoes/<id>/impressos     os impressos da triagem (pedido de exames, enxoval) e da internação (prontuário, manual
                                     de orientação, ficha multiprofissional, capa do envelope, relatório do Serviço Social)
@@ -37,6 +38,7 @@ Organização:
     modelos.py     tabelas (pessoas, internacoes, parcelas)
     servicos.py    regras de negócio: validar, gravar, mudar status, parcelas
     avisos.py      quadro de avisos
+    permissoes.py  o que cada nível de acesso pode fazer e a regra de cada rota (nega por padrão)
     catalogo.py    o que o sistema sabe de cada convênio (lido do cadastro, uma vez por requisição)
     cadastros.py   cadastros de convênios e de funcionários
     fichas.py      pedido de exames, enxoval, capa do envelope e ficha multiprofissional (em branco)
@@ -55,7 +57,8 @@ Organização:
 ATENÇÃO: o banco guarda dados pessoais sensíveis e NUNCA vai para o git (instance/ está
 no .gitignore; na hospedagem o banco é externo, via DATABASE_URL — veja banco.py).
 Toda tela e todo dado exigem login (o administrador cria os usuários em Cadastros > Funcionários;
-veja autenticacao.py para o primeiro usuário e para as variáveis de ambiente da hospedagem). Em produção use HTTPS e um servidor de
+veja autenticacao.py para o primeiro usuário e para as variáveis de ambiente da hospedagem) e, depois do login, a
+permissão do nível de acesso da pessoa (permissoes.REGRAS: rota sem regra fica fechada). Em produção use HTTPS e um servidor de
 verdade (gunicorn app:app) — `python app.py` é só para uso local.
 """
 
@@ -75,6 +78,7 @@ import documentos
 import exclusao
 import impressos
 import painel
+import permissoes
 import relatorios
 import servico_social
 import servicos
@@ -109,14 +113,13 @@ with app.app_context():
     autenticacao.criar_usuario_inicial()
 
 app.before_request(autenticacao.exigir_login)
+app.before_request(permissoes.exigir_permissao)     # depois do login: a rota pede uma permissão e a pessoa tem? (permissoes.REGRAS)
 app.after_request(autenticacao.cabecalhos_de_seguranca)
 autenticacao.registrar_comandos(app)
 def _e_administrador():
     """O usuário logado é o administrador? (cadastros.pode_gerenciar_acessos: enquanto nenhum administrador tem usuário
     vinculado, vale para quem está logado.) Guardado por requisição: as telas perguntam várias vezes."""
-    if "e_administrador" not in g:
-        g.e_administrador = cadastros_.pode_gerenciar_acessos(g.get("usuario"))
-    return g.e_administrador
+    return permissoes.e_administrador()
 
 
 def _pode_servico_social():
@@ -127,8 +130,10 @@ def _pode_servico_social():
     return g.pode_servico_social
 
 
+# pode('triagem') nos templates esconde o que a pessoa não pode usar; permissoes_js() leva o mesmo ao JavaScript das listas
 app.context_processor(lambda: {"usuario_atual": g.get("usuario"), "e_administrador": _e_administrador(),
-                               "pode_servico_social": _pode_servico_social()})
+                               "pode_servico_social": _pode_servico_social(),
+                               "pode": permissoes.pode, "permissoes_js": permissoes.do_usuario})
 
 # filtros usados nos templates: {{ p.cpf | cpf }}, {{ i.inicio | data }} ...
 app.jinja_env.filters.update(cpf=fmt_cpf, rg=fmt_rg, cep=fmt_cep, data=fmt_data, hora=fmt_hora,
@@ -185,6 +190,8 @@ def login():
     proximo = request.values.get("next", "")
     if request.method == "POST":
         usuario, erro = autenticacao.entrar(request.form.get("usuario"), request.form.get("senha"))
+        if usuario and cadastros_.acesso_desativado(usuario):     # a senha confere, mas o funcionário foi desativado
+            usuario, erro = None, "Este acesso foi desativado. Procure o administrador."
         if usuario:
             autenticacao.abrir_sessao(usuario)
             return redirect(autenticacao.destino_seguro(proximo, url_for("home")))
@@ -217,7 +224,8 @@ def home():
     hoje = date.today()
     lista_de_vagas = gerar_vagas()
     return render_template("home.html", avisos=gerar_avisos(_pode_servico_social()), vagas=lista_de_vagas, vagas_total=totais(lista_de_vagas),
-                           resumo=painel.resumo(), agenda=painel.agenda(hoje=hoje), para_imprimir=painel.impressos_da_internacao(hoje=hoje),
+                           resumo=painel.resumo(), agenda=painel.agenda(hoje=hoje),
+                           para_imprimir=painel.impressos_da_internacao(hoje=hoje) if permissoes.pode("documentos") else {"total": 0, "itens": []},
                            dias_da_agenda=painel.DIAS_DA_AGENDA, fim_do_tratamento=painel.tratamentos_a_finalizar(hoje=hoje),
                            hoje_por_extenso=painel.data_por_extenso(hoje),
                            na_lixeira=exclusao.quantos_excluidos() if _e_administrador() else 0)     # o que os operadores excluíram
@@ -358,7 +366,7 @@ def gerar():
         return render_template("formulario.html", d=request.form, erros=erros, pessoa=pessoa,
                                anterior=None, **servicos.opcoes_formulario(request.form.get("convenio", ""))), 400
     # Post/Redirect/Get: a lista destaca a linha e, se foi "Salvar e baixar", baixa o .docx
-    baixar = 1 if request.form.get("acao") == "baixar" else None
+    baixar = 1 if request.form.get("acao") == "baixar" and permissoes.pode("documentos") else None
     return redirect(url_for("lista_internos", novo=internacao.id, baixar=baixar))
 
 
@@ -824,6 +832,26 @@ def lista_niveis():
         db.select(Funcionario.nivel_id, db.func.count()).filter(Funcionario.ativo.is_(True)).group_by(Funcionario.nivel_id))}
     return render_template("cadastro_niveis.html", niveis=cadastros_.niveis(), funcionarios_por_nivel=em_uso,
                            pode_acessos=cadastros_.pode_gerenciar_acessos(g.usuario))
+
+
+# O que cada nível pode fazer (permissoes.py). Quem tem "cadastros" vê; só o administrador ("acessos") altera.
+@app.get("/cadastros/permissoes")
+def lista_permissoes():
+    niveis, grupos = permissoes.matriz()
+    return render_template("cadastro_permissoes.html", niveis=niveis, grupos=grupos, pode_acessos=permissoes.pode("acessos"),
+                           acolhimento_social=permissoes.ACOLHIMENTO_SOCIAL)
+
+
+@app.post("/cadastros/permissoes")
+def salvar_permissoes():
+    erros, mudaram = permissoes.salvar_matriz(request.form, _nome_do_usuario())
+    if erros:
+        flash(" ".join(erros.values()))
+    elif mudaram:
+        flash(f"Permissões salvas ({mudaram} alterada{'s' if mudaram != 1 else ''}).")
+    else:
+        flash("Nada mudou.")
+    return redirect(url_for("lista_permissoes"))
 
 
 def _so_administrador(destino):

@@ -103,6 +103,7 @@
   const NOVO = {{ novo | tojson }};
   const IMPRIMIR = {{ imprimir | tojson }};     // 1 = a internação acabou de ser marcada: pergunta se imprime exames e enxoval
   const PODE_SOCIAL = {{ pode_servico_social | tojson }};     // lê e escreve o acolhimento social (Serviço Social e administrador)
+  const PODE = {{ permissoes_js() | tojson }};     // o que o nível de acesso da pessoa permite (permissoes.py): o resto não aparece
   const OPCOES = [...{{ status_triagem | tojson }}, ["ativo", "Admitido → internos"]];
   const filtro = new ControleSegmentado(document.getElementById("filtro"));
   const aviso = document.getElementById("aviso");
@@ -190,13 +191,13 @@
   function celulaAcoes(i) {
     const caixa = document.createElement("div");
     caixa.className = "acoes-linha";
-    if (i.agendada && i.agendada >= hojeIso() && (i.status === "em_admissao" || i.status === "lista_espera")) {
+    if (PODE.documentos && i.agendada && i.agendada >= hojeIso() && (i.status === "em_admissao" || i.status === "lista_espera")) {
       const imprimir = link("Imprimir", `/internacoes/${i.id}/impressos?itens=exames,enxoval&imprimir=1`, "botao pequeno secundario");
       imprimir.target = "_blank"; imprimir.rel = "noopener"; imprimir.title = "Pedido de exames e enxoval";
       imprimir.prepend(icone("impressora"));
       caixa.append(imprimir);
     }
-    caixa.append(link("Editar", `/internacoes/${i.id}/editar`, "botao pequeno secundario"));
+    if (PODE.triagem) caixa.append(link("Editar", `/internacoes/${i.id}/editar`, "botao pequeno secundario"));
     return caixa;
   }
 
@@ -206,6 +207,7 @@
   }
 
   function seletorStatus(item) {
+    if (!PODE.triagem) return selo(item.status_txt, item.status);        // sem permissão para mudar a situação: só mostra
     const sel = document.createElement("select");
     sel.className = "seletor " + item.status;
     for (const [valor, rotulo] of OPCOES) sel.add(new Option(rotulo, valor, false, valor === item.status));

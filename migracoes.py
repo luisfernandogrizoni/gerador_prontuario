@@ -113,6 +113,7 @@ def semear(db):
     Pode rodar quantas vezes quiser."""
     from catalogo import CONVENIOS_DE_FABRICA, NIVEIS_DE_FABRICA
     from documentos import EMISSOR_CARGO, EMISSOR_NOME
+    import permissoes
     from modelos import Convenio, Funcionario, NivelAcesso
 
     try:
@@ -131,3 +132,4 @@ def semear(db):
         db.session.commit()
     except IntegrityError:          # outro processo do servidor semeou ao mesmo tempo
         db.session.rollback()
+    permissoes.semear()             # o nível de fábrica de cada permissão (a nova de uma versão futura entra sozinha)

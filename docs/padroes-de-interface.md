@@ -117,6 +117,17 @@ Um botão **cheio** (primário) por tela, para a ação principal. Os outros sã
 - **Entrada**: fundo em pastel (rosa da marca e azul) com o cartão em destaque; é a única tela com fundo diferente.
 - **Cadastros**: as abas têm ícone (`_abas_cadastros.html`); formulário curto sem "Cancelar".
 
+## Níveis de acesso na tela
+
+- **Esconda o que a pessoa não pode usar**, nunca ofereça botão que dá "sem permissão": `{% if pode('triagem') %}` no template
+  (permissões em `permissoes.py`); nas listas dinâmicas, `permissoes_js()` leva o mesmo ao JavaScript (`const PODE = ...`).
+  Um botão cheio que some não deixa buraco: o que sobra continua alinhado. Menu "Mais" sem nenhum item não aparece.
+- **A tela nunca é a trava.** Quem manda é a regra da rota (`permissoes.REGRAS`, nega por padrão). Rota nova precisa de regra,
+  senão fica fechada para todos; ação do JavaScript recebe JSON 403 e mostra o aviso que a lista já sabe mostrar.
+- **Grade de permissões** (`cadastro_permissoes.html`): permissão nas linhas, níveis nas colunas, um cartão por grupo (formulário
+  com índice e barra de salvar). Cada célula é um sinal com texto (✓ pode, – não pode), nunca só cor; o anel marca o nível mínimo.
+  Quem só pode ler vê o mesmo sem as opções. No celular cada permissão vira um bloco com o nome de cada nível ao lado do sinal.
+
 ## Antes de entregar uma tela
 
 1. Só variáveis de cor, espaço e canto do `base.html`. Nenhum valor solto.

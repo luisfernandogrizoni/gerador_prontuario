@@ -404,8 +404,8 @@ class Convenio(db.Model):
 
 
 class NivelAcesso(db.Model):
-    """Níveis de acesso (Cadastros > Níveis de acesso), em cascata: o de `ordem` menor tem mais acesso e, na regra que
-    ainda será configurada, inclui o que os de baixo têm. Por enquanto o nível só é registrado em cada funcionário."""
+    """Níveis de acesso (Cadastros > Níveis de acesso), em cascata: o de `ordem` menor tem mais acesso e inclui tudo o que
+    os de baixo têm. O que cada nível pode fazer fica em PermissaoNivel (veja permissoes.py)."""
     __tablename__ = "niveis_acesso"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -414,6 +414,19 @@ class NivelAcesso(db.Model):
     ordem: Mapped[int] = mapped_column(default=0)                 # 1 = o que tem mais acesso
     ativo: Mapped[bool] = mapped_column(default=True)
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class PermissaoNivel(db.Model):
+    """O nível mínimo de cada permissão (Cadastros > Permissões): quem está nesse nível, ou acima dele na cascata, pode.
+    Uma linha por permissão configurável (a lista está em permissoes.py); a que não tem linha cai no padrão de fábrica."""
+    __tablename__ = "permissoes_nivel"
+
+    chave: Mapped[str] = mapped_column(String(40), primary_key=True)
+    nivel_id: Mapped[int] = mapped_column(ForeignKey("niveis_acesso.id"))
+    alterado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    alterado_por: Mapped[str] = mapped_column(String(50), default="")
+
+    nivel: Mapped[NivelAcesso] = relationship()
 
 
 class Funcionario(db.Model):

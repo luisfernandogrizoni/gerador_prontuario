@@ -100,7 +100,7 @@
     <h3>Responsável</h3>
     <dl>{% for rotulo, valor in responsavel %}<div><dt>{{ rotulo }}</dt><dd>{{ valor }}</dd></div>{% endfor %}</dl>
     {% endif %}
-    <p class="corrigir"><a href="{{ url_for('editar_internacao', id=i.id) }}">Corrigir no cadastro</a></p>
+    {% if pode('triagem' if i.e_triagem else 'internacao') %}<p class="corrigir"><a href="{{ url_for('editar_internacao', id=i.id) }}">Corrigir no cadastro</a></p>{% endif %}
   </section>
 
   <div class="form-grade">
