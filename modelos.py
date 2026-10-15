@@ -378,6 +378,23 @@ class AdendoSocial(db.Model):
 
 
 # =========================================================================
+class CodigoSeguranca(db.Model):
+    """Códigos de uso único que a pessoa recebe por e-mail (contas.py): o de 6 dígitos que confirma o e-mail e o link do "esqueci
+    minha senha". Só o resumo (sha256) do código é guardado: quem lê o banco não consegue usá-lo."""
+    __tablename__ = "codigos_seguranca"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    usuario_id: Mapped[int] = mapped_column(index=True)
+    finalidade: Mapped[str] = mapped_column(String(10), index=True)                # "email" ou "senha"
+    resumo: Mapped[str] = mapped_column(String(64), index=True)
+    destino: Mapped[str] = mapped_column(String(120), default="")                  # para qual e-mail foi enviado
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, index=True)
+    expira_em: Mapped[datetime] = mapped_column(DateTime)
+    usado_em: Mapped[datetime | None] = mapped_column(DateTime)
+    tentativas: Mapped[int] = mapped_column(default=0)
+
+
+# =========================================================================
 class Evento(db.Model):
     """Trilha de auditoria (auditoria.py): quem fez o quê, em qual registro e quando. Só se acrescenta: nenhuma tela edita nem
     apaga. Não guarda o conteúdo dos dados (só QUAIS campos mudaram) e não aponta para as outras tabelas por chave: sobrevive
@@ -464,6 +481,10 @@ class Funcionario(db.Model):
     # registro profissional (CRESS). O administrador também tem acesso, sem precisar desta marca.
     servico_social: Mapped[bool] = mapped_column(default=False)
     registro_profissional: Mapped[str] = mapped_column(String(30), default="")
+    # e-mail institucional (só o administrador altera): serve para o "esqueci minha senha" e para os avisos de segurança, e só vale
+    # depois de confirmado com um código enviado a ele (contas.py)
+    email: Mapped[str] = mapped_column(String(120), default="")
+    email_confirmado_em: Mapped[datetime | None] = mapped_column(DateTime)
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     nivel: Mapped[NivelAcesso | None] = relationship()
@@ -481,4 +502,13 @@ class Usuario(db.Model):
     # proteção contra tentativa e erro: após várias senhas erradas, bloqueia por um tempo
     falhas: Mapped[int] = mapped_column(default=0)
     bloqueado_ate: Mapped[datetime | None] = mapped_column(DateTime)
+    # senha que o administrador definiu: a pessoa tem de trocá-la antes de usar qualquer outra tela
+    trocar_senha: Mapped[bool] = mapped_column(default=False)
+    # segundo fator (aplicativo autenticador no celular, TOTP; totp.py). O segredo fica CIFRADO com uma chave que não vai no banco
+    # (instance/secret.key), para um backup do banco sozinho não bastar. `totp_ativo` só vale depois de a pessoa digitar um código
+    # que o aplicativo gerou (até lá o segredo é só de uma ativação pendente).
+    totp_segredo: Mapped[str] = mapped_column(String(200), default="")
+    totp_ativo: Mapped[bool] = mapped_column(default=False)
+    totp_ultimo_passo: Mapped[int] = mapped_column(default=0)                      # o último código aceito: um código só vale uma vez
+    totp_recuperacao: Mapped[str] = mapped_column(String(2000), default="")        # resumos (scrypt) dos códigos de recuperação que ainda não foram usados
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

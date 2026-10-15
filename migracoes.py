@@ -62,6 +62,19 @@ def migrar(db):
         db.session.execute(text("ALTER TABLE funcionarios ADD COLUMN registro_profissional VARCHAR(30) NOT NULL DEFAULT ''"))
         db.session.commit()
 
+    # 6a) fase 3 do plano de segurança: e-mail do funcionário; troca obrigatória de senha e segundo fator do usuário
+    if "email" not in _colunas(db, "funcionarios"):
+        db.session.execute(text("ALTER TABLE funcionarios ADD COLUMN email VARCHAR(120) NOT NULL DEFAULT ''"))
+        db.session.execute(text("ALTER TABLE funcionarios ADD COLUMN email_confirmado_em TIMESTAMP"))
+        db.session.commit()
+    if "trocar_senha" not in _colunas(db, "usuarios"):
+        db.session.execute(text("ALTER TABLE usuarios ADD COLUMN trocar_senha BOOLEAN NOT NULL DEFAULT FALSE"))
+        db.session.execute(text("ALTER TABLE usuarios ADD COLUMN totp_segredo VARCHAR(200) NOT NULL DEFAULT ''"))
+        db.session.execute(text("ALTER TABLE usuarios ADD COLUMN totp_ativo BOOLEAN NOT NULL DEFAULT FALSE"))
+        db.session.execute(text("ALTER TABLE usuarios ADD COLUMN totp_ultimo_passo INTEGER NOT NULL DEFAULT 0"))
+        db.session.execute(text("ALTER TABLE usuarios ADD COLUMN totp_recuperacao VARCHAR(2000) NOT NULL DEFAULT ''"))
+        db.session.commit()
+
     # 6) o relatório de rejeição virou o parecer do acolhimento social: o que já foi escrito passa para lá
     _rejeicoes_para_o_acolhimento(db)
 

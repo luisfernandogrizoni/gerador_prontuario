@@ -60,10 +60,30 @@ registros (`logs`) ficam com acesso só do SISTEMA, dos administradores e de que
 
    Entre com ele, abra *Cadastros > Funcionários*, edite o seu cadastro e, em *Acesso ao sistema*, escolha o seu usuário
    em *Usuário de login* (o seu cadastro é o do nível Administrador). Daí em diante só o administrador cria usuários:
-   em *Novo funcionário* (ou editando a pessoa), preencha *Criar um usuário novo* e a senha. Cada pessoa troca a própria
-   senha depois, em *Alterar senha*.
-4. **Testar** a partir de outro computador: abra o endereço que o instalador mostrou e entre. Salve como favorito.
-5. **Aposente o banco antigo.** Depois de conferir que os dados estão no servidor, renomeie o `instance\internos.db` do
+   em *Novo funcionário* (ou editando a pessoa), preencha *Criar um usuário novo*, a senha e o **e-mail** da pessoa. A senha
+   que o administrador define é **provisória**: no primeiro acesso a pessoa é levada à troca e escolhe a dela. O sistema barra
+   senhas fáceis de adivinhar (`1234567890`, `senha2024`, o nome da pessoa...); uma frase de várias palavras serve.
+4. **Ligar o e-mail do sistema** (código de confirmação, "esqueci minha senha", avisos de segurança e o aviso da troca do
+   pen-drive). Uma vez, como Administrador, neste computador:
+
+   ```powershell
+   cd C:\prontuario
+   powershell -ExecutionPolicy Bypass -File implantacao\configurar-email.ps1
+   ```
+
+   O script pergunta a **senha da caixa de envio** (`sistema@restauracao.org.br`, na Hostinger). Ela é digitada aqui, **não
+   aparece na tela** e fica só em `instance\email.json` (protegido como o resto da pasta `instance`): nunca a escreva em arquivo
+   do projeto, no GitHub nem em conversa. Depois o script manda um e-mail de teste para `financeiro@restauracao.org.br`. Se não
+   chegar, confira a senha e rode de novo. Sem isto o sistema funciona normalmente, só não manda e-mail.
+5. **Cada pessoa confirma o seu e-mail**: clicando no nome (no topo) abre *Minha segurança*; *Enviar o código de confirmação*,
+   e digitar o código que chegou ao e-mail dela. Sem e-mail confirmado ela não consegue usar *Esqueci minha senha*.
+6. **Segundo fator do administrador.** Em *Minha segurança > Ativar o aplicativo autenticador*: instale no celular o Google
+   Authenticator (ou Microsoft Authenticator, ou Authy), leia o QR code, digite o código que o app mostra e **imprima ou
+   anote os 8 códigos de recuperação** (aparecem uma vez só; guarde fora do computador, junto da frase do backup). Dali em
+   diante a entrada pede a senha e o código do app. Celular perdido: use um código de recuperação, ou, no servidor,
+   `.\.venv\Scripts\python.exe -m flask --app app desativar-segundo-fator luis`.
+7. **Testar** a partir de outro computador: abra o endereço que o instalador mostrou e entre. Salve como favorito.
+8. **Aposente o banco antigo.** Depois de conferir que os dados estão no servidor, renomeie o `instance\internos.db` do
    projeto de desenvolvimento (por exemplo para `internos_ANTIGO_nao_usar.db`). Dois bancos em uso ao mesmo tempo
    significam dados espalhados e perdidos.
 
@@ -161,7 +181,10 @@ O banco se atualiza sozinho na subida. Se algo falhar, o sistema volta a ligar n
 | Sintoma | O que ver |
 | --- | --- |
 | Outro computador não abre a página | O servidor está ligado? O IP mudou (`ipconfig`)? Ambos na mesma rede/roteador? Tente pelo IP, não pelo nome. |
-| A página abre, mas alguém não consegue entrar | 5 senhas erradas seguidas bloqueiam o usuário por 10 minutos. Para dar uma senha nova e desbloquear, o administrador preenche *Nova senha* no cadastro da pessoa (*Cadastros > Funcionários*). Se não houver nenhum administrador que consiga entrar: `.\.venv\Scripts\python.exe -m flask --app app redefinir-senha maria`. |
+| A página abre, mas alguém não consegue entrar | 5 senhas erradas seguidas bloqueiam o usuário por 10 minutos (e mais de 15 erradas em 10 minutos vindas do mesmo computador bloqueiam aquele computador). Quem tem o e-mail confirmado usa *Esqueci minha senha* na tela de entrada. Senão, o administrador preenche *Nova senha* no cadastro da pessoa (*Cadastros > Funcionários*; a senha é provisória, a pessoa troca ao entrar). Se não houver nenhum administrador que consiga entrar: `.\.venv\Scripts\python.exe -m flask --app app redefinir-senha maria`. |
+| O e-mail não chega (código, *Esqueci minha senha*) | O e-mail está configurado (`implantacao\configurar-email.ps1`)? Confira a caixa de spam. `.\.venv\Scripts\python.exe -m flask --app app testar-email alguem@restauracao.org.br` mostra o erro (senha da caixa, servidor, porta). O sistema nunca escreve o conteúdo dos e-mails nem a senha em `logs\servidor.log`. |
+| A pessoa perdeu o celular do segundo fator | Se ela tem os códigos de recuperação, entra com um deles. Senão, o administrador marca *Desativar o aplicativo autenticador desta pessoa* no cadastro dela, ou, no servidor, `flask --app app desativar-segundo-fator USUARIO`. Ela entra só com a senha e liga o app de novo. |
+| A pessoa é desconectada sozinha | É o tempo ocioso: 30 minutos sem usar o sistema encerram a sessão (aos 25 aparece um aviso com a contagem). |
 | O sistema parou | `C:\prontuario\logs\servidor.log` mostra o erro. No Agendador de Tarefas, a tarefa *Prontuario - servidor* mostra o último resultado. |
 | Aviso de backup na página inicial | `C:\prontuario\logs\backup.log`; o HD externo está ligado? |
 | Quer ligar à mão, para ver o erro na tela | `cd C:\prontuario` e `.\.venv\Scripts\python.exe servidor.py` (pare a tarefa antes, para não dividir a porta). |
@@ -176,6 +199,12 @@ O banco se atualiza sozinho na subida. Se algo falhar, o sistema volta a ligar n
 - O arquivo `logs\servidor.log` registra só erros e acessos negados, sem dados dos internos. Quem fez o quê (entradas, quem abriu
   cada ficha, quem baixou documentos, alterações e mudanças de permissão) fica na **trilha de auditoria**, dentro do sistema:
   **Cadastros > Auditoria** (só o administrador), com filtros e CSV. A trilha não guarda o conteúdo dos dados, só quais campos mudaram.
+- **Contas**: o sistema barra senhas fáceis, exige a troca da senha provisória, encerra a sessão depois de 30 minutos sem uso,
+  limita as tentativas por computador, confirma o e-mail de cada pessoa e oferece o segundo fator (aplicativo autenticador). O
+  administrador **não redefine a senha pelo e-mail** sem o segundo fator ligado. Detalhes em `docs\plano-de-seguranca.md`
+  (fase 3).
+- O aviso por e-mail da troca do pen-drive (e de cópia externa atrasada) sai pela mesma tarefa do backup, uma vez por dia, para
+  `financeiro@restauracao.org.br`.
 - Acesso de fora do escritório não existe, de propósito.
 
 ## 7. Desinstalar

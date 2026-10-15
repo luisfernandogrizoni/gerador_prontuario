@@ -45,10 +45,27 @@ def _tabelas():
     return [por_nome[nome] for nome in TABELAS_COPIADAS]
 
 
-def _linhas(conexao, tabela):
-    """Todas as linhas, na ordem da chave (ordenado aqui: SQLite e Postgres ordenam texto diferente)."""
-    posicoes = [tabela.columns.keys().index(c.name) for c in tabela.primary_key.columns]
-    return sorted((tuple(l) for l in conexao.execute(select(tabela))),
+def _colunas_do_banco(conexao, tabela):
+    """As colunas da tabela que o banco de fato tem (um banco de origem antigo ainda não tem as colunas acrescentadas depois)."""
+    tem = {c["name"] for c in inspect(conexao).get_columns(tabela.name)}
+    return [c for c in tabela.columns if c.name in tem]
+
+
+def _valor_de_coluna_nova(coluna):
+    """O que vai no destino para uma coluna que a origem antiga não tem: o valor padrão do modelo (ou vazio, se pode)."""
+    if coluna.default is not None and coluna.default.is_scalar:
+        return coluna.default.arg
+    if coluna.nullable:
+        return None
+    raise click.ClickException(f"O banco de origem é antigo demais (falta a coluna {coluna.table.name}.{coluna.name}). "
+                               "Abra o sistema uma vez com ele para atualizá-lo e copie de novo.")
+
+
+def _linhas(conexao, tabela, colunas=None):
+    """Todas as linhas, na ordem da chave (ordenado aqui: SQLite e Postgres ordenam texto diferente). `colunas`: só essas."""
+    colunas = list(colunas if colunas is not None else tabela.columns)
+    posicoes = [colunas.index(c) for c in tabela.primary_key.columns]
+    return sorted((tuple(l) for l in conexao.execute(select(*colunas))),
                   key=lambda l: tuple(l[i] for i in posicoes))
 
 
@@ -103,16 +120,18 @@ def copiar(origem, substituir):
             for t in reversed(tabelas):
                 if t.name in CADASTROS:
                     d.execute(t.delete())
+            comuns = {t.name: _colunas_do_banco(o, t) for t in tabelas}
             for t in tabelas:
-                linhas = o.execute(select(t)).mappings().all()
+                novas = [c for c in t.columns if c not in comuns[t.name]]
+                linhas = o.execute(select(*comuns[t.name])).mappings().all()
                 if linhas:
-                    d.execute(t.insert(), [dict(l) for l in linhas])
-                click.echo(f"  {t.name}: {len(linhas)} linhas copiadas")
+                    d.execute(t.insert(), [{**dict(l), **{c.name: _valor_de_coluna_nova(c) for c in novas}} for l in linhas])
+                click.echo(f"  {t.name}: {len(linhas)} linhas copiadas" + (f" (a origem não tem as colunas {', '.join(c.name for c in novas)}: ficam com o padrão)" if novas else ""))
             _acertar_sequencias(d, tabelas)
 
             # conferência: o destino tem que ser IGUAL à origem, valor por valor
             for t in tabelas:
-                if _linhas(o, t) != _linhas(d, t):
+                if _linhas(o, t, comuns[t.name]) != _linhas(d, t, comuns[t.name]):
                     raise click.ClickException(f"A tabela {t.name} ficou diferente da origem. "
                                                "Nada foi gravado (a cópia foi desfeita).")
         click.echo("Conferido: o destino é idêntico à origem. Lembre de fechar o acesso externo ao banco.")

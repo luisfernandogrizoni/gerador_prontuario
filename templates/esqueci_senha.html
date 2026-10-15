@@ -1,0 +1,17 @@
+{% extends "entrar_base.html" %}
+{% block titulo %}Esqueci minha senha — Casa de Acolhida Restauração{% endblock %}
+
+{% block cartao %}
+  <h1>Esqueci minha senha</h1>
+  {% if enviado %}
+    <p class="caixa-info" role="status">Se esse usuário tem um e-mail confirmado, enviamos o link para criar uma senha nova. Ele vale por 30 minutos; confira também a caixa de spam.</p>
+  {% else %}
+    {% if problema %}<p class="caixa-erros erro" role="alert">{{ problema }}</p>{% endif %}
+    <form method="post" action="{{ url_for('esqueci_senha') }}">
+      <label>Usuário
+        <input name="usuario" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus></label>
+      <button class="botao">Enviar o link por e-mail</button>
+    </form>
+  {% endif %}
+  <p class="links"><a href="{{ url_for('login') }}">Voltar para a entrada</a></p>
+{% endblock %}

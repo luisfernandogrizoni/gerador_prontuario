@@ -44,6 +44,10 @@ ACOES = {
     "login.inexistente": ("entrada", "Tentativa de entrada com um usuário que não existe"),
     "login.bloqueado": ("entrada", "Tentativa de entrada durante o bloqueio"),
     "login.bloqueio": ("entrada", "Usuário bloqueado por senhas erradas seguidas"),
+    "login.codigo_errado": ("entrada", "Código do aplicativo autenticador errado"),
+    "login.bloqueado_endereco": ("entrada", "Entrada bloqueada: muitas tentativas erradas vindas deste computador"),
+    "sessao.expirada": ("entrada", "Sessão encerrada (sem uso por 30 minutos, ou mais de 10 horas)"),
+    "senha.pedido_reset": ("entrada", "Pediu para redefinir a senha pelo e-mail"),
     "login.desativado": ("entrada", "Entrada recusada: o funcionário está desativado"),
     "sair": ("entrada", "Saiu do sistema"),
     "sessao.derrubada": ("entrada", "Sessão derrubada: o funcionário foi desativado"),
@@ -91,6 +95,12 @@ ACOES = {
     "usuario.criar": ("administracao", "Criou um usuário de login"),
     "senha.redefinida": ("administracao", "Definiu uma senha nova para um usuário"),
     "senha.trocada": ("administracao", "Trocou a própria senha"),
+    "senha.redefinida_por_email": ("administracao", "Redefiniu a senha pelo link do e-mail"),
+    "email.codigo_enviado": ("administracao", "Pediu o código para confirmar o e-mail"),
+    "email.confirmado": ("administracao", "Confirmou o e-mail"),
+    "totp.ativado": ("administracao", "Ativou o segundo fator (aplicativo autenticador)"),
+    "totp.desativado": ("administracao", "Desativou o segundo fator"),
+    "totp.recuperacao_usada": ("administracao", "Entrou com um código de recuperação do segundo fator"),
     "nivel.criar": ("administracao", "Criou um nível de acesso"),
     "nivel.editar": ("administracao", "Editou um nível de acesso"),
     "nivel.mover": ("administracao", "Mudou um nível de lugar na cascata"),
@@ -170,7 +180,8 @@ EXPLICITAS = {
     "login", "sair", "alterar_senha", "aviso_ciente", "unificar_pessoas", "salvar_triagem", "mudar_status", "baixa_interno", "registrar_envelope",
     "gerar", "lancar_parcela", "excluir_parcela", "adendo_social", "excluir_registro", "restaurar_registro", "apagar_registro",
     "novo_convenio", "editar_convenio", "novo_funcionario", "novo_nivel", "editar_nivel", "mover_nivel", "salvar_permissoes",
-    "pagina_auditoria", "exportar_auditoria",
+    "pagina_auditoria", "exportar_auditoria", "login_codigo", "esqueci_senha", "redefinir_senha", "enviar_codigo_email", "confirmar_email",
+    "ativar_autenticador", "desativar_autenticador",
 }
 
 # o que não se registra, e por quê
@@ -182,6 +193,8 @@ NAO_REGISTRA = {
     "cadastros": "redireciona para a lista de convênios",
     "lista_convenios": "convênios não são dado pessoal",
     "relatorio_de_rejeicao": "redireciona para o acolhimento social, que é registrado",
+    "seguranca": "a página da própria pessoa (as ações dela são registradas quando acontecem)",
+    "sessao_ping": "só avisa que a pessoa continua usando o sistema (renova o tempo de inatividade)",
 }
 
 
@@ -208,6 +221,12 @@ def endpoints_sem_classificacao(app):
 # ====================================================================== a tela Cadastros > Auditoria
 POR_PAGINA = 50
 LIMITE_DO_CSV = 20000
+
+
+def falhas_do_endereco(endereco, desde):
+    """Quantas senhas ou códigos errados vieram deste endereço de rede desde `desde` (o limite por computador da entrada)."""
+    return db.session.execute(db.select(func.count()).select_from(Evento).filter(
+        Evento.acao.in_(("login.falha", "login.inexistente", "login.bloqueio", "login.codigo_errado")), Evento.endereco == endereco, Evento.quando >= desde)).scalar()
 
 
 def _data(texto):

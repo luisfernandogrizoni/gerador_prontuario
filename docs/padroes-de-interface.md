@@ -60,7 +60,8 @@ Um botão **cheio** (primário) por tela, para a ação principal. Os outros sã
 - **Uma largura só** para todas as telas: o conteúdo usa a tela até 1760 px (`--largura-max`) e começa na mesma borda do menu, com
   recuo de 16 a 32 px (`--pad-pagina`). Nada de coluna estreita centralizada no meio de uma tela grande. O que é estreito por
   natureza (formulário curto, senha) fica **à esquerda** com `.estreito` (820 px) ou `.estreito.curto` (520 px). Só a entrada e a
-  página de erro são centralizadas.
+  página de erro são centralizadas. As páginas de quem ainda não entrou (entrar, código de segurança, "esqueci minha senha", senha
+  nova) estendem `entrar_base.html`: o cartão no meio do fundo pastel, com o logotipo.
 - Ordem do topo: **Voltar** (`linha_voltar`), título, subtítulo, ações à direita. Toda tela, menos Início e Entrada, tem Voltar.
 - `+ Triagem` e `+ Prontuário` só no cabeçalho.
 - **Sem textos de instrução ou ajuda** nas telas: só estado e erros.
@@ -72,6 +73,9 @@ Um botão **cheio** (primário) por tela, para a ação principal. Os outros sã
   Já vem pronto: basta `flash("...")`.
 - Pendências e alertas: no quadro de avisos do Início, nunca como faixa no meio da página.
 - Erro de formulário: ao lado do campo (`small.erro`) e a caixa `.caixa-erros` no topo.
+- Informação de estado que a pessoa precisa ler (a senha é provisória, a sessão terminou, o e-mail foi enviado): a caixa
+  `.caixa-info` (azul pastel), no topo do conteúdo. Não é para instrução.
+- Pop-up que exige uma resposta (a troca do pen-drive, a sessão a vencer): `<dialog>` com um título, uma frase e os botões à direita.
 
 ## Formulários
 

@@ -39,6 +39,7 @@ from pathlib import Path
 
 import banco
 import copia_externa
+import email_envio
 
 RAIZ = Path(__file__).resolve().parent
 PASTA_INSTANCE = RAIZ / "instance"
@@ -145,6 +146,28 @@ def levar_para_externo(arquivo):
         return
     if not resultados:
         registrar("Cópia externa: nenhum pen-drive preparado está plugado agora (a página inicial avisa se passar de 3 dias).")
+
+
+ASSINATURA_DO_EMAIL = "\n\n—\nCasa de Acolhida Restauração · Sistema de prontuários\nMensagem automática: não responda."
+
+
+def avisar_por_email():
+    """Manda por e-mail, para quem recebe os avisos do sistema, o que a cópia externa está pedindo (troca do pen-drive, cópia atrasada, dois
+    pen-drives plugados, teste de restauração), no máximo uma vez por dia por assunto. Nunca levanta erro: o backup do dia já valeu."""
+    try:
+        destinos = email_envio.avisos_para(PASTA_INSTANCE)
+        if not destinos:
+            return
+        for chave, assunto, texto in copia_externa.avisos_para_enviar_por_email(PASTA_INSTANCE):
+            try:
+                email_envio.enviar(PASTA_INSTANCE, destinos, assunto, texto + ASSINATURA_DO_EMAIL)
+            except email_envio.ErroDeEmail as erro:
+                registrar(f"AVISO POR E-MAIL NÃO ENVIADO ({chave}): {erro}")
+                continue
+            copia_externa.marcar_avisado(chave, PASTA_INSTANCE)
+            registrar(f"Aviso por e-mail enviado ({chave}).")
+    except Exception as erro:       # noqa: BLE001 - aviso é cortesia, nunca derruba a tarefa
+        registrar(f"AVISO POR E-MAIL FALHOU: {type(erro).__name__}: {erro}")
 
 
 def backup_mais_novo(pasta):
@@ -288,6 +311,7 @@ def main(argv=None):
             if recente is None:
                 raise ErroDeBackup("Ainda não há backup do dia para levar ao pen-drive.")
             levar_para_externo(recente)
+            avisar_por_email()
         elif args.copiar_para:
             destino = Path(args.copiar_para)
             if destino.exists():
@@ -297,6 +321,7 @@ def main(argv=None):
             print(f"Copiado para {destino} (registros — {', '.join(f'{n}: {q}' for n, q in contagem.items())}).")
         else:
             levar_para_externo(fazer_backup(origem, pasta_de_backup(args.destino), args.manter))
+            avisar_por_email()
     except (ErroDeBackup, copia_externa.ErroDeCopia) as erro:
         registrar(f"BACKUP FALHOU: {erro}")
         return 1
