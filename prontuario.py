@@ -12,6 +12,7 @@ no formato do formulário e devolve o documento. Por isso dá para usar
 tanto ao enviar o formulário quanto ao baixar de novo pela lista.
 """
 
+import copy
 from datetime import date
 
 import catalogo
@@ -297,6 +298,12 @@ def _item(numero, partes, recuo, tamanho=None, antes=0, depois=0):
                      recuo=recuo, suspenso=360, numero=f"{numero}.", tamanho=tamanho)
 
 
+def _em_duas_vias(paginas):
+    """A mesma página (ou páginas) duas vezes, uma atrás da outra, para sair já em duas vias na impressora (no Word e no navegador). A segunda é uma
+    cópia fiel: sem "2ª via" escrito nem nada que desloque o texto e empurre a página para uma terceira folha."""
+    return paginas + copy.deepcopy(paginas)
+
+
 def _blocos_do_prontuario(c):
     """O prontuário inteiro, como lista de blocos (documentos.py). `c` é o contexto de montar_contexto()."""
     centro, justificado = "centro", "justificado"
@@ -405,7 +412,9 @@ def _blocos_do_prontuario(c):
         Paragrafo(["Residente: " + "_" * 32 + " "], centro, antes=2 * LINHA, unido_ao_proximo=True),
         Paragrafo([data], centro, antes=LINHA),
     ]
-    return capa + ficha + contrato + termo + compromisso + punho
+    # Saem em DUAS VIAS a ficha de controle (página 2) e o termo de contribuição voluntária com a relação de documentos (página 4): uma fica na
+    # casa e a outra com quem assina. O prontuário completo tem, então, 8 folhas: capa, ficha x2, contrato, termo x2, compromisso e punho.
+    return capa + _em_duas_vias(ficha) + contrato + _em_duas_vias(termo) + compromisso + punho
 
 
 def montar_documento(dados):
