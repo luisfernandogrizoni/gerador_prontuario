@@ -6,8 +6,8 @@
 {% block estilo %}
   .ativacao { max-width: 720px; margin-top: var(--e4); }
   .ativacao .qr { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 22px; align-items: center; }
-  .ativacao .qr-imagem { background: #fff; border: 1px solid var(--borda); border-radius: var(--r-md); padding: 6px; line-height: 0; }
-  .ativacao .qr-imagem svg { width: 190px; height: 190px; display: block; }
+  .ativacao .qr-imagem { background: #fff; border: 1px solid var(--borda); border-radius: var(--r-md); padding: 4px; line-height: 0; }
+  .ativacao .qr-imagem svg { width: 280px; height: 280px; max-width: 100%; display: block; }      /* grande e com margem branca: lê melhor com a câmera */
   .ativacao .segredo { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 1.05rem; letter-spacing: .06em; word-break: break-all; }
   .ativacao form { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-top: 18px; }
   .ativacao form label { flex: 1 1 200px; }
@@ -45,6 +45,7 @@
         <div>
           <p class="nao-informado" style="margin-top:0">{{ 'Ou digite a chave no aplicativo:' if dados.qr else 'Digite a chave no aplicativo:' }}</p>
           <p class="segredo">{{ dados.segredo }}</p>
+          <a class="botao secundario pequeno" href="{{ dados.endereco }}">Abrir no aplicativo (se estiver no celular)</a>
         </div>
       </div>
     {% endcall %}

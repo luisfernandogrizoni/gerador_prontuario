@@ -29,7 +29,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 PASSO = 30                  # segundos de cada código
 DIGITOS = 6
 JANELA = 1                  # aceita o passo anterior e o seguinte (relógio do celular um pouco fora)
-EMISSOR = "Casa de Acolhida Restauração"
+EMISSOR = "Prontuario"                # o nome que aparece no aplicativo (curto e sem acento: um QR code menor se lê melhor na tela)
 QUANTOS_CODIGOS_DE_RECUPERACAO = 8
 ALFABETO = "ABCDEFGHJKMNPQRSTVWXYZ23456789"        # sem 0/O, 1/I/L, U: não se confunde no papel
 
@@ -72,14 +72,14 @@ def verificar(segredo, digitado, ultimo_passo=0, agora=None):
 # ====================================================================== o QR e o endereço do aplicativo
 def endereco_otpauth(segredo, conta):
     """O endereço otpauth:// que o aplicativo lê (no QR ou digitado): conta = o usuário de login."""
-    return (f"otpauth://totp/{quote(EMISSOR)}:{quote(conta)}?secret={segredo}&issuer={quote(EMISSOR)}"
-            f"&algorithm=SHA1&digits={DIGITOS}&period={PASSO}")
+    # (SHA1, 6 dígitos e 30 segundos são o padrão de todos os aplicativos: não precisa dizer, e o endereço curto dá um QR code com menos quadradinhos)
+    return f"otpauth://totp/{quote(EMISSOR)}:{quote(conta)}?secret={segredo}&issuer={quote(EMISSOR)}"
 
 
 def qr_em_svg(endereco):
     """O QR code como SVG (para a página). Precisa da biblioteca `segno`."""
     import segno
-    return segno.make(endereco, error="m").svg_inline(scale=5, border=2, dark="#1d2939", light="#ffffff", title="QR code do autenticador")
+    return segno.make(endereco, error="m").svg_inline(scale=6, border=4, dark="#000000", light="#ffffff", title="QR code do autenticador")
 
 
 def segredo_para_digitar(segredo):
