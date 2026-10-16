@@ -85,6 +85,7 @@ import banco
 import cadastros as cadastros_
 import catalogo
 import contas
+import csrf
 import copia_externa
 import declaracoes
 import documentos
@@ -120,6 +121,8 @@ app.config.update(
     SESSION_COOKIE_SECURE=not app.debug and os.environ.get("SESSAO_SEM_HTTPS") != "1",
     SESSION_REFRESH_EACH_REQUEST=False,    # o login não se renova sozinho: vale 10 h e acabou
     PERMANENT_SESSION_LIFETIME=autenticacao.DURACAO_LOGIN,
+    CSRF_ATIVO=True,                    # csrf.py: todo envio que muda coisas precisa do token da página (os testes antigos desligam)
+    CSP_SOMENTE_RELATORIO=os.environ.get("CSP_SOMENTE_RELATORIO") == "1",    # emergência: a política só avisa, não bloqueia (csrf.py)
 )
 db.init_app(app)
 
@@ -128,10 +131,13 @@ with app.app_context():
     migrar(db)        # acrescenta colunas novas em bancos antigos
     autenticacao.criar_usuario_inicial()
 
+app.before_request(csrf.verificar)                  # o primeiro de todos: envio sem o token da página não passa (nem a entrada)
 app.before_request(autenticacao.exigir_login)
 app.after_request(auditoria.depois_da_requisicao)       # leituras (auditoria.LEITURAS); as alterações são registradas onde dão certo
 app.before_request(permissoes.exigir_permissao)     # depois do login: a rota pede uma permissão e a pessoa tem? (permissoes.REGRAS)
 app.after_request(autenticacao.cabecalhos_de_seguranca)
+app.after_request(csrf.cabecalhos)                  # política de conteúdo (CSP) e cabeçalhos que fecham o que o navegador não precisa
+app.jinja_env.globals.update(csrf_token=csrf.token, csp_nonce=csrf.nonce)      # {{ csrf_token() }} nos formulários; {{ csp_nonce() }} nas tags de dentro da página
 autenticacao.registrar_comandos(app)
 contas.registrar_comandos(app)
 def _e_administrador():
@@ -359,6 +365,12 @@ def desativar_autenticador():
         contas.desativar(g.usuario)
         flash("Segundo fator desativado.")
     return redirect(url_for("seguranca") + "#autenticador")
+
+
+@app.post("/csp-relatorio")
+def csp_relatorio():
+    """O navegador conta aqui quando a política de conteúdo barra alguma coisa (csrf.relatorio: uma linha curta no registro do servidor)."""
+    return csrf.relatorio()
 
 
 @app.post("/sessao/ping")

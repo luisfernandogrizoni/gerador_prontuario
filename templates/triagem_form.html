@@ -11,7 +11,7 @@
   <h1>{{ 'Editar triagem' if editando else 'Nova triagem' }}</h1>
 
   <div class="form-grade">
-  <form method="post" action="{{ url_for('salvar_triagem') }}" data-indice>
+  <form method="post" action="{{ url_for('salvar_triagem') }}" data-indice><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {{ f.topo(url_for('nova_triagem'), 'triagem') }}
     {{ f.triagem() }}
 

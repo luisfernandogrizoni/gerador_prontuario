@@ -77,6 +77,15 @@ Um botão **cheio** (primário) por tela, para a ação principal. Os outros sã
   `.caixa-info` (azul pastel), no topo do conteúdo. Não é para instrução.
 - Pop-up que exige uma resposta (a troca do pen-drive, a sessão a vencer): `<dialog>` com um título, uma frase e os botões à direita.
 
+## Defesa do navegador (CSRF e CSP: `csrf.py`)
+
+- Formulário POST novo: `<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">` logo depois da tag `<form>`.
+- `<script>` ou `<style>` escrito dentro da página: `nonce="{{ csp_nonce() }}"`. Script ou estilo em arquivo (`static/`) não precisa.
+- **Nada de atributo de evento** (`onclick=`, `onsubmit=`, `onchange=`): a política do navegador não deixa rodar. Use `data-confirmar="texto"`
+  (formulário ou botão), `data-imprimir`, ou um listener em um arquivo de `static/`.
+- Chamadas do JavaScript ao próprio sistema: o `fetch` normal (o `static/base.js` acrescenta o cabeçalho do token). Para chamar outro site, é
+  preciso liberá-lo em `connect-src` (`csrf.py`), e isso é uma decisão de segurança, não de interface.
+
 ## Formulários
 
 - **Seção = cartão com ícone**: `<fieldset class="tom-azul">{{ legenda('Acolhido', 'usuario') }} ...` (`templates/_cartao.html`).

@@ -104,7 +104,7 @@
   </section>
 
   <div class="form-grade">
-  <form method="post" id="form-relatorio" data-indice>
+  <form method="post" id="form-relatorio" data-indice><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% if erros %}<div class="caixa-erros"><strong>{{ erros['_'] if erros.get('_') else 'Confira os campos marcados em vermelho.' }}</strong></div>{% endif %}
     {% for secao in secoes %}
     {% set vis = visual.get(secao.titulo, ('documento', 'neutro')) %}
@@ -127,7 +127,7 @@
 </main>
 <script src="{{ url_for('static', filename='secoes.js') }}"></script>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
   // o campo de texto cresce enquanto se escreve (sem barra de rolagem dentro dele)
   function crescer(t) { t.style.height = "auto"; t.style.height = Math.max(t.scrollHeight + 2, 0) + "px"; }
   document.querySelectorAll("textarea[data-cresce]").forEach(function (t) { crescer(t); t.addEventListener("input", function () { crescer(t); }); });

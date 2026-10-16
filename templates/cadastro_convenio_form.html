@@ -21,7 +21,7 @@
   {{ linha_voltar(url_for('lista_convenios')) }}
   <h1>{{ 'Editar convênio' if convenio else 'Novo convênio' }}</h1>
 
-  <form class="estreito" method="post">
+  <form class="estreito" method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% if erros %}<div class="caixa-erros"><strong>Confira os campos marcados em vermelho.</strong></div>{% endif %}
     <fieldset class="tom-azul">
       {{ legenda('Convênio', 'casa') }}

@@ -99,7 +99,7 @@
 </dialog>
 
 <script src="{{ url_for('static', filename='tabela.js') }}"></script>
-<script>
+<script nonce="{{ csp_nonce() }}">
   const NOVO = {{ novo | tojson }};
   const IMPRIMIR = {{ imprimir | tojson }};     // 1 = a internação acabou de ser marcada: pergunta se imprime exames e enxoval
   const PODE_SOCIAL = {{ pode_servico_social | tojson }};     // lê e escreve o acolhimento social (Serviço Social e administrador)

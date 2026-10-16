@@ -29,10 +29,10 @@ com banco SQLite, sem custo de hospedagem. Isso tem uma vantagem de segurança (
 | Quem pode o quê | **Fase 1 (esta entrega)**: cascata de níveis com permissões configuráveis, nega por padrão, funcionário desativado perde o acesso | Quem tem "ver" vê todas as fichas; não há registro de quem viu o quê |
 | Rastro | **Fase 2**: trilha de auditoria com tela só do administrador (entradas, leituras, alterações, administração e acessos negados); mais o registro técnico do servidor | Quem controla o computador e o banco consegue mexer na tabela (a trilha não protege do dono da máquina); sem política de retenção ainda (fase 8) |
 | Rede | Porta aberta só para a sub-rede local (firewall); sem acesso externo; **fase 4**: HTTPS pelo Tailscale (certificado que ele emite e renova), com modo de transição e modo final que fecha o http da rede local | Até o usuário ligar, **HTTP sem criptografia** (a página inicial lembra); depois, quem não tem o Tailscale não abre |
-| Navegador | Cookie HttpOnly e SameSite=Lax; nosniff; X-Frame-Options; sem cache das páginas | Sem token CSRF; sem CSP |
+| Navegador | Cookie HttpOnly e SameSite=Lax; nosniff; X-Frame-Options; sem cache das páginas; **fase 7**: token CSRF em todo envio, política de conteúdo (CSP) com nonce, Permissions-Policy e COOP/CORP | `style="..."` dentro das tags ainda é permitido; o ViaCEP recebe o CEP digitado |
 | Dados | Excluir é em duas etapas (lixeira); banco fora do git; hook que barra dado real no repositório; **fase 5**: cópia externa criptografada em pen-drives em rodízio, conferida na hora, com aviso, tela de situação e teste de restauração | Depende de alguém trocar o pen-drive toda semana (o sistema avisa) e de a frase de recuperação estar em papel; o backup do dia (`.db`) segue sem criptografia no computador |
 | Servidor | Tarefas agendadas, firewall, pasta `instance/` protegida | Roda como SYSTEM; disco sem criptografia (a verificar); roteador e Windows sem checklist |
-| Papel | — | Sem inventário de dados, política de retenção, termo de sigilo nem plano de resposta a incidente |
+| Papel | — | Sem inventário de dados, política de retenção nem plano de resposta a incidente (o termo de sigilo foi dispensado: decisão da casa, 2026-10-16) |
 
 ## 3. Ameaças que o plano cobre (da mais provável para a menos)
 
@@ -44,7 +44,7 @@ com banco SQLite, sem custo de hospedagem. Isso tem uma vantagem de segurança (
 | 4 | **Alguém escuta a rede** | Wi-Fi do escritório com senha conhecida por muita gente; visitante conectado | HTTPS na rede interna, Wi-Fi separado para visitante | 4, 6 |
 | 5 | **Acesso físico ao computador servidor** | Roubo, pessoa de passagem mexendo na máquina | Disco criptografado, bloqueio de tela, sala fechada | 6 |
 | 6 | **Ataque pelo navegador** | Link malicioso faz o navegador de um funcionário logado executar uma ação | Token CSRF, CSP | 7 |
-| 7 | **Dado que sai do sistema** | Prontuário baixado em pen-drive e esquecido; impressão deixada na impressora | Permissão própria para documentos, trilha de quem baixou, termo de sigilo | **1**, 2, 8 |
+| 7 | **Dado que sai do sistema** | Prontuário baixado em pen-drive e esquecido; impressão deixada na impressora | Permissão própria para documentos, trilha de quem baixou | **1**, 2 |
 | 8 | **Sistema exposto na internet sem querer** | Alguém libera uma porta no roteador "para acessar de casa" | Checklist do roteador, firewall só para a rede local | 6 |
 | 9 | **Falha em uma biblioteca** | Vulnerabilidade conhecida no Flask, Werkzeug, python-docx | Auditoria mensal das dependências | 9 |
 
@@ -61,10 +61,10 @@ fase 10 (VPN), nunca abrindo porta no roteador.
 | 4 | HTTPS (celular e todos os navegadores) | Sistema + usuário (instalar o Tailscale) | **Feita** (2026-10-16); falta o usuário ligar |
 | 5 | Backup que sobrevive ao computador | Sistema + usuário (pen-drives e rotina) | **Feita** (2026-10-15); falta o usuário configurar |
 | 6 | Servidor Windows, rede e roteador | Quase tudo o usuário (roteiro passo a passo) | A fazer |
-| 7 | Token CSRF e CSP | Sistema | A fazer |
+| 7 | Token CSRF e CSP | Sistema | **Feita** (2026-10-16) |
 | 8 | LGPD no papel | Usuário, com modelos prontos do sistema | A fazer |
 | 9 | Manutenção contínua | Sistema (avisos) + usuário | A fazer |
-| 10 | Segundo polo e acesso de fora do escritório (VPN) | Sistema + usuário (instalar o Tailscale e combinar o termo de sigilo) | **Feita** (2026-10-16); falta o usuário ligar e o termo de sigilo (fase 8) |
+| 10 | Segundo polo e acesso de fora do escritório (VPN) | Sistema + usuário (instalar o Tailscale) | **Feita** (2026-10-16); falta o usuário ligar |
 
 Ordem sugerida: 1 → 5 → 2 → 3 → 4 + 10 (juntas: HTTPS pela VPN e o segundo polo) → 7 → 6 → 8 → 9. O backup (5) sobe na frente porque
 perder tudo é a ameaça mais provável e a mais cara, e passa a ser obrigatório quando o polo 2 depender do computador do escritório.
@@ -123,7 +123,7 @@ some do menu. O administrador pode devolver qualquer uma ao Operador na grade, a
 
 - Quem tem "ver" enxerga **todos** os acolhidos. Não há restrição por registro nem por convênio.
 - Documento baixado ou impresso sai do controle do sistema (por isso `documentos` é uma permissão própria, e a trilha da fase 2
-  e o termo de sigilo da fase 8 completam).
+  completa).
 - Não há registro de **quem viu** o quê (fase 2).
 
 **Como conferir.** `teste_permissoes.py` (74 verificações): sementes, cobertura das rotas, consulta/operador/administrador em
@@ -375,12 +375,46 @@ Roteiro com o passo a passo, quase tudo manual, em `implantacao/`:
   (UPnP desligado); senha de administração do roteador trocada; Wi-Fi com WPA2/WPA3 e senha forte; **rede de visitantes separada**.
 - **Impressão**: a impressora fica onde só a equipe passa; documento com dado sensível não fica na bandeja.
 
-### Fase 7 — Defesa do navegador
+### Fase 7 — Defesa do navegador (entregue em 2026-10-16)
 
-- **Token CSRF** em todo formulário e chamada de alteração (hoje só `SameSite=Lax`, que é bom, mas não substitui).
-- **CSP** (Content-Security-Policy) sem `unsafe-inline`: exige tirar os scripts e estilos que ainda estão dentro das páginas e
-  passá-los para arquivos (as telas novas já seguem isso, como `static/permissoes.js`).
-- Cabeçalhos extras: `Permissions-Policy`, `Cross-Origin-Opener-Policy`, `Content-Disposition` nos downloads.
+**Por quê.** O que protege o sistema por dentro (senha, nível, auditoria) não ajuda se uma página de outro site conseguir fazer o navegador
+de quem está logado mandar um comando (**CSRF**), ou se alguém conseguir pôr um `<script>` numa página do sistema (**XSS**). Esta fase fecha
+as duas portas no navegador.
+
+**O que foi feito** (`csrf.py`, `static/base.js`, os templates):
+
+- **Token CSRF em todo envio que muda coisas** (POST e afins), inclusive a entrada. O token vai na sessão (muda a cada entrada), os 28
+  formulários POST levam `<input type="hidden" name="csrf_token">` e as chamadas do JavaScript levam o cabeçalho `X-CSRF-Token` (o
+  `base.js` embrulha o `fetch` do próprio sistema, e cobre formulário criado por script). Sem o token, ou com um que não confere: **400**,
+  uma tela explicando ("A página venceu"; JSON nas chamadas do JavaScript), comparação em tempo constante e registro na auditoria
+  (`csrf.recusado`: só o método e a rota, nunca o que foi digitado). Não conta como senha errada. Token na linha do endereço não vale.
+- **Política de conteúdo (CSP)** em toda página: script e estilo só do próprio sistema ou **com o nonce da resposta** (um código novo a cada
+  página, que o servidor põe nas próprias tags). Quem conseguir injetar um `<script>` na página não leva nada para rodar (testado no
+  Chrome: um script inserido à força é barrado e o relatório chega ao registro do servidor). `connect-src` só o próprio sistema e o ViaCEP
+  (o preenchimento do endereço pelo CEP); `form-action 'self'`, `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`. Sem
+  `unsafe-inline` nem `unsafe-eval` em script e em bloco de estilo (só `style="..."` dentro das tags continua permitido).
+  Em vez de tirar todos os scripts e estilos de dentro das páginas (a ideia original), usamos o **nonce**, que dá a mesma proteção sem
+  reescrever as telas. Os atributos de evento (`onclick`, `onsubmit`, `onchange`) foram trocados por `data-confirmar`,
+  `data-imprimir` e `data-trocar-emissor`, tratados pelo `base.js`.
+- **Relatório da política**: o navegador avisa `/csp-relatorio` quando barra algo, e o sistema escreve **uma linha curta** em `logs\servidor.log`
+  (o que foi barrado e em qual página, sem consulta nem conteúdo; no máximo 20 por minuto). **Modo de emergência**: se uma tela deixar de
+  funcionar por causa da política, `CSP_SOMENTE_RELATORIO=1` põe a política em "só avisar" (o navegador não bloqueia, só relata) até se
+  achar a causa.
+- **Cabeçalhos extras**: `Permissions-Policy` (sem câmera, microfone, localização, pagamento, USB), `Cross-Origin-Opener-Policy` e
+  `Cross-Origin-Resource-Policy` iguais a `same-origin`. Os downloads (Word e CSV) já saem com `Content-Disposition: attachment`.
+
+**Para quem mexe no sistema** (`docs/padroes-de-interface.md`): formulário POST novo leva `<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">`;
+`<script>` ou `<style>` dentro da página leva `nonce="{{ csp_nonce() }}"`; nada de `onclick=` (use `data-*` e o `base.js`); chamada nova do
+JavaScript usa o `fetch` normal (o `base.js` põe o cabeçalho).
+
+**Limites.** O CSRF não protege de quem já controla o navegador da pessoa (extensão maliciosa, computador infectado). `style="..."` dentro
+das tags segue permitido (só estilo, sem código). O ViaCEP recebe o CEP digitado (dado de endereço, fora do sistema): se a casa não quiser
+isso, basta tirar o `viacep.com.br` de `connect-src` em `csrf.py` e o preenchimento automático deixa de funcionar.
+
+**Como conferir.** `teste_csrf.py` (53 verificações, com o CSRF ligado: token na página e em todo formulário, recusa de TODA rota POST sem
+token em HTML e em JSON, token errado/no endereço/de sessão antiga, a política com nonce em todas as tags, sem atributo de evento, o relatório,
+a confirmação do nome com aspas), os testes de servidor real (`teste_servidor.py`, `teste_rede.py`) e a conferência no Chrome em todas as
+telas, sem uma só violação, com envio de formulário, confirmações, impressão, troca de quem assina e chamadas do JavaScript.
 
 ### Fase 8 — LGPD no papel
 
@@ -390,7 +424,9 @@ Modelos prontos em `docs/lgpd/`, para a casa preencher e assinar:
   for o caso), quem acessa, onde fica, por quanto tempo.
 - **Política de retenção**: por quanto tempo guardar prontuário de ex-interno e quanto tempo um registro fica na lixeira antes
   de ser apagado de vez. Alinhar com as exigências do conselho profissional e da vigilância sanitária.
-- **Termo de sigilo** assinado por quem recebe um login.
+- ~~**Termo de sigilo** assinado por quem recebe um login.~~ **Dispensado por decisão da casa (2026-10-16)**: os computadores que acessam o
+  sistema são patrimônio da instituição, e o que importa é proteger os dados e dar logins seguros (fases 1 a 5, 7 e 10). Se um dia a casa
+  quiser, é só um papel: o sistema não depende dele.
 - **Plano de resposta a incidente**: quem avisa quem, em quanto tempo; a comunicação à ANPD e ao titular tem prazo (conferir a
   Resolução CD/ANPD nº 15/2024). Inclui o que fazer se um computador for roubado ou um pen-drive de backup for perdido.
 - **Canal do titular** (art. 18): como a pessoa pede acesso, correção ou eliminação.
@@ -432,9 +468,9 @@ parte 5), e esta fase entrega o que faltava para isso ser seguro:
 - **Cada pessoa do polo 2 com a própria conta** do Tailscale (convite por usuário; até 6 no plano gratuito), nunca a conta da casa compartilhada.
 - **Roteiro de liberação e do dia a dia** no LEIA-ME, parte 5: antes de liberar, durante e quando alguém sai ou perde um aparelho.
 
-**Pré-requisitos** (todos entregues, **menos o termo de sigilo**): HTTPS (fase 4), segundo fator do administrador e tempo ocioso (fase 3), trilha
-de auditoria com o endereço de cada acesso (fase 2), backup externo (fase 5). **Falta o termo de sigilo (fase 8)**: cada pessoa do polo 2
-precisa assinar antes de receber o acesso; o sistema não cobra isso, é combinação da casa.
+**Pré-requisitos** (todos entregues): HTTPS (fase 4), segundo fator do administrador e tempo ocioso (fase 3), trilha de auditoria com o
+endereço de cada acesso (fase 2), backup externo (fase 5). O **termo de sigilo** foi dispensado por decisão da casa (2026-10-16): os computadores
+que acessam o sistema são todos patrimônio da instituição, e a proteção está nos logins e nos dados.
 
 **Limites.** O computador do escritório é o ponto único: se ele ou a internet de lá cair, o polo 2 para (o backup externo mostra o que fazer
 para recomeçar em outro computador, `implantacao/RESTAURAR.md`). O aviso de aparelho novo depende de o Tailscale repassar o endereço de quem
@@ -456,7 +492,7 @@ o aviso de aparelho novo em cada situação e a política do Tailscale).
 | Fase 6 | Seguir o roteiro do Windows e do roteador |
 | Fase 3 | Rodar `implantacao\configurar-email.ps1` no servidor e **digitar a senha da caixa `sistema@`** (e trocá-la, se já apareceu em conversa); cadastrar o **e-mail de cada funcionário** (Cadastros > Funcionários); cada pessoa confirma o seu em **Minha segurança**; o administrador **liga o aplicativo autenticador** no celular e guarda os 8 códigos de recuperação em papel |
 | Fase 4 | Criar a conta do Tailscale (com verificação em duas etapas), instalar nos aparelhos, ligar o HTTPS no painel, rodar `configurar-https.ps1` no servidor, migrar os aparelhos e, no fim, `-FecharHttp` (LEIA-ME, parte 5) |
-| Fase 10 | Convidar cada pessoa do polo 2 no Tailscale (conta própria), colar a política de acesso (`configurar-https.ps1 -MostrarPolitica`), instalar nos aparelhos do polo e **colher o termo de sigilo de cada pessoa antes de dar o acesso** (LEIA-ME, parte 5) |
+| Fase 10 | Convidar cada pessoa do polo 2 no Tailscale (conta própria), colar a política de acesso (`configurar-https.ps1 -MostrarPolitica`), instalar nos aparelhos do polo (LEIA-ME, parte 5) |
 | Fase 8 | Preencher e assinar os modelos |
 
 ## 6. Decisões e perguntas
@@ -475,6 +511,8 @@ o aviso de aparelho novo em cada situação e a política do Tailscale).
 7. O e-mail institucional é da **Hostinger** (envio por SMTP com senha: mais simples que o Microsoft 365).
 8. Caixa de envio `sistema@restauracao.org.br`; e-mail principal, que recebe os avisos do sistema, `financeiro@restauracao.org.br`.
 9. Segundo fator (aplicativo autenticador no celular): sim, para o administrador; vale para quem quiser. Passa a ser necessário para o administrador redefinir a senha pelo e-mail.
+10. Termo de sigilo: dispensado (2026-10-16). Os computadores que acessam o sistema são todos patrimônio da instituição; o foco é proteger os
+    dados e criar logins seguros.
 
 **Em aberto**
 

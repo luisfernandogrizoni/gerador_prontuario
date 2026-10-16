@@ -250,8 +250,8 @@ mesmo endereço `https://...ts.net`. O sistema é um só, com um banco só: os d
 
 1. O HTTPS rodando bem (passos 1 a 5 acima) e, de preferência, o http da rede local fechado (`-FecharHttp`).
 2. O backup externo em dia (parte 3): a tela *Cadastros > Backup* sem aviso.
-3. **Cada pessoa do polo 2 com o termo de sigilo assinado** (modelo na fase 8 do plano de segurança) e cadastrada em *Cadastros > Funcionários*
-   com o e-mail dela e o nível certo (Operador ou Consulta).
+3. **Cada pessoa do polo 2 cadastrada** em *Cadastros > Funcionários*, com o e-mail dela e o nível certo (Operador ou Consulta). Os
+   computadores do polo precisam ser da instituição (é o que a casa combinou: nada de computador pessoal).
 4. **O administrador com o aplicativo autenticador ligado**: a partir do modo `misto`, o sistema só abre para o administrador depois disso
    (a tela "Ligue o aplicativo autenticador" aparece sozinha). Se for preciso desligar a exigência (administrador sem celular, e só
    enquanto isso durar), coloque `"segundo_fator_do_administrador": false` em `instance\rede.json`.
@@ -292,6 +292,7 @@ mesmo endereço `https://...ts.net`. O sistema é um só, com um banco só: os d
 | A pessoa é desconectada sozinha | É o tempo ocioso: 30 minutos sem usar o sistema encerram a sessão (aos 25 aparece um aviso com a contagem). |
 | O sistema parou | `C:\prontuario\logs\servidor.log` mostra o erro. No Agendador de Tarefas, a tarefa *Prontuario - servidor* mostra o último resultado. |
 | Aviso de backup na página inicial | `C:\prontuario\logs\backup.log`; o HD externo está ligado? |
+| Uma tela deixou de funcionar (botão que não responde, página em branco) logo depois de atualizar | Pode ser a política de conteúdo do navegador (fase 7). Veja `C:\prontuario\logs\servidor.log`: as linhas "CSP: a política barrou..." dizem o quê e em qual página. Para voltar a funcionar enquanto se acha a causa, ligue o modo "só avisar": defina a variável de ambiente `CSP_SOMENTE_RELATORIO=1` para a tarefa do servidor e religue o sistema. Me mande as linhas do registro. |
 | Quer ligar à mão, para ver o erro na tela | `cd C:\prontuario` e `.\.venv\Scripts\python.exe servidor.py` (pare a tarefa antes, para não dividir a porta). |
 
 ## 7. Segurança e limites
@@ -305,6 +306,7 @@ mesmo endereço `https://...ts.net`. O sistema é um só, com um banco só: os d
 - O arquivo `logs\servidor.log` registra só erros e acessos negados, sem dados dos internos. Quem fez o quê (entradas, quem abriu
   cada ficha, quem baixou documentos, alterações e mudanças de permissão) fica na **trilha de auditoria**, dentro do sistema:
   **Cadastros > Auditoria** (só o administrador), com filtros e CSV. A trilha não guarda o conteúdo dos dados, só quais campos mudaram.
+- **Navegador** (fase 7): todo envio leva um código de segurança que só a página do próprio sistema tem (CSRF), e a política de conteúdo só deixa rodar script e estilo do sistema. Um envio vindo de outro lugar recebe "A página venceu".
 - **Contas**: o sistema barra senhas fáceis, exige a troca da senha provisória, encerra a sessão depois de 30 minutos sem uso,
   limita as tentativas por computador, confirma o e-mail de cada pessoa e oferece o segundo fator (aplicativo autenticador). O
   administrador **não redefine a senha pelo e-mail** sem o segundo fator ligado. Detalhes em `docs\plano-de-seguranca.md`

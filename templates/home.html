@@ -317,12 +317,12 @@
                   {% if a.url %}<a class="botao pequeno secundario" href="{{ a.url }}">{{ a.rotulo_url }}</a>{% endif %}
                   {% if a.acao and pode(a.acao.exige or 'acessos') %}
                     <form method="post" action="{{ a.acao.url }}"
-                          {% if a.acao.confirmar %}onsubmit='return confirm({{ a.acao.confirmar | tojson }})'{% endif %}>
+                          {% if a.acao.confirmar %}data-confirmar="{{ a.acao.confirmar }}"{% endif %}><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                       {% for campo, valor in (a.acao.campos or {}).items() %}<input type="hidden" name="{{ campo }}" value="{{ valor }}">{% endfor %}
                       <button class="botao pequeno{{ '' if a.acao.principal else ' secundario' }}">{{ a.acao.rotulo }}</button></form>
                   {% endif %}
                   {% if a.dispensavel and pode('triagem', 'internacao', 'baixa') %}
-                  <form method="post" action="{{ url_for('aviso_ciente') }}">
+                  <form method="post" action="{{ url_for('aviso_ciente') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="chave" value="{{ a.chave }}">
                     <button class="botao pequeno secundario" title="Tirar do quadro sem corrigir">Ciente</button></form>
                   {% endif %}

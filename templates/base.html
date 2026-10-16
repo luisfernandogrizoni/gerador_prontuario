@@ -3,11 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <script src="{{ url_for('static', filename='base.js') }}"></script>
   <title>{% block titulo %}Casa de Acolhida Restauração{% endblock %}</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='marca/favicon-32.png') }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='marca/apple-touch-icon.png') }}">
-  <style>
+  <style nonce="{{ csp_nonce() }}">
     /* ============================ identidade visual ============================
        Nada vem de fora (sem fontes nem bibliotecas de terceiros): o sistema guarda dados
        sensíveis e não faz nenhuma requisição a outros sites para se desenhar. */
@@ -509,7 +511,7 @@
       <span class="usuario">
         <a class="eu" href="{{ url_for('seguranca') }}" title="Minha segurança">
           <span class="inicial">{{ usuario_atual.nome[:1] }}</span><span class="nome">{{ usuario_atual.nome }}</span></a>
-        <form method="post" action="{{ url_for('sair') }}"><button>Sair</button></form>
+        <form method="post" action="{{ url_for('sair') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button>Sair</button></form>
       </span>
       {% endif %}
     </nav>
@@ -534,7 +536,7 @@
   <script src="{{ url_for('static', filename='ociosidade.js') }}" data-ocioso="{{ ocioso_segundos }}" data-aviso="{{ aviso_de_ocioso_segundos }}"
           data-ping="{{ url_for('sessao_ping') }}" data-sair="{{ url_for('login', encerrada='ocioso') }}" data-sair-agora="{{ url_for('sair') }}"></script>
   {% endif %}
-  <script>
+  <script nonce="{{ csp_nonce() }}">
     // "Voltar" volta uma página no histórico (a lista continua como estava); sem histórico, segue o endereço do botão.
     // Os botões marcados com data-substituir (colunas e quem assina nos relatórios) trocam a página em vez de empilhar histórico.
     document.addEventListener("click", function (e) {
@@ -547,7 +549,7 @@
       } catch (erro) { /* sem referência: segue o endereço */ }
     });
   </script>
-  <script>
+  <script nonce="{{ csp_nonce() }}">
     // avisos de confirmação (flash): cartão no canto, com botão de fechar, que some sozinho depois de alguns segundos
     (function () {
       var lista = document.querySelector(".mensagens");
@@ -563,7 +565,7 @@
       });
     })();
   </script>
-  <script>
+  <script nonce="{{ csp_nonce() }}">
     // na impressão: abre os grupos recolhidos (senão o conteúdo some do papel) e carimba quando e quem imprimiu
     (function () {
       var abertos = [];

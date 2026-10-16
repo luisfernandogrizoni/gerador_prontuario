@@ -51,9 +51,9 @@
           <td class="fixo acao">
             {% if pode_acessos %}
             <div class="acoes-linha">
-              <form method="post" action="{{ url_for('mover_nivel', id=n.id) }}"><input type="hidden" name="sentido" value="cima">
+              <form method="post" action="{{ url_for('mover_nivel', id=n.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="sentido" value="cima">
                 <button class="botao pequeno secundario" title="Dar mais acesso (subir na cascata)" aria-label="Subir {{ n.nome }}"{{ ' disabled' if loop.index <= 2 }}>↑</button></form>
-              <form method="post" action="{{ url_for('mover_nivel', id=n.id) }}"><input type="hidden" name="sentido" value="baixo">
+              <form method="post" action="{{ url_for('mover_nivel', id=n.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="sentido" value="baixo">
                 <button class="botao pequeno secundario" title="Dar menos acesso (descer na cascata)" aria-label="Descer {{ n.nome }}"{{ ' disabled' if loop.first or loop.last }}>↓</button></form>
               <a class="botao pequeno secundario" href="{{ url_for('editar_nivel', id=n.id) }}">Editar</a>
             </div>

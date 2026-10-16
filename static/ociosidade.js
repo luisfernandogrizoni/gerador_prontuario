@@ -62,6 +62,8 @@
   document.getElementById("ocioso-sair").addEventListener("click", function () {
     var f = document.createElement("form");
     f.method = "post"; f.action = script.dataset.sairAgora;
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    if (meta) { var campo = document.createElement("input"); campo.type = "hidden"; campo.name = "csrf_token"; campo.value = meta.content; f.appendChild(campo); }
     document.body.appendChild(f);
     f.submit();
   });

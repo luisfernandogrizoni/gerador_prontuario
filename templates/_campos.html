@@ -139,7 +139,7 @@
     {{ entrada('contribuicao_condicoes', 'Condições', 'c2', attrs={'placeholder': 'ex.: mensal, 9 parcelas'}) }}
   </div>
 </fieldset>
-<script>
+<script nonce="{{ csp_nonce() }}">
   // regra de convênio/categoria vinda do prontuario.py — uma única fonte da regra
   window.REGRAS_CONVENIO = {
     gratuitos: {{ gratuitos | tojson }}, faixas: {{ faixas | tojson }},
