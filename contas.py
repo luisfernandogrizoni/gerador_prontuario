@@ -21,7 +21,7 @@ import secrets
 from datetime import datetime, timedelta
 
 import click
-from flask import current_app
+from flask import current_app, request
 
 import auditoria
 import autenticacao
@@ -152,6 +152,44 @@ def avisar_senha_trocada(usuario):
     """A própria pessoa trocou a senha: e-mail de aviso para o endereço confirmado dela (se houver)."""
     _avisar(funcionario_de(usuario), "A sua senha foi alterada", f"A senha do usuário {usuario.nome} foi alterada agora.\n\n"
             "Se não foi você, avise o administrador agora." + _assinatura_do_email())
+
+
+# ====================================================================== entrar por um aparelho novo
+def aparelho_novo(usuario, endereco=None):
+    """True se a pessoa já entrou antes, mas nunca por este endereço de rede (com o Tailscale cada aparelho tem o seu endereço 100.x). A
+    primeira entrada de uma conta não conta (não há com o que comparar), e o endereço local do servidor também não."""
+    endereco = request.remote_addr if endereco is None else endereco
+    if not endereco or endereco in autenticacao.ENDERECOS_LOCAIS:
+        return False
+    consulta = db.select(db.func.count()).select_from(auditoria.Evento).filter(auditoria.Evento.acao == "login.ok", auditoria.Evento.usuario == usuario.nome)
+    if not db.session.execute(consulta).scalar():
+        return False
+    return not db.session.execute(consulta.filter(auditoria.Evento.endereco == endereco)).scalar()
+
+
+def registrar_entrada(usuario, detalhe=""):
+    """Registra que a pessoa entrou e, se foi por um aparelho novo, avisa por e-mail (a própria pessoa; se for administrador, também quem recebe
+    os avisos da casa) e deixa isso na auditoria. Nunca atrapalha a entrada."""
+    novo = False
+    try:
+        novo = aparelho_novo(usuario)
+    except Exception:                                  # noqa: BLE001 — o aviso é cortesia
+        log.exception("Não consegui conferir se o aparelho é novo")
+    auditoria.registrar("login.ok", usuario=usuario.nome, detalhe=detalhe)
+    if not novo:
+        return
+    auditoria.registrar("login.aparelho_novo", usuario=usuario.nome)
+    if not email_envio.configurado(_instance()):
+        return
+    funcionario = funcionario_de(usuario)
+    texto = (f"O usuário {usuario.nome} entrou no sistema agora ({datetime.now():%d/%m/%Y às %H:%M}) por um aparelho que ainda não tinha usado "
+             f"(endereço {request.remote_addr}).\n\nSe foi você (computador ou celular novo), pode ignorar esta mensagem. Se não foi, avise o "
+             "administrador agora e troque a sua senha." + _assinatura_do_email())
+    _avisar(funcionario, "Entrada por um aparelho novo", texto)
+    if e_administrador(usuario) and (casa := email_envio.avisos_para(_instance())):
+        destinos = [e for e in casa if not (funcionario is not None and e.lower() == (funcionario.email or "").lower())]
+        if destinos:
+            email_envio.enviar_em_segundo_plano(_instance(), destinos, "Administrador entrou por um aparelho novo", texto)
 
 
 # ====================================================================== esqueci minha senha

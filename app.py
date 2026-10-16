@@ -225,7 +225,7 @@ def login():
             return redirect(url_for("login_codigo"))
         if usuario:
             autenticacao.abrir_sessao(usuario)
-            auditoria.registrar("login.ok", usuario=usuario.nome)
+            contas.registrar_entrada(usuario)
             return redirect(autenticacao.destino_seguro(proximo, url_for("home")))
         return render_template("login.html", erro=erro, proximo=proximo, aviso=None), 401
     return render_template("login.html", erro=None, proximo=proximo, aviso=aviso)
@@ -245,7 +245,7 @@ def login_codigo():
         if como:
             proximo = session["mfa"].get("proximo", "")
             autenticacao.abrir_sessao(usuario)
-            auditoria.registrar("login.ok", usuario=usuario.nome, detalhe="com o código do aplicativo" if como == "app" else "com um código de recuperação")
+            contas.registrar_entrada(usuario, "com o código do aplicativo" if como == "app" else "com um código de recuperação")
             return redirect(autenticacao.destino_seguro(proximo, url_for("home")))
         bloqueou = autenticacao.registrar_falha(usuario, "login.codigo_errado")
         if bloqueou or autenticacao.errou_o_codigo() >= autenticacao.MAX_FALHAS:

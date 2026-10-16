@@ -226,6 +226,13 @@ o sistema continua sem aparecer na internet. É também o caminho do segundo pol
    Agora o sistema só atende por dentro do Tailscale, o cookie do login passa a ser só-HTTPS e o navegador passa a exigir HTTPS no
    endereço novo.
 
+**Manter os dois acessos (escolha da casa).** Dá para deixar `http://IP:8000` para os computadores do escritório e o endereço `https` do
+Tailscale só para quem está fora (polo 2, celular): é o modo `misto`, sem o passo 6. Rode `configurar-https.ps1 -ManterOsDois` e a página
+inicial deixa de lembrar de fechar o http. O que se perde: **a senha de quem entra pelo http continua viajando sem criptografia na rede do
+escritório** (e o cookie do login dele não é só-HTTPS). Cuidados: Wi-Fi do escritório com senha forte e visitantes em outra rede; quem mexe
+com coisas mais sensíveis, **principalmente o administrador, entra pelo endereço https** mesmo estando no escritório (basta ter o Tailscale
+no computador dele); reserve o IP de cada computador no roteador (se o IP mudar, a pessoa recebe o aviso de "aparelho novo").
+
 **Se algo não der certo**
 
 - No **próprio servidor**, `http://127.0.0.1:8000` abre sempre, em qualquer modo.
@@ -236,9 +243,42 @@ o sistema continua sem aparecer na internet. É também o caminho do segundo pol
   ser dado quando o HTTPS já estiver rodando bem há alguns dias; e o `-Desfazer` está sempre à mão.
 - O certificado é do Tailscale e **se renova sozinho**. Nada a fazer.
 
-**Segundo polo.** É o mesmo caminho: instalar o Tailscale nos computadores de lá, entrar na mesma conta e abrir o mesmo endereço
-(fase 10 do plano de segurança). Antes de liberar, leia a fase 10 (termo de sigilo, e a lembrança de que o computador do escritório passa
-a ser o ponto único: o backup externo precisa estar em dia).
+**Segundo polo e celular fora do escritório (fase 10).** É o mesmo caminho: cada pessoa instala o Tailscale no aparelho dela e abre o
+mesmo endereço `https://...ts.net`. O sistema é um só, com um banco só: os dois polos veem o que o outro registrou na hora.
+
+*Antes de liberar* (o computador do escritório passa a ser o ponto único: se ele ou a internet de lá cair, o polo 2 para):
+
+1. O HTTPS rodando bem (passos 1 a 5 acima) e, de preferência, o http da rede local fechado (`-FecharHttp`).
+2. O backup externo em dia (parte 3): a tela *Cadastros > Backup* sem aviso.
+3. **Cada pessoa do polo 2 com o termo de sigilo assinado** (modelo na fase 8 do plano de segurança) e cadastrada em *Cadastros > Funcionários*
+   com o e-mail dela e o nível certo (Operador ou Consulta).
+4. **O administrador com o aplicativo autenticador ligado**: a partir do modo `misto`, o sistema só abre para o administrador depois disso
+   (a tela "Ligue o aplicativo autenticador" aparece sozinha). Se for preciso desligar a exigência (administrador sem celular, e só
+   enquanto isso durar), coloque `"segundo_fator_do_administrador": false` em `instance\rede.json`.
+
+*Como ligar*
+
+1. No painel do Tailscale (*Users > Invite users*), **convide cada pessoa do polo 2 pelo e-mail dela**: cada uma entra com a **própria**
+   conta (Google ou Microsoft) e os aparelhos dela ficam no nome dela. Não compartilhe a conta da casa com o polo 2. O plano gratuito aceita
+   até 6 usuários (confira em tailscale.com/pricing).
+2. **Limite o que cada aparelho alcança.** Por padrão, todo aparelho da rede alcança todos os outros, e um computador infectado do polo 2
+   chegaria aos computadores do escritório. No servidor, rode:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File implantacao\configurar-https.ps1 -MostrarPolitica
+   ```
+
+   e cole o texto que ele mostra em login.tailscale.com/admin/acls (use *Preview rules* antes de salvar). O efeito: **cada aparelho só alcança
+   o servidor, e só na porta 443** (o sistema); nenhum alcança os outros.
+3. No polo 2: instalar o Tailscale, entrar com a conta convidada e abrir o endereço https.
+
+*No dia a dia*
+
+- Quando alguém entra por um **aparelho que ainda não tinha usado**, ela recebe um e-mail ("Entrada por um aparelho novo", com o endereço do
+  aparelho e o que fazer se não foi ela); no caso do administrador, o e-mail principal da casa também. Fica na auditoria como "Entrou por um
+  aparelho que ainda não tinha usado". Ao migrar para o endereço novo, cada pessoa recebe esse aviso uma vez.
+- **Quem sai da casa**: desativar o funcionário (o acesso cai na hora) **e** remover a pessoa no painel do Tailscale.
+- **Aparelho perdido ou roubado**: remover o aparelho no painel do Tailscale (*Machines > ... > Delete*) e trocar a senha da pessoa.
 
 ## 6. Se algo der errado
 

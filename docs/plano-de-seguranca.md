@@ -64,7 +64,7 @@ fase 10 (VPN), nunca abrindo porta no roteador.
 | 7 | Token CSRF e CSP | Sistema | A fazer |
 | 8 | LGPD no papel | Usuário, com modelos prontos do sistema | A fazer |
 | 9 | Manutenção contínua | Sistema (avisos) + usuário | A fazer |
-| 10 | Segundo polo e acesso de fora do escritório (VPN) | Sistema + usuário (instalar a VPN) | A fazer; decidido: mesmo banco, opção A |
+| 10 | Segundo polo e acesso de fora do escritório (VPN) | Sistema + usuário (instalar o Tailscale e combinar o termo de sigilo) | **Feita** (2026-10-16); falta o usuário ligar e o termo de sigilo (fase 8) |
 
 Ordem sugerida: 1 → 5 → 2 → 3 → 4 + 10 (juntas: HTTPS pela VPN e o segundo polo) → 7 → 6 → 8 → 9. O backup (5) sobe na frente porque
 perder tudo é a ameaça mais provável e a mais cara, e passa a ser obrigatório quando o polo 2 depender do computador do escritório.
@@ -301,6 +301,10 @@ ligar o *HTTPS Certificates* no painel, rodar `configurar-https.ps1` no servidor
 - Depois de `-FecharHttp`, **quem não tem o Tailscale não abre mais o sistema**. No próprio servidor, `http://127.0.0.1:8000` abre sempre.
 - Se o Tailscale ou a internet cair, o acesso pelos outros aparelhos pode cair (a rede costuma lembrar dos aparelhos conhecidos, mas não é
   garantido): por isso o modo `misto` existe e o `-Desfazer` está sempre à mão.
+- **Manter os dois acessos é uma escolha válida** (`configurar-https.ps1 -ManterOsDois`, modo `misto` com `"manter_http": true`; o lembrete da
+  página inicial some). O custo: a senha e o cookie de quem entra pelo http seguem sem criptografia na rede do escritório. Mitigações: Wi-Fi
+  forte e visitantes separados, administrador e tarefas sensíveis pelo endereço https, e o segundo fator do administrador (fase 10), que
+  impede que uma senha espiada na rede abra a conta dele.
 - O HSTS faz o navegador exigir HTTPS naquele nome por 1 ano; por isso ele só vai no modo `https` (ou em hospedagem com HTTPS).
 - **Não testado com o Tailscale de verdade nesta entrega** (não há conta nem o programa instalado neste computador de desenvolvimento): o
   script e o sistema foram testados com um Tailscale de mentira e com o waitress real; a primeira execução no servidor é o teste final, e o modo
@@ -400,7 +404,7 @@ Modelos prontos em `docs/lgpd/`, para a casa preencher e assinar:
 - **Revisão trimestral dos acessos**: lista de usuários × funcionários ativos × nível, com aviso no quadro de avisos.
 - **Teste de restauração do backup** trimestral (fase 5) e revisão deste plano a cada semestre.
 
-### Fase 10 — Segundo polo e acesso de fora do escritório
+### Fase 10 — Segundo polo e acesso de fora do escritório (entregue em 2026-10-16; falta o usuário ligar)
 
 **Pergunta de origem (2026-10-15).** Hoje o sistema só abre quando o computador está no Wi-Fi do escritório. Dá para instalar
 um servidor em outro polo e os dois usarem o mesmo banco?
@@ -409,26 +413,36 @@ um servidor em outro polo e os dois usarem o mesmo banco?
 arquivo pela rede podem corrompê-lo. Manter um banco por polo e sincronizar traz conflitos (a mesma pessoa cadastrada nos dois
 lados, numeração repetida, internet que cai no meio) e não é recomendado.
 
-**Opção A (recomendada): um banco só, e o polo 2 entra no computador do escritório por VPN.**
+**Decisão (2026-10-15): opção A, um banco só.** Os polos compartilham **exatamente as mesmas informações**, como se o sistema estivesse na
+nuvem, e o polo 2 tem computadores e internet. Logo: um sistema, um banco, um endereço (o do computador do escritório no Tailscale) para os
+dois polos e para o celular. Sem campo "polo" e sem sincronização. Com a fase 4 pronta, ligar o polo 2 é **instalar o Tailscale lá** (LEIA-ME,
+parte 5), e esta fase entrega o que faltava para isso ser seguro:
 
-- Sem servidor novo e sem sincronização: os dois polos usam o mesmo sistema e veem o que o outro registrou na hora.
-- A VPN (por exemplo Tailscale, que tem plano gratuito; conferir os limites atuais) liga os aparelhos numa rede privada, **sem
-  abrir porta no roteador** e sem expor o sistema na internet. Serve também para o celular fora do escritório.
-- O HTTPS (fase 4, entregue) usa o certificado que a própria VPN emite: o polo 2 só precisa instalar o Tailscale e abrir o mesmo endereço.
-- Ponto fraco: o computador do escritório vira o ponto único. Se ele ou a internet de lá cair, o polo 2 para. O backup externo
-  (fase 5) passa a ser obrigatório.
-- **Pré-requisitos de segurança**, que passam a ser obrigatórios antes de liberar: HTTPS (4), segundo fator do administrador, tempo
-  ocioso (3), trilha de auditoria com o endereço de cada acesso (2) e o termo de sigilo (8).
+- **Segundo fator obrigatório para o administrador** quando o sistema pode ser acessado de fora (modos `misto` e `https`, `servidor.py`). O
+  administrador sem o aplicativo autenticador só consegue abrir a tela de ativação (`Ligue o aplicativo autenticador`), com os dados fechados
+  até lá. No modo `http` (só o escritório) não exige. Dá para desligar (`"segundo_fator_do_administrador": false` em `instance/rede.json`, ou a
+  variável `EXIGIR_SEGUNDO_FATOR=0`) para quem não tem celular. Celular perdido: `flask --app app desativar-segundo-fator USUARIO`, e ele liga de novo.
+- **Aviso de aparelho novo**: quando alguém entra por um endereço de rede (cada aparelho do Tailscale tem o seu `100.x`) que nunca usou, e já
+  tinha entrado antes, recebe um e-mail ("Entrada por um aparelho novo", com o endereço e o que fazer se não foi ela); se for administrador,
+  o e-mail principal da casa também. Fica na auditoria (`login.aparelho_novo`). A primeira entrada de uma conta e as do próprio servidor
+  (127.0.0.1) não avisam; o e-mail que falha nunca atrapalha a entrada.
+- **Política de acesso do Tailscale** (`implantacao/tailscale-politica.json`, mostrada já preenchida por
+  `configurar-https.ps1 -MostrarPolitica`): cada aparelho só alcança o servidor, só na porta 443. Sem isso, um computador infectado do polo 2
+  alcançaria os computadores do escritório (por padrão todo aparelho da rede alcança todos os outros).
+- **Cada pessoa do polo 2 com a própria conta** do Tailscale (convite por usuário; até 6 no plano gratuito), nunca a conta da casa compartilhada.
+- **Roteiro de liberação e do dia a dia** no LEIA-ME, parte 5: antes de liberar, durante e quando alguém sai ou perde um aparelho.
 
-**Opção B: Postgres central e um servidor do sistema em cada polo.** O sistema já suporta (`DATABASE_URL`, testado nesta entrega,
-incluindo a cópia do SQLite com `copiar_banco.py`). O banco precisa ficar num lugar que os dois polos alcancem: a mesma VPN, ou um
-Postgres em nuvem (custo, e dado de saúde fora do país, com implicação de LGPD). Só compensa se o polo 2 precisar funcionar com o
-escritório fora do ar.
+**Pré-requisitos** (todos entregues, **menos o termo de sigilo**): HTTPS (fase 4), segundo fator do administrador e tempo ocioso (fase 3), trilha
+de auditoria com o endereço de cada acesso (fase 2), backup externo (fase 5). **Falta o termo de sigilo (fase 8)**: cada pessoa do polo 2
+precisa assinar antes de receber o acesso; o sistema não cobra isso, é combinação da casa.
 
-**Decisões (2026-10-15)**: os polos compartilham **exatamente as mesmas informações**, como se o sistema estivesse na nuvem, e o
-polo 2 tem computadores e internet. Logo vale a **opção A**, sem campo "polo" e sem sincronização: um sistema, um banco, um
-endereço (o do computador do escritório na VPN) para os dois polos e para o celular. Falta só confirmar com o usuário a hora de
-fazer, porque depende das fases 2, 3 e 4 (pré-requisitos acima) e do backup externo (5).
+**Limites.** O computador do escritório é o ponto único: se ele ou a internet de lá cair, o polo 2 para (o backup externo mostra o que fazer
+para recomeçar em outro computador, `implantacao/RESTAURAR.md`). O aviso de aparelho novo depende de o Tailscale repassar o endereço de quem
+acessa (conferir na auditoria, LEIA-ME parte 5, passo 5). Se a casa um dia precisar que o polo 2 funcione com o escritório fora do ar, a
+opção B (Postgres central) continua disponível: o sistema já suporta (`DATABASE_URL`, `copiar_banco.py`).
+
+**Como conferir.** `teste_polo2.py` (51 verificações: quando a exigência vale, o administrador barrado e liberado, quem não deve ser barrado,
+o aviso de aparelho novo em cada situação e a política do Tailscale).
 
 ## 5. O que só uma pessoa na casa pode fazer
 
@@ -442,7 +456,7 @@ fazer, porque depende das fases 2, 3 e 4 (pré-requisitos acima) e do backup ext
 | Fase 6 | Seguir o roteiro do Windows e do roteador |
 | Fase 3 | Rodar `implantacao\configurar-email.ps1` no servidor e **digitar a senha da caixa `sistema@`** (e trocá-la, se já apareceu em conversa); cadastrar o **e-mail de cada funcionário** (Cadastros > Funcionários); cada pessoa confirma o seu em **Minha segurança**; o administrador **liga o aplicativo autenticador** no celular e guarda os 8 códigos de recuperação em papel |
 | Fase 4 | Criar a conta do Tailscale (com verificação em duas etapas), instalar nos aparelhos, ligar o HTTPS no painel, rodar `configurar-https.ps1` no servidor, migrar os aparelhos e, no fim, `-FecharHttp` (LEIA-ME, parte 5) |
-| Fase 10 | Instalar a VPN no computador do escritório e em cada aparelho que for acessar de fora |
+| Fase 10 | Convidar cada pessoa do polo 2 no Tailscale (conta própria), colar a política de acesso (`configurar-https.ps1 -MostrarPolitica`), instalar nos aparelhos do polo e **colher o termo de sigilo de cada pessoa antes de dar o acesso** (LEIA-ME, parte 5) |
 | Fase 8 | Preencher e assinar os modelos |
 
 ## 6. Decisões e perguntas

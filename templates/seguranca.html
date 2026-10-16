@@ -17,14 +17,16 @@
 {% block conteudo %}
 <main class="largo">
   {% if not restricao_da_conta %}{{ linha_voltar(url_for('home')) }}{% endif %}
-  <h1>{{ 'Confirme o seu e-mail' if restricao_da_conta else 'Minha segurança' }}</h1>
-  {% if restricao_da_conta %}<p class="caixa-info" role="status">Para começar a usar o sistema, confirme o seu e-mail: peça o código e digite o que chegar.</p>{% endif %}
+  <h1>{{ 'Confirme o seu e-mail' if restricao_da_conta == 'email' else ('Ligue o aplicativo autenticador' if restricao_da_conta == 'segundo_fator' else 'Minha segurança') }}</h1>
+  {% if restricao_da_conta == 'email' %}<p class="caixa-info" role="status">Para começar a usar o sistema, confirme o seu e-mail: peça o código e digite o que chegar.</p>{% endif %}
+  {% if restricao_da_conta == 'segundo_fator' %}<p class="caixa-info" role="status">O sistema pode ser acessado de fora do escritório. Para continuar, o administrador precisa ligar o aplicativo autenticador no celular.</p>{% endif %}
 
   {% with msgs = get_flashed_messages() %}
     {% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
   {% endwith %}
 
   <div class="seguranca">
+    {% if restricao_da_conta != 'segundo_fator' %}
     {% call cartao('E-mail', 'envelope', 'azul', id='email') %}
       {% if funcionario and funcionario.email %}
         <div class="estado">
@@ -48,7 +50,8 @@
       {% endif %}
     {% endcall %}
 
-    {% if not restricao_da_conta %}
+    {% endif %}
+    {% if restricao_da_conta != 'email' %}
     {% call cartao('Aplicativo autenticador', 'cadeado', 'roxo', id='autenticador') %}
       {% if totp_ativo %}
         <div class="estado">
@@ -70,6 +73,8 @@
       {% endif %}
     {% endcall %}
 
+    {% endif %}
+    {% if not restricao_da_conta %}
     {% call cartao('Senha', 'cadeado', 'neutro', id='senha') %}
       <div class="acoes-cartao" style="margin-top: 0"><a class="botao secundario" href="{{ url_for('alterar_senha') }}">Alterar minha senha</a></div>
     {% endcall %}
