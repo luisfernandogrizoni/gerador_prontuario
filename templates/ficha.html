@@ -204,7 +204,7 @@
                 <td>{{ parc.data | data }}</td>
                 <td class="num">{{ parc.valor | reais if parc.valor is not none else '—' }}</td>
                 <td>{% if pode('financeiro') %}<form method="post" action="{{ url_for('excluir_parcela', id=parc.id) }}"
-                          onsubmit="return confirm('Excluir a {{ parc.numero }}ª parcela?')">
+                          data-confirmar="Excluir a {{ parc.numero }}ª parcela?"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                       <button class="botao pequeno secundario">Excluir</button></form>{% endif %}</td>
               </tr>
               {% endfor %}
@@ -215,7 +215,7 @@
           <p class="nao-informado">Nenhuma parcela lançada.</p>
         {% endif %}
         {% if pode('financeiro') %}
-        <form class="nova-parcela" method="post" action="{{ url_for('lancar_parcela', id=i.id) }}">
+        <form class="nova-parcela" method="post" action="{{ url_for('lancar_parcela', id=i.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <label>Nº<input type="number" name="numero" min="1"
                  value="{{ (i.parcelas | map(attribute='numero') | max) + 1 if i.parcelas else 1 }}"></label>
           <label>Data *<input type="date" name="data" required></label>
@@ -315,7 +315,7 @@
             {% endif %}
           </div>
           {% if pode('baixa') %}
-          <form method="post" action="{{ url_for('registrar_envelope', id=i.id) }}">
+          <form method="post" action="{{ url_for('registrar_envelope', id=i.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             {% if i.envelope == 'recebido' %}
               <button class="botao secundario" name="situacao" value="pendente">Desfazer</button>
             {% elif i.envelope == 'pendente' %}
@@ -366,7 +366,7 @@
 
 {% if pode_servico_social and acolhimento.estado == 'finalizado' %}
 <dialog id="adendo">
-  <form method="post" action="{{ url_for('adendo_social', id=i.id) }}">
+  <form method="post" action="{{ url_for('adendo_social', id=i.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <h2>Adendo ao acolhimento social</h2>
     <textarea name="texto" maxlength="3000" required aria-label="Adendo"></textarea>
     <div class="botoes">
@@ -379,7 +379,7 @@
 
 {% if pode('excluir') %}
 <dialog id="excluir">
-  <form method="post" action="{{ url_for('excluir_registro', id=i.id) }}">
+  <form method="post" action="{{ url_for('excluir_registro', id=i.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <h2>Excluir o registro de {{ p.nome }}?</h2>
     <p>
       {% if i.status == 'ativo' %}<strong>Este interno está ativo: a vaga dele será liberada.</strong> {% endif %}
@@ -393,7 +393,7 @@
       <button type="button" class="botao secundario" id="cancelar-exclusao">Cancelar</button>
       {% if e_administrador %}
         <button class="botao secundario" name="acao" value="lixeira">Mover para a lixeira</button>
-        <button class="botao perigo solido" name="acao" value="apagar" onclick="return confirm('Apagar {{ p.nome | replace("'", "") }} do banco de dados? Não tem volta.')">Excluir de vez</button>
+        <button class="botao perigo solido" name="acao" value="apagar" data-confirmar="Apagar {{ p.nome }} do banco de dados? Não tem volta.">Excluir de vez</button>
       {% else %}
         <button class="botao perigo solido" name="acao" value="lixeira">Excluir</button>
       {% endif %}
@@ -401,7 +401,7 @@
   </form>
 </dialog>
 {% endif %}
-<script>
+<script nonce="{{ csp_nonce() }}">
   (function () {
     // (o que a pessoa não pode usar nem existe na página: cada peça abaixo só liga se estiver lá)
     var gaveta = document.getElementById("documentos");

@@ -16,7 +16,7 @@
   <h1>{{ 'Editar funcionário' if funcionario else 'Novo funcionário' }}</h1>
 
   <div class="form-grade">
-  <form data-indice method="post" autocomplete="off">
+  <form data-indice method="post" autocomplete="off"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% if erros %}<div class="caixa-erros"><strong>Confira os campos marcados em vermelho.</strong></div>{% endif %}
     <fieldset class="tom-azul">
       {{ legenda('Funcionário', 'usuario') }}

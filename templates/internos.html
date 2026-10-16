@@ -94,7 +94,7 @@
 </dialog>
 
 <script src="{{ url_for('static', filename='tabela.js') }}"></script>
-<script>
+<script nonce="{{ csp_nonce() }}">
   const NOVO = {{ novo | tojson }};            // id da internação recém-gravada (ou null)
   const BAIXAR = {{ baixar | tojson }};        // 1 = veio de "Salvar e baixar prontuário"
   const PODE_SOCIAL = {{ pode_servico_social | tojson }};     // lê e escreve o acolhimento social (Serviço Social e administrador)

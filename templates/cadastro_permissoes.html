@@ -62,7 +62,7 @@
   {{ abas('permissoes') }}
 
   <div class="form-grade">
-    <form data-indice{% if pode_acessos %} method="post" action="{{ url_for('salvar_permissoes') }}"{% endif %}>
+    <form data-indice{% if pode_acessos %} method="post" action="{{ url_for('salvar_permissoes') }}"{% endif %}><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       {% for g in grupos %}
       <fieldset class="tom-{{ g.grupo.tom }}">
         {{ legenda(g.grupo.titulo, g.grupo.icone) }}

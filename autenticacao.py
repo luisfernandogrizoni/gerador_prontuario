@@ -62,7 +62,7 @@ LIMITE_POR_ENDERECO = 15                       # senhas ou códigos errados vind
 JANELA_POR_ENDERECO = timedelta(minutes=10)    # ...nesta janela de tempo bloqueiam aquele computador
 VALIDADE_DO_CODIGO = 300                       # segundos para digitar o código do autenticador depois de acertar a senha
 # páginas que funcionam sem a pessoa ter entrado (e o que ela pode abrir com a senha provisória, antes de trocá-la)
-ROTAS_LIVRES = {"login", "static", "login_codigo", "esqueci_senha", "redefinir_senha"}
+ROTAS_LIVRES = {"login", "static", "login_codigo", "esqueci_senha", "redefinir_senha", "csp_relatorio"}
 ROTAS_COM_SENHA_PROVISORIA = {"alterar_senha", "sair", "sessao_ping", "static"}
 ROTAS_COM_EMAIL_PENDENTE = {"seguranca", "enviar_codigo_email", "confirmar_email", "alterar_senha", "sair", "sessao_ping", "static"}
 ROTAS_COM_SEGUNDO_FATOR_PENDENTE = ROTAS_COM_EMAIL_PENDENTE | {"ativar_autenticador"}

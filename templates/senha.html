@@ -12,7 +12,7 @@
   <h1>Alterar minha senha</h1>
   {% if usuario_atual.trocar_senha %}<p class="caixa-info" role="status">A sua senha é provisória: crie uma senha nova para continuar.</p>{% endif %}
   {% if erro %}<p class="caixa-erros erro" role="alert">{{ erro }}</p>{% endif %}
-  <form class="estreito curto" method="post" action="{{ url_for('alterar_senha') }}">
+  <form class="estreito curto" method="post" action="{{ url_for('alterar_senha') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <fieldset class="tom-roxo">
       {{ legenda('Senha', 'cadeado') }}
       <div class="grade">

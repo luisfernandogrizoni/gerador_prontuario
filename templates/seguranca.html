@@ -36,8 +36,8 @@
         {% if funcionario.email_confirmado_em %}
           <p class="nao-informado">Confirmado em {{ funcionario.email_confirmado_em.strftime('%d/%m/%Y às %H:%M') }}</p>
         {% elif envio_configurado %}
-          <form method="post" action="{{ url_for('enviar_codigo_email') }}"><button class="botao secundario">Enviar o código de confirmação</button></form>
-          <form method="post" action="{{ url_for('confirmar_email') }}">
+          <form method="post" action="{{ url_for('enviar_codigo_email') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="botao secundario">Enviar o código de confirmação</button></form>
+          <form method="post" action="{{ url_for('confirmar_email') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <label>Código recebido por e-mail
               <input class="codigo" name="codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="10" required></label>
             <button class="botao">Confirmar e-mail</button>
@@ -58,7 +58,7 @@
           <span class="selo ativo">Ativo</span>
           <span>Códigos de recuperação restantes: <strong>{{ restam }}</strong></span>
         </div>
-        <form method="post" action="{{ url_for('desativar_autenticador') }}" autocomplete="off">
+        <form method="post" action="{{ url_for('desativar_autenticador') }}" autocomplete="off"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <label>Senha
             <input type="password" name="senha" autocomplete="current-password" required></label>
           <label>Código do aplicativo (ou de recuperação)

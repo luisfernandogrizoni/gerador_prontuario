@@ -11,7 +11,7 @@
   <h1>{{ 'Editar prontuário' if editando else 'Novo prontuário' }}</h1>
 
   <div class="form-grade">
-  <form method="post" action="{{ url_for('gerar') }}" data-indice>
+  <form method="post" action="{{ url_for('gerar') }}" data-indice><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {{ f.topo(url_for('formulario')) }}
     {{ f.identificacao() }}
     {{ f.endereco() }}

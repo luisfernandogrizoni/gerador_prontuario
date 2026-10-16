@@ -34,7 +34,7 @@
       <p class="caixa-info" role="status">Segundo fator ativado. Guarde estes códigos agora: eles não aparecem de novo. Cada um vale uma vez e substitui o aplicativo se o celular se perder.</p>
       <ul class="codigos">{% for c in codigos %}<li>{{ c }}</li>{% endfor %}</ul>
       <div class="acoes-cartao">
-        <button type="button" class="botao secundario" onclick="window.print()"><svg class="icone"><use href="#i-impressora"/></svg>Imprimir</button>
+        <button type="button" class="botao secundario" data-imprimir><svg class="icone"><use href="#i-impressora"/></svg>Imprimir</button>
         <a class="botao" href="{{ url_for('seguranca') }}#autenticador">Já guardei os códigos</a>
       </div>
     {% endcall %}
@@ -52,7 +52,7 @@
     <div style="height: var(--e4)"></div>
     {% call cartao('2. Digite o código que o aplicativo mostra', 'ok', 'verde') %}
       {% if erro %}<p class="caixa-erros erro" role="alert">{{ erro }}</p>{% endif %}
-      <form method="post" autocomplete="off">
+      <form method="post" autocomplete="off"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label>Código de 6 dígitos
           <input class="codigo" name="codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="10" required autofocus></label>
         <button class="botao">Ativar</button>

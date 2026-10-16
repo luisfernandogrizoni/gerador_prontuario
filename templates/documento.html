@@ -175,7 +175,7 @@
     {{ voltar(doc.voltar or url_for('home')) }}
     <h1>{{ doc.titulo }}</h1>
     <div class="botoes-doc">
-      <button type="button" class="botao" onclick="window.print()"><svg class="icone"><use href="#i-impressora"/></svg>Imprimir</button>
+      <button type="button" class="botao" data-imprimir><svg class="icone"><use href="#i-impressora"/></svg>Imprimir</button>
       <a class="botao secundario" href="{{ docx }}"><svg class="icone"><use href="#i-baixar"/></svg>Baixar .docx</a>
     </div>
   </div>
@@ -205,7 +205,7 @@
     <form method="get" class="grupo">
       {% for chave, valor in barra.manter.items() %}<input type="hidden" name="{{ chave }}" value="{{ valor }}">{% endfor %}
       <label><span class="rotulo">Responsável pela emissão</span>
-        <select name="emissor" onchange="trocarEmissor(this.form)">
+        <select name="emissor" data-trocar-emissor>
           {% for id, rotulo, sem_registro in barra.emissores %}<option value="{{ id }}"{{ ' selected' if id == barra.emissor_id }}{{ ' disabled' if sem_registro and id != barra.emissor_id }}>{{ rotulo }}</option>{% endfor %}
         </select></label>
       <noscript><button class="botao pequeno secundario">Aplicar</button></noscript>
@@ -241,7 +241,7 @@
     {% endfor %}
   </div>
 </main>
-<script>
+<script nonce="{{ csp_nonce() }}">
   // trocar quem assina recarrega o documento no lugar (sem acrescentar uma página ao histórico: o "Voltar" continua indo para a tela de onde veio)
   function trocarEmissor(form) {
     location.replace(location.pathname + "?" + new URLSearchParams(new FormData(form)).toString());

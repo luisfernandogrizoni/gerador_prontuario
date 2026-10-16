@@ -7,7 +7,7 @@
     <p class="caixa-info" role="status">Se esse usuário tem um e-mail confirmado, enviamos o link para criar uma senha nova. Ele vale por 30 minutos; confira também a caixa de spam.</p>
   {% else %}
     {% if problema %}<p class="caixa-erros erro" role="alert">{{ problema }}</p>{% endif %}
-    <form method="post" action="{{ url_for('esqueci_senha') }}">
+    <form method="post" action="{{ url_for('esqueci_senha') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label>Usuário ou e-mail
         <input name="usuario" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus></label>
       <button class="botao">Enviar o link por e-mail</button>

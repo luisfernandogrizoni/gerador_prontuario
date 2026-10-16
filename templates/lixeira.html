@@ -55,9 +55,9 @@
           <td class="fixo quando" data-rotulo="Excluído">{{ r.excluido_em.strftime('%d/%m/%Y às %H:%M') }}{{ ' · por ' ~ r.excluido_por if r.excluido_por }}</td>
           <td class="fixo acao">
             <div class="acoes-linha">
-              <form method="post" action="{{ url_for('restaurar_registro', id=r.id) }}"><button class="botao pequeno secundario">Restaurar</button></form>
+              <form method="post" action="{{ url_for('restaurar_registro', id=r.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="botao pequeno secundario">Restaurar</button></form>
               <form method="post" action="{{ url_for('apagar_registro', id=r.id) }}"
-                    onsubmit="return confirm('Apagar {{ r.pessoa.nome | replace("'", "") }} do banco de dados? Não tem volta.')">
+                    data-confirmar="Apagar {{ r.pessoa.nome }} do banco de dados? Não tem volta."><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="botao pequeno perigo">Excluir de vez</button></form>
             </div>
           </td>

@@ -110,6 +110,7 @@ ACOES = {
     "convenio.editar": ("administracao", "Editou um convênio"),
     # ---- negados
     "acesso.negado": ("negado", "Acesso negado pelo nível de acesso"),
+    "csrf.recusado": ("negado", "Envio recusado: faltou o código de segurança da página (a página venceu ou o pedido não veio do sistema)"),
 }
 
 
@@ -187,6 +188,7 @@ EXPLICITAS = {
 
 # o que não se registra, e por quê
 NAO_REGISTRA = {
+    "csp_relatorio": "o relatório do navegador sobre a política de conteúdo: vai para o registro do servidor, não para a trilha",
     "static": "arquivos do próprio sistema (imagens, estilos, scripts)",
     "home": "o Início é um resumo; o que ele leva a abrir (fichas, listas, documentos) é registrado quando abre",
     "lista_triagens": "só a página vazia; a lista chega pela API, que é registrada",
