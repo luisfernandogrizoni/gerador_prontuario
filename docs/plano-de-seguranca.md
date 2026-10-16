@@ -28,7 +28,7 @@ com banco SQLite, sem custo de hospedagem. Isso tem uma vantagem de segurança (
 | Entrada | Login obrigatório em toda rota; senha só como hash (scrypt); **fase 3**: senhas fáceis barradas, senha provisória, sessão que termina em 30 min sem uso, limite por endereço, e-mail confirmado, "esqueci minha senha" e segundo fator (aplicativo autenticador); 5 erros bloqueiam o usuário por 10 min; mensagem igual para usuário inexistente e senha errada; trocar a senha derruba as outras sessões | O segundo fator é opcional (o sistema cobra do administrador, mas não obriga); o e-mail é um canal que a casa não controla por inteiro |
 | Quem pode o quê | **Fase 1 (esta entrega)**: cascata de níveis com permissões configuráveis, nega por padrão, funcionário desativado perde o acesso | Quem tem "ver" vê todas as fichas; não há registro de quem viu o quê |
 | Rastro | **Fase 2**: trilha de auditoria com tela só do administrador (entradas, leituras, alterações, administração e acessos negados); mais o registro técnico do servidor | Quem controla o computador e o banco consegue mexer na tabela (a trilha não protege do dono da máquina); sem política de retenção ainda (fase 8) |
-| Rede | Porta aberta só para a sub-rede local (firewall); sem acesso externo | **HTTP sem criptografia**: senha e ficha trafegam em texto puro pela rede interna |
+| Rede | Porta aberta só para a sub-rede local (firewall); sem acesso externo; **fase 4**: HTTPS pelo Tailscale (certificado que ele emite e renova), com modo de transição e modo final que fecha o http da rede local | Até o usuário ligar, **HTTP sem criptografia** (a página inicial lembra); depois, quem não tem o Tailscale não abre |
 | Navegador | Cookie HttpOnly e SameSite=Lax; nosniff; X-Frame-Options; sem cache das páginas | Sem token CSRF; sem CSP |
 | Dados | Excluir é em duas etapas (lixeira); banco fora do git; hook que barra dado real no repositório; **fase 5**: cópia externa criptografada em pen-drives em rodízio, conferida na hora, com aviso, tela de situação e teste de restauração | Depende de alguém trocar o pen-drive toda semana (o sistema avisa) e de a frase de recuperação estar em papel; o backup do dia (`.db`) segue sem criptografia no computador |
 | Servidor | Tarefas agendadas, firewall, pasta `instance/` protegida | Roda como SYSTEM; disco sem criptografia (a verificar); roteador e Windows sem checklist |
@@ -58,7 +58,7 @@ fase 10 (VPN), nunca abrindo porta no roteador.
 | 1 | Cascata de acesso por nível | Sistema | **Feita** (nesta entrega) |
 | 2 | Trilha de auditoria (com tela dentro do sistema, só administrador) | Sistema | **Feita** (2026-10-15) |
 | 3 | Contas e sessões mais fortes: tempo ocioso, e-mail validado, "esqueci minha senha" e segundo fator | Sistema + usuário (senha da caixa de envio no servidor, e-mail de cada funcionário e celular com app autenticador) | **Feita** (2026-10-15); falta o usuário configurar |
-| 4 | HTTPS (celular e todos os navegadores) | Sistema + usuário (instalar a VPN) | A fazer; decidido usar o certificado da VPN |
+| 4 | HTTPS (celular e todos os navegadores) | Sistema + usuário (instalar o Tailscale) | **Feita** (2026-10-16); falta o usuário ligar |
 | 5 | Backup que sobrevive ao computador | Sistema + usuário (pen-drives e rotina) | **Feita** (2026-10-15); falta o usuário configurar |
 | 6 | Servidor Windows, rede e roteador | Quase tudo o usuário (roteiro passo a passo) | A fazer |
 | 7 | Token CSRF e CSP | Sistema | A fazer |
@@ -256,29 +256,59 @@ injeção de cabeçalho; nada de segredo no registro), `teste_aviso_email.py` (3
 `teste_contas_pg.py` (banco antigo aberto pelo código novo, no SQLite e no Postgres, e `copiar_banco.py` com banco de origem antigo).
 Também foi conferido no navegador (computador e celular), inclusive o aviso de tempo ocioso com os tempos encurtados.
 
-### Fase 4 — HTTPS na rede interna
+### Fase 4 — HTTPS na rede interna (entregue em 2026-10-16; falta o usuário ligar)
 
 **Por quê.** Hoje a senha e as fichas viajam em texto puro entre o computador de cada pessoa e o servidor. Quem estiver na mesma
 rede (Wi-Fi compartilhado, um visitante, um aparelho infectado) consegue ler com ferramentas gratuitas.
 
-**Como.** Um programa pequeno e gratuito (Caddy) fica na frente do sistema, com certificado de uma **autoridade certificadora
-local** criada na própria casa (`tls internal`). O `waitress` passa a ouvir só em `127.0.0.1`. O cookie de sessão volta a ser
-`Secure` (sai `SESSAO_SEM_HTTPS`) e entra HSTS.
+**Decisão (2026-10-15).** O usuário quer acesso pelo **celular** e por **qualquer navegador** (Chrome, Edge, Firefox, Safari), e o segundo
+polo vai precisar de VPN de qualquer jeito (fase 10). Logo: **Tailscale** (VPN gratuita) com o certificado público que ele mesmo emite. Os
+navegadores e celulares aceitam sem instalar nada, o que uma autoridade certificadora local (Caddy, `tls internal`) não daria (certificado
+instalado à mão em cada computador e celular, e o Firefox com configuração própria).
 
-**O que o usuário precisa fazer** (uma vez por computador): instalar o certificado raiz da casa. No Windows, em
-`certlm.msc` → Autoridades de Certificação Raiz Confiáveis. **Firefox** tem repositório próprio: é preciso ligar
-`security.enterprise_roots.enabled` (ou política `ImportEnterpriseRoots`) para ele aceitar o certificado do Windows. **Celulares**
-exigem instalar o certificado manualmente e o Android mostra um aviso permanente.
+**Como funciona** (`implantacao/configurar-https.ps1`, `servidor.py`, `instance/rede.json`):
 
-**Alternativa** que evita instalar certificado em cada máquina: registrar um domínio próprio (cerca de R$ 40 por ano) e usar um
-certificado público por desafio de DNS. O endereço interno passa a ter nome (`prontuario.casaacolhida.org.br`) e todos os
-navegadores e celulares aceitam sem configuração. Custa pouco e simplifica a vida; decidir junto com a resposta abaixo.
+- O **Tailscale Serve** do próprio servidor entrega `https://servidor.tailXXXX.ts.net` (porta 443, só dentro da rede do Tailscale) e repassa
+  para o sistema em `127.0.0.1:8000`. O certificado é emitido e **renovado pelo Tailscale**: nada de arquivo de certificado nem de tarefa de
+  renovação. Nenhuma porta é aberta no roteador.
+- Três **modos de rede**, em `instance/rede.json` (o script grava):
+  - `http` (o de sempre, padrão): aberto na rede local, sem HTTPS;
+  - `misto` (**transição**): igual ao `http` **e** atende o HTTPS do Tailscale. Dá para migrar um computador de cada vez, sem ninguém
+    perder o acesso;
+  - `https` (**final**, `-FecharHttp`): o sistema escuta só em `127.0.0.1`, o cookie do login volta a ser **só-HTTPS** (`SESSAO_SEM_HTTPS`
+    sai), o navegador recebe **HSTS** (1 ano) e a regra do firewall da porta é removida.
+- **Quem acessa continua identificado.** Atrás de um proxy todo acesso chegaria como `127.0.0.1`; o waitress passa a confiar nos cabeçalhos
+  `X-Forwarded-For` e `X-Forwarded-Proto` **só de quem vem de 127.0.0.1** (o Tailscale Serve) e apaga esses cabeçalhos de qualquer outra origem,
+  então ninguém na rede local consegue se passar por outro endereço. Assim a auditoria e o limite de tentativas continuam vendo o **aparelho**
+  de cada acesso (`100.x.x.x`). Se o proxy não repassar o endereço, o sistema não limita o endereço local (para um erro de um não bloquear todos);
+  continuam valendo os 5 erros por usuário. **Conferir na prática** (passo 5 do LEIA-ME, parte 5): Cadastros > Auditoria deve mostrar `100.x.x.x`.
+- O script confere o Tailscale (conectado, MagicDNS, HTTPS ligado no painel), liga o modo "Run unattended" (o Tailscale volta sozinho depois de
+  reiniciar o Windows, sem ninguém logado), grava o modo, religa o sistema, **troca o endereço dos links dos e-mails** (`flask --app app
+  endereco-do-sistema`, para o "esqueci minha senha" apontar para o endereço novo) e **testa o endereço https** a partir do servidor
+  **antes** de fechar o http. `-Desfazer` volta tudo ao http da rede local.
+- A página inicial mostra "Segurança da rede" enquanto o modo for `http` ou `misto` (só no servidor do escritório).
 
-**Decisão (2026-10-15)**: o usuário quer acesso pelo **celular** e por **qualquer navegador** (Chrome, Edge, Firefox, Safari).
-Isso pesa contra a autoridade certificadora local (instalar e configurar certificado em cada celular e no Firefox). Como o
-segundo polo vai precisar de VPN de qualquer jeito (fase 10), a recomendação é **usar o certificado que a própria VPN emite**
-(Tailscale: `tailscale cert`, certificado público válido para o nome do computador na VPN), que todos os navegadores e celulares
-aceitam sem instalar nada. A confirmar na hora de fazer: limites do plano gratuito e o funcionamento no Windows 11 Home.
+**O que o usuário precisa fazer** (LEIA-ME, parte 5): criar a conta do Tailscale (com verificação em duas etapas), instalar nos aparelhos,
+ligar o *HTTPS Certificates* no painel, rodar `configurar-https.ps1` no servidor, migrar os computadores e celulares e, no fim,
+`-FecharHttp`.
+
+**Limites e cuidados**
+
+- **Os nomes ficam públicos**: o nome do computador e da rede (`tailXXXX.ts.net`) aparecem nos registros públicos de certificados. Usar nomes
+  neutros; nada com nome de paciente.
+- **A conta do Tailscale é a chave da rede**: verificação em duas etapas nela; remover do painel qualquer aparelho perdido.
+- O plano gratuito é **para uso não comercial**: confirmar que a casa se enquadra (há desconto para entidades sem fins lucrativos).
+- Depois de `-FecharHttp`, **quem não tem o Tailscale não abre mais o sistema**. No próprio servidor, `http://127.0.0.1:8000` abre sempre.
+- Se o Tailscale ou a internet cair, o acesso pelos outros aparelhos pode cair (a rede costuma lembrar dos aparelhos conhecidos, mas não é
+  garantido): por isso o modo `misto` existe e o `-Desfazer` está sempre à mão.
+- O HSTS faz o navegador exigir HTTPS naquele nome por 1 ano; por isso ele só vai no modo `https` (ou em hospedagem com HTTPS).
+- **Não testado com o Tailscale de verdade nesta entrega** (não há conta nem o programa instalado neste computador de desenvolvimento): o
+  script e o sistema foram testados com um Tailscale de mentira e com o waitress real; a primeira execução no servidor é o teste final, e o modo
+  `misto` existe para ela ser segura.
+
+**Como conferir.** `teste_rede.py` (47 verificações: leitura do modo, o que cada modo liga, o waitress real confiando só no proxy local e
+recusando cabeçalhos forjados, o sistema de verdade subindo em cada modo com cookie e HSTS, o limite de tentativas, o comando do endereço dos
+e-mails e o lembrete na página inicial) e o script contra um `tailscale.cmd` de mentira (conectado, sem login, sem HTTPS, sem nome).
 
 ### Fase 5 — Backup que sobrevive ao computador (entregue em 2026-10-15)
 
@@ -384,7 +414,7 @@ lados, numeração repetida, internet que cai no meio) e não é recomendado.
 - Sem servidor novo e sem sincronização: os dois polos usam o mesmo sistema e veem o que o outro registrou na hora.
 - A VPN (por exemplo Tailscale, que tem plano gratuito; conferir os limites atuais) liga os aparelhos numa rede privada, **sem
   abrir porta no roteador** e sem expor o sistema na internet. Serve também para o celular fora do escritório.
-- O HTTPS (fase 4) pode usar o certificado que a própria VPN oferece, sem instalar certificado em cada máquina (a confirmar).
+- O HTTPS (fase 4, entregue) usa o certificado que a própria VPN emite: o polo 2 só precisa instalar o Tailscale e abrir o mesmo endereço.
 - Ponto fraco: o computador do escritório vira o ponto único. Se ele ou a internet de lá cair, o polo 2 para. O backup externo
   (fase 5) passa a ser obrigatório.
 - **Pré-requisitos de segurança**, que passam a ser obrigatórios antes de liberar: HTTPS (4), segundo fator do administrador, tempo
@@ -411,7 +441,7 @@ fazer, porque depende das fases 2, 3 e 4 (pré-requisitos acima) e do backup ext
 | Fase 5 | A cada 3 meses, fazer o teste de restauração (2 minutos, `implantacao/RESTAURAR.md`) |
 | Fase 6 | Seguir o roteiro do Windows e do roteador |
 | Fase 3 | Rodar `implantacao\configurar-email.ps1` no servidor e **digitar a senha da caixa `sistema@`** (e trocá-la, se já apareceu em conversa); cadastrar o **e-mail de cada funcionário** (Cadastros > Funcionários); cada pessoa confirma o seu em **Minha segurança**; o administrador **liga o aplicativo autenticador** no celular e guarda os 8 códigos de recuperação em papel |
-| Fase 4 | Instalar o certificado em cada computador (e celular, se houver) |
+| Fase 4 | Criar a conta do Tailscale (com verificação em duas etapas), instalar nos aparelhos, ligar o HTTPS no painel, rodar `configurar-https.ps1` no servidor, migrar os aparelhos e, no fim, `-FecharHttp` (LEIA-ME, parte 5) |
 | Fase 10 | Instalar a VPN no computador do escritório e em cada aparelho que for acessar de fora |
 | Fase 8 | Preencher e assinar os modelos |
 

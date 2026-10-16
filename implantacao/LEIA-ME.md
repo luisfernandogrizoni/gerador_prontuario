@@ -3,8 +3,8 @@
 Um computador do escritório guarda o banco e roda o sistema; os outros usam pelo navegador, em
 `http://IP-DO-SERVIDOR:8000`, cada pessoa com o seu usuário. Não custa nada e os dados não saem do escritório.
 
-Funciona **só dentro da rede do escritório**. O banco fica num único lugar: o backup (parte 3) é o que protege contra
-disco queimado, vírus ou arquivo apagado sem querer.
+Funciona dentro da rede do escritório e, com o Tailscale (parte 5), também pelo celular e pelo segundo polo, sempre com HTTPS. O banco
+fica num único lugar: o backup (parte 3) é o que protege contra disco queimado, vírus ou arquivo apagado sem querer.
 
 ## Antes de começar
 
@@ -179,7 +179,68 @@ powershell -ExecutionPolicy Bypass -File implantacao\atualizar.ps1
 Faz um backup (e **cancela se o backup falhar**), para o sistema, baixa a versão nova, instala o que mudou e liga de novo.
 O banco se atualiza sozinho na subida. Se algo falhar, o sistema volta a ligar na versão que estava.
 
-## 5. Se algo der errado
+## 5. HTTPS pelo Tailscale: senha criptografada, celular e segundo polo
+
+Hoje o endereço é `http://IP:8000`: a senha e as fichas viajam **sem criptografia** pela rede do escritório. O **Tailscale** é uma rede
+privada gratuita que liga os seus aparelhos (computadores e celulares) e entrega ao sistema um endereço **com cadeado**
+(`https://servidor.tailXXXX.ts.net`) que todos os navegadores e celulares aceitam sem instalar certificado. Não abre porta no roteador e
+o sistema continua sem aparecer na internet. É também o caminho do segundo polo e do celular fora do escritório.
+
+**Antes de começar**
+
+- A conta do Tailscale é a chave de toda a rede. Crie com um e-mail da casa e **ative a verificação em duas etapas na conta** (no Google ou
+  Microsoft que você usar para entrar). Quem entrar nessa conta consegue ligar aparelhos novos na rede.
+- O plano gratuito (Personal) é para **uso não comercial**. Confira em tailscale.com/pricing se a casa se enquadra; se não, há plano
+  pago e desconto para entidades sem fins lucrativos.
+- Ao ligar o HTTPS, o **nome do computador e da rede ficam públicos** nos registros de certificados (qualquer pessoa pode ver). Use nomes
+  neutros (por exemplo `servidor`); nada com nome de paciente.
+
+**Passo a passo**
+
+1. **No servidor**: baixe o Tailscale para Windows (tailscale.com/download), instale e entre na conta.
+2. **No painel** (login.tailscale.com/admin):
+   - em *DNS*, confira que o *MagicDNS* está ligado e, em *HTTPS Certificates*, clique em **Enable HTTPS** (concordando com a
+     publicação dos nomes);
+   - em *Machines*, renomeie o computador do servidor para algo neutro (`servidor`) e, no menu `...` dele, escolha **Disable key
+     expiry** (senão o servidor sai da rede depois de alguns meses).
+3. **No servidor**, como Administrador:
+
+   ```powershell
+   cd C:\prontuario
+   powershell -ExecutionPolicy Bypass -File implantacao\configurar-https.ps1
+   ```
+
+   O script confere o Tailscale, liga o HTTPS, grava o modo (`instance\rede.json`), religa o sistema, passa o endereço novo para os links
+   dos e-mails e testa o endereço. No fim mostra **o endereço do sistema** (`https://servidor.tailXXXX.ts.net`).
+4. **Em cada computador do escritório, no polo 2 e em cada celular**: instale o Tailscale, entre na **mesma conta**, abra o endereço
+   `https://...ts.net` no navegador e salve como favorito. (No celular, ligue o Tailscale e abra o endereço.) Neste primeiro momento o
+   endereço antigo (`http://IP:8000`) continua funcionando: dá para migrar um computador de cada vez.
+5. **Conferir**: entre pelo endereço novo e abra *Cadastros > Auditoria*. Na coluna do endereço deve aparecer um número `100.x.x.x` (o
+   aparelho de quem entrou), e não `127.0.0.1`. Enquanto a página inicial mostrar o aviso "Segurança da rede", falta fechar o passo 6.
+6. **Quando todos já usam o endereço novo**, feche o http da rede local (quem não tem o Tailscale deixa de abrir):
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File implantacao\configurar-https.ps1 -FecharHttp
+   ```
+
+   Agora o sistema só atende por dentro do Tailscale, o cookie do login passa a ser só-HTTPS e o navegador passa a exigir HTTPS no
+   endereço novo.
+
+**Se algo não der certo**
+
+- No **próprio servidor**, `http://127.0.0.1:8000` abre sempre, em qualquer modo.
+- Para voltar ao que era (http na rede local, sem HTTPS): `powershell -ExecutionPolicy Bypass -File implantacao\configurar-https.ps1 -Desfazer`.
+- O endereço https não abre: o Tailscale está ligado nesse aparelho (ícone perto do relógio, ou o app no celular)? Está na **mesma conta**?
+- O script diz que o HTTPS não está ligado: faltou o *Enable HTTPS* do passo 2.
+- Se a internet cair, o Tailscale costuma continuar ligando aparelhos que já se conheciam, mas não é garantido. Por isso o passo 6 só deve
+  ser dado quando o HTTPS já estiver rodando bem há alguns dias; e o `-Desfazer` está sempre à mão.
+- O certificado é do Tailscale e **se renova sozinho**. Nada a fazer.
+
+**Segundo polo.** É o mesmo caminho: instalar o Tailscale nos computadores de lá, entrar na mesma conta e abrir o mesmo endereço
+(fase 10 do plano de segurança). Antes de liberar, leia a fase 10 (termo de sigilo, e a lembrança de que o computador do escritório passa
+a ser o ponto único: o backup externo precisa estar em dia).
+
+## 6. Se algo der errado
 
 | Sintoma | O que ver |
 | --- | --- |
@@ -193,11 +254,12 @@ O banco se atualiza sozinho na subida. Se algo falhar, o sistema volta a ligar n
 | Aviso de backup na página inicial | `C:\prontuario\logs\backup.log`; o HD externo está ligado? |
 | Quer ligar à mão, para ver o erro na tela | `cd C:\prontuario` e `.\.venv\Scripts\python.exe servidor.py` (pare a tarefa antes, para não dividir a porta). |
 
-## 6. Segurança e limites
+## 7. Segurança e limites
 
-- **Sem HTTPS na rede interna.** A senha trafega sem criptografia dentro da rede do escritório. Mantenha o Wi-Fi com
-  senha forte e deixe visitantes em outra rede.
-- O firewall libera a porta 8000 só para a sub-rede local. **Não** redirecione portas no roteador.
+- **HTTPS** (parte 5): enquanto o sistema é acessado por `http://IP:8000`, a senha trafega sem criptografia dentro da rede do escritório
+  (a página inicial lembra). Com o Tailscale ligado e o http fechado (`configurar-https.ps1 -FecharHttp`), tudo vai criptografado, o cookie do
+  login é só-HTTPS e a auditoria mostra o aparelho de cada acesso. Até lá, mantenha o Wi-Fi com senha forte e deixe visitantes em outra rede.
+- O firewall libera a porta 8000 só para a sub-rede local (e a fecha quando o http é fechado). **Não** redirecione portas no roteador.
 - O Windows 11 Home não tem o BitLocker completo. Em Configurações > Privacidade e segurança, veja se há
   *Criptografia do dispositivo* e, se houver, ative (guarde a chave de recuperação fora do computador). Use senha no Windows.
 - O arquivo `logs\servidor.log` registra só erros e acessos negados, sem dados dos internos. Quem fez o quê (entradas, quem abriu
@@ -209,9 +271,9 @@ O banco se atualiza sozinho na subida. Se algo falhar, o sistema volta a ligar n
   (fase 3).
 - O aviso por e-mail da troca do pen-drive (e de cópia externa atrasada) sai pela mesma tarefa do backup, uma vez por dia, para
   `financeiro@restauracao.org.br`.
-- Acesso de fora do escritório não existe, de propósito.
+- Acesso de fora do escritório só pelo Tailscale (parte 5); nunca por porta aberta no roteador.
 
-## 7. Desinstalar
+## 8. Desinstalar
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File implantacao\instalar.ps1 -Remover
