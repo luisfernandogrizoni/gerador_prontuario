@@ -12,7 +12,7 @@ Como o sistema é servido (instance/rede.json, escrito por implantacao/configura
   * "misto" (transição): igual ao "http", e **também** atende o HTTPS que o Tailscale Serve entrega por trás (aqui em 127.0.0.1);
   * "https" (final): o waitress escuta só em 127.0.0.1, ninguém chega sem passar pelo HTTPS do Tailscale; o cookie do login volta a ser
     "só HTTPS" e o navegador passa a exigir HTTPS neste endereço (HSTS).
-Nos modos "misto" e "https" o waitress confia nos cabeçalhos X-Forwarded-* **só** de quem vem de 127.0.0.1 (o Tailscale Serve): é assim que
+Nos modos "misto" e "https" o administrador também só usa o sistema com o segundo fator ligado (fase 10: acesso de fora). O waitress confia nos cabeçalhos X-Forwarded-* **só** de quem vem de 127.0.0.1 (o Tailscale Serve): é assim que
 o sistema sabe o endereço de quem acessa, para a auditoria e para o limite de tentativas.
 
 Diferenças para o uso no seu computador (python app.py):
@@ -52,6 +52,31 @@ def carregar_modo(pasta_instance=RAIZ / "instance"):
         except (OSError, ValueError, AttributeError):
             modo = ""
     return modo if modo in MODOS else "http"
+
+
+def carregar_manter_http(pasta_instance=RAIZ / "instance"):
+    """A casa decidiu manter os dois acessos (http no escritório, https pelo Tailscale para quem está fora)? Então o lembrete de fechar o http
+    some. Vem de instance/rede.json ({"manter_http": true}, que `configurar-https.ps1 -ManterOsDois` grava) e só vale no modo "misto"."""
+    try:
+        return json.loads((Path(pasta_instance) / "rede.json").read_text(encoding="utf-8-sig")).get("manter_http") is True
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
+def carregar_exigir_segundo_fator(modo, pasta_instance=RAIZ / "instance"):
+    """O administrador precisa ter o segundo fator (aplicativo autenticador) para usar o sistema? Sim nos modos "misto" e "https" (o Tailscale
+    pode levar o sistema ao segundo polo e ao celular); não no "http" (só a rede do escritório). Dá para mudar em instance/rede.json
+    ({"segundo_fator_do_administrador": false}) ou pela variável EXIGIR_SEGUNDO_FATOR (1 ou 0); a variável vence o arquivo."""
+    valor = (os.environ.get("EXIGIR_SEGUNDO_FATOR") or "").strip()
+    if valor in ("0", "1"):
+        return valor == "1"
+    try:
+        escolha = json.loads((Path(pasta_instance) / "rede.json").read_text(encoding="utf-8-sig")).get("segundo_fator_do_administrador")
+        if isinstance(escolha, bool):
+            return escolha
+    except (OSError, ValueError, AttributeError):
+        pass
+    return modo in ("misto", "https")
 
 
 def opcoes_de_rede(modo, host_pedido=None):
@@ -103,6 +128,8 @@ def main():
     for chave, valor in ambiente.items():
         os.environ.setdefault(chave, valor)                  # (quem definiu a variável de propósito mantém o que definiu)
     os.environ["MODO_DE_REDE_ATUAL"] = modo                  # a página inicial lembra de ligar o HTTPS (avisos._avisos_de_rede)
+    os.environ["EXIGIR_SEGUNDO_FATOR"] = "1" if carregar_exigir_segundo_fator(modo) else "0"      # autenticacao.restricao_da_conta
+    os.environ["MANTER_HTTP_NA_REDE"] = "1" if (modo == "misto" and carregar_manter_http()) else "0"          # avisos._avisos_de_rede
 
     from waitress import serve
     from app import app

@@ -193,6 +193,8 @@ def _avisos_de_rede():
         texto = ("O sistema ainda é acessado sem HTTPS: a senha e as fichas trafegam sem criptografia pela rede do escritório. "
                  "Para ligar o HTTPS pelo Tailscale, veja implantacao\\LEIA-ME.md, parte 5.")
     elif modo == "misto":
+        if os.environ.get("MANTER_HTTP_NA_REDE") == "1":      # a casa escolheu manter os dois acessos (configurar-https.ps1 -ManterOsDois)
+            return []
         texto = ("O HTTPS está ligado, mas o http da rede local continua aberto. Quando todos os computadores e celulares usarem o endereço https, "
                  "feche o http (implantacao\\LEIA-ME.md, parte 5).")
     else:

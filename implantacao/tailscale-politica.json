@@ -1,0 +1,12 @@
+{
+  "hosts": {
+    "servidor": "__IP_DO_SERVIDOR__"
+  },
+  "acls": [
+    {
+      "action": "accept",
+      "src": ["autogroup:member"],
+      "dst": ["servidor:443"]
+    }
+  ]
+}

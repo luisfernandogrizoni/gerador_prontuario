@@ -65,6 +65,7 @@ VALIDADE_DO_CODIGO = 300                       # segundos para digitar o código
 ROTAS_LIVRES = {"login", "static", "login_codigo", "esqueci_senha", "redefinir_senha"}
 ROTAS_COM_SENHA_PROVISORIA = {"alterar_senha", "sair", "sessao_ping", "static"}
 ROTAS_COM_EMAIL_PENDENTE = {"seguranca", "enviar_codigo_email", "confirmar_email", "alterar_senha", "sair", "sessao_ping", "static"}
+ROTAS_COM_SEGUNDO_FATOR_PENDENTE = ROTAS_COM_EMAIL_PENDENTE | {"ativar_autenticador"}
 COMANDOS_DE_USUARIO = {"criar-usuario", "redefinir-senha"}
 # hash de uma senha qualquer: testar um usuário que não existe gasta o mesmo tempo
 # que testar um que existe (sem isso, o tempo de resposta revelaria quem existe)
@@ -293,9 +294,15 @@ def errou_o_codigo():
     return espera["tentativas"]
 
 
+def _e_administrador(usuario):
+    import cadastros                       # (cadastros importa este módulo: por isso aqui dentro)
+    return any(a.usuario == usuario.nome for a in cadastros.administradores())
+
+
 def restricao_da_conta(usuario):
     """Por que esta pessoa ainda não pode usar o sistema: "senha" (a senha é provisória: só abre a troca), "email" (acesso novo: só abre a
-    confirmação do e-mail) ou None. O e-mail só é cobrado se a pessoa TEM e-mail e o envio de e-mail está configurado: senão ninguém novo
+    confirmação do e-mail), "segundo_fator" (administrador sem o aplicativo autenticador, quando o sistema pode ser acessado de fora: só abre
+    a ativação dele) ou None. O e-mail só é cobrado se a pessoa TEM e-mail e o envio de e-mail está configurado: senão ninguém novo
     conseguiria entrar (o administrador confirma na mão pelo terminal: flask --app app confirmar-email USUARIO)."""
     if usuario is None:
         return None
@@ -305,6 +312,8 @@ def restricao_da_conta(usuario):
         dono = db.session.execute(db.select(Funcionario).filter_by(usuario=usuario.nome)).scalars().first()
         if dono is not None and dono.email and not dono.email_confirmado_em and email_envio.configurado(current_app.instance_path):
             return "email"
+    if os.environ.get("EXIGIR_SEGUNDO_FATOR") == "1" and not usuario.totp_ativo and _e_administrador(usuario):
+        return "segundo_fator"
     return None
 
 
@@ -333,6 +342,10 @@ def exigir_login():
     if g.restricao_da_conta == "email" and request.endpoint not in ROTAS_COM_EMAIL_PENDENTE:
         if request.path.startswith("/api/") or request.is_json:
             return jsonify(ok=False, erros={"email": "Confirme o seu e-mail antes de continuar."}), 403
+        return redirect(url_for("seguranca"))
+    if g.restricao_da_conta == "segundo_fator" and request.endpoint not in ROTAS_COM_SEGUNDO_FATOR_PENDENTE:
+        if request.path.startswith("/api/") or request.is_json:
+            return jsonify(ok=False, erros={"segundo_fator": "Ative o aplicativo autenticador antes de continuar."}), 403
         return redirect(url_for("seguranca"))
     if g.usuario or request.endpoint in ROTAS_LIVRES:
         return None

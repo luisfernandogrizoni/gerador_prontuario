@@ -10,9 +10,19 @@ computador (o servidor), DEPOIS de instalar o Tailscale, entrar na sua conta e l
 
        powershell -ExecutionPolicy Bypass -File implantacao\configurar-https.ps1 -FecharHttp
 
+     Se a casa decidir MANTER os dois acessos de propósito (http para os computadores do escritório, https pelo Tailscale para quem está
+     fora), rode com -ManterOsDois: o sistema fica no modo "misto" e a página inicial deixa de lembrar de fechar o http:
+
+       powershell -ExecutionPolicy Bypass -File implantacao\configurar-https.ps1 -ManterOsDois
+
   3) Para voltar ao que era (http na rede local, sem HTTPS):
 
        powershell -ExecutionPolicy Bypass -File implantacao\configurar-https.ps1 -Desfazer
+
+  4) Para limitar o que cada aparelho alcança na rede do Tailscale (recomendado antes de ligar o segundo polo), mostra o texto para colar
+     no painel (login.tailscale.com/admin/acls), já com o endereço deste servidor:
+
+       powershell -ExecutionPolicy Bypass -File implantacao\configurar-https.ps1 -MostrarPolitica
 
 Para ver o que seria feito, sem mudar nada, acrescente -SoVer.
 
@@ -28,7 +38,9 @@ O que o script faz (modo "misto"; com -FecharHttp, "https"):
 [CmdletBinding()]
 param(
     [switch]$FecharHttp,
+    [switch]$ManterOsDois,             # decisão da casa: http no escritório e https (Tailscale) para quem está fora; some o lembrete de fechar o http
     [switch]$Desfazer,
+    [switch]$MostrarPolitica,           # só mostra a política de acesso do Tailscale (quem alcança o quê) para colar no painel
     [int]$Porta = 8000,
     [string]$Tailscale = "",           # caminho do tailscale.exe, se o script não achar sozinho
     [switch]$SoVer
@@ -49,7 +61,7 @@ function Fazer($descricao, [scriptblock]$acao) {
 }
 
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $admin -and -not $SoVer) { throw "Rode este script como Administrador: botão direito no PowerShell > Executar como administrador." }
+if (-not $admin -and -not $SoVer -and -not $MostrarPolitica) { throw "Rode este script como Administrador: botão direito no PowerShell > Executar como administrador." }
 if ($SoVer) { Write-Host "(modo -SoVer: nada será alterado)" -ForegroundColor Yellow }
 if (-not (Test-Path $venvPy)) { throw "Não achei $venvPy. O sistema foi instalado com implantacao\instalar.ps1 neste computador?" }
 
@@ -67,7 +79,9 @@ function Nativo([string]$Exe, [string[]]$Argumentos) {
 
 function Gravar-Modo($modo) {
     # sem BOM: o sistema lê com ou sem, mas assim o arquivo fica igual em qualquer versão do PowerShell
-    $texto = (@{ modo = $modo } | ConvertTo-Json -Compress)
+    $dados = @{ modo = $modo }
+    if ($ManterOsDois -and $modo -eq "misto") { $dados.manter_http = $true }
+    $texto = ($dados | ConvertTo-Json -Compress)
     [System.IO.File]::WriteAllText((Join-Path $instance "rede.json"), $texto, (New-Object System.Text.UTF8Encoding($false)))
 }
 
@@ -124,6 +138,17 @@ $bruto = & $ts status --json
 if ($LASTEXITCODE) { throw "O Tailscale não respondeu. Abra o Tailscale (ícone perto do relógio) e entre na conta." }
 $st = $bruto | ConvertFrom-Json
 if ($st.BackendState -ne "Running") { throw "O Tailscale não está conectado (situação: $($st.BackendState)). Abra o Tailscale, entre na conta e rode este script de novo." }
+if ($MostrarPolitica) {
+    $ip = $st.Self.TailscaleIPs | Where-Object { $_ -notmatch ":" } | Select-Object -First 1
+    if (-not $ip) { throw "Não achei o endereço deste computador na rede do Tailscale (tailscale ip -4)." }
+    $modelo = Get-Content (Join-Path $PSScriptRoot "tailscale-politica.json") -Raw -Encoding UTF8
+    Write-Host ""
+    Write-Host "Cole isto em login.tailscale.com/admin/acls (substitui a política que está lá; confira com 'Preview rules' antes de salvar):" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host ($modelo -replace "__IP_DO_SERVIDOR__", $ip)
+    Write-Host "Efeito: cada aparelho da rede só alcança este servidor, e só na porta 443 (o sistema). Nenhum aparelho alcança os outros." -ForegroundColor Green
+    return
+}
 $nome = ([string]$st.Self.DNSName).TrimEnd(".")
 if (-not $nome) { throw "Este computador ainda não tem nome na rede do Tailscale. No painel (login.tailscale.com/admin/dns), ligue o MagicDNS." }
 if ($st.PSObject.Properties.Name -contains "CertDomains") {
@@ -179,6 +204,7 @@ Write-Host "Endereço do sistema:  https://$nome" -ForegroundColor Green
 if ($FecharHttp) {
     Write-Host "O http da rede local está FECHADO: quem não tem o Tailscale não abre mais o sistema."
 } else {
-    Write-Host "O endereço antigo (http://IP:$Porta) continua funcionando enquanto você migra os computadores. Quando todos usarem o novo, rode de novo com -FecharHttp."
+    if ($ManterOsDois) { Write-Host "Os dois acessos ficam: http://IP:$Porta para os computadores do escritório e o endereço https para quem está fora. A página inicial não vai mais lembrar de fechar o http." }
+    else { Write-Host "O endereço antigo (http://IP:$Porta) continua funcionando enquanto você migra os computadores. Quando todos usarem o novo, rode de novo com -FecharHttp." }
 }
 Write-Host "Confira: depois de entrar, abra Cadastros > Auditoria. Na coluna do endereço deve aparecer um número 100.x.x.x (o aparelho de quem entrou), não 127.0.0.1."

@@ -45,6 +45,7 @@ ACOES = {
     "login.bloqueado": ("entrada", "Tentativa de entrada durante o bloqueio"),
     "login.bloqueio": ("entrada", "Usuário bloqueado por senhas erradas seguidas"),
     "login.codigo_errado": ("entrada", "Código do aplicativo autenticador errado"),
+    "login.aparelho_novo": ("entrada", "Entrou por um aparelho que ainda não tinha usado (a pessoa e, se for administrador, a casa foram avisadas por e-mail)"),
     "login.bloqueado_endereco": ("entrada", "Entrada bloqueada: muitas tentativas erradas vindas deste computador"),
     "sessao.expirada": ("entrada", "Sessão encerrada (sem uso por 30 minutos, ou mais de 10 horas)"),
     "senha.pedido_reset": ("entrada", "Pediu para redefinir a senha pelo e-mail"),
