@@ -110,6 +110,24 @@ def gravar_configuracao(instance, dados):
     os.replace(provisorio, arquivo)
 
 
+def endereco_do_arquivo(instance):
+    """O endereço do sistema gravado em instance/email.json ('' se não há arquivo)."""
+    try:
+        return str(json.loads(arquivo_da_configuracao(instance).read_text(encoding="utf-8-sig")).get("endereco_do_sistema", ""))
+    except (OSError, ValueError, AttributeError):
+        return ""
+
+
+def mudar_endereco_do_sistema(instance, endereco):
+    """Troca só o endereço dos links no instance/email.json (o resto da configuração fica como está). Levanta ErroDeEmail se não há arquivo."""
+    try:
+        dados = json.loads(arquivo_da_configuracao(instance).read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as erro:
+        raise ErroDeEmail("O envio de e-mail ainda não foi configurado (implantacao\\configurar-email.ps1).") from erro
+    dados["endereco_do_sistema"] = endereco.strip().rstrip("/")
+    gravar_configuracao(instance, dados)
+
+
 def endereco_do_sistema(instance):
     """O endereço do sistema para os links dos e-mails, ou '' se ainda não foi informado (sem ele, o "esqueci minha senha" não sai)."""
     config = carregar(instance)

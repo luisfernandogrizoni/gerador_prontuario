@@ -34,6 +34,7 @@ PRAZO_BACKUP = timedelta(days=3)
 CATEGORIA_BACKUP = "Backup do banco"
 # Cópia criptografada em pen-drives em rodízio (copia_externa.py): não configurada, pen-drive fora, hora de trocar, teste por fazer
 CATEGORIA_BACKUP_EXTERNO = "Cópia externa do backup"
+CATEGORIA_REDE = "Segurança da rede"             # o HTTPS ainda não está ligado, ou o http da rede local ainda não foi fechado (servidor.py, modos de rede)
 CATEGORIA_CONTA = "Sua conta"                    # o que a própria pessoa ainda precisa fazer na segurança dela (contas.pendencias_da_conta)
 
 
@@ -155,13 +156,14 @@ def gerar_avisos(pode_servico_social=False, da_conta=()):
     avisos = [a for a in avisos if a.chave not in dispensados]
     avisos.extend(a for a in (_aviso_do_backup(),) if a)
     avisos.extend(_avisos_do_backup_externo())
+    avisos.extend(_avisos_de_rede())
     avisos.extend(Aviso(CATEGORIA_CONTA, texto, url_for("seguranca"), chave, dispensavel=False, rotulo_url="Abrir Minha segurança") for chave, texto in da_conta)
 
     grupos = defaultdict(list)
     for a in avisos:
         grupos[a.categoria].append(a)
     # o backup, o envelope pendente e o acolhimento social são tarefas, não correções de cadastro: vêm primeiro
-    tarefas = (CATEGORIA_CONTA, CATEGORIA_BACKUP, CATEGORIA_BACKUP_EXTERNO, CATEGORIA_ENVELOPE, CATEGORIA_REJEICAO, CATEGORIA_ACOLHIMENTO)
+    tarefas = (CATEGORIA_CONTA, CATEGORIA_REDE, CATEGORIA_BACKUP, CATEGORIA_BACKUP_EXTERNO, CATEGORIA_ENVELOPE, CATEGORIA_REJEICAO, CATEGORIA_ACOLHIMENTO)
     return dict(sorted(grupos.items(), key=lambda g: (g[0] not in tarefas, g[0])))
 
 
@@ -179,6 +181,23 @@ def _aviso_do_backup():
         texto = (f"O último backup do banco foi em {ultimo:%d/%m/%Y %H:%M}. "
                  "Confira a tarefa de backup do Windows e o disco de destino (veja implantacao/LEIA-ME.md).")
     return Aviso(CATEGORIA_BACKUP, texto, "", "backup", dispensavel=False)
+
+
+def _avisos_de_rede():
+    """Só no servidor do escritório (AVISAR_BACKUP=1, e o servidor.py diz o modo de rede em MODO_DE_REDE_ATUAL): enquanto o acesso é por http, ou
+    enquanto o http da rede local segue aberto depois de ligar o HTTPS, a página inicial lembra (implantacao\\LEIA-ME.md, parte 5)."""
+    if os.environ.get("AVISAR_BACKUP") != "1":
+        return []
+    modo = os.environ.get("MODO_DE_REDE_ATUAL")
+    if modo == "http":
+        texto = ("O sistema ainda é acessado sem HTTPS: a senha e as fichas trafegam sem criptografia pela rede do escritório. "
+                 "Para ligar o HTTPS pelo Tailscale, veja implantacao\\LEIA-ME.md, parte 5.")
+    elif modo == "misto":
+        texto = ("O HTTPS está ligado, mas o http da rede local continua aberto. Quando todos os computadores e celulares usarem o endereço https, "
+                 "feche o http (implantacao\\LEIA-ME.md, parte 5).")
+    else:
+        return []
+    return [Aviso(CATEGORIA_REDE, texto, "", f"rede:{modo}", dispensavel=False)]
 
 
 def _avisos_do_backup_externo():

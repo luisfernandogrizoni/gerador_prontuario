@@ -170,7 +170,7 @@ def pedir_redefinicao(nome, endereco="", agora=None):
     auditoria.registrar("senha.pedido_reset", usuario=usuario.nome if usuario else "")
     if config is None or not config["endereco_do_sistema"]:
         return MENSAGEM_ENVIO_NAO_CONFIGURADO
-    if endereco and _pedidos_do_endereco(endereco, agora) > MAX_PEDIDOS_POR_ENDERECO:
+    if endereco and endereco not in autenticacao.ENDERECOS_LOCAIS and _pedidos_do_endereco(endereco, agora) > MAX_PEDIDOS_POR_ENDERECO:
         return None
     if usuario is None or not usuario.ativo or cadastros.acesso_desativado(usuario):
         return None
@@ -361,6 +361,22 @@ def registrar_comandos(app):
         except email_envio.ErroDeEmail as erro:
             raise click.ClickException(str(erro)) from erro
         click.echo(f"E-mail de teste enviado para {destino}.")
+
+    @app.cli.command("endereco-do-sistema")
+    @click.argument("endereco", required=False)
+    def endereco_do_sistema_cmd(endereco):
+        """Mostra ou muda o endereço que vai nos links dos e-mails (instance/email.json), por exemplo depois de ligar o HTTPS."""
+        atual = email_envio.endereco_do_arquivo(current_app.instance_path)
+        if not endereco:
+            click.echo(atual or "Ainda não há endereço: configure o e-mail (implantacao\\configurar-email.ps1).")
+            return
+        if not endereco.lower().startswith(("http://", "https://")):
+            raise click.ClickException("O endereço precisa começar com http:// ou https://")
+        try:
+            email_envio.mudar_endereco_do_sistema(current_app.instance_path, endereco)
+        except email_envio.ErroDeEmail as erro:
+            raise click.ClickException(str(erro)) from erro
+        click.echo(f"Os links dos e-mails agora usam {endereco.rstrip('/')}")
 
     @app.cli.command("confirmar-email")
     @click.argument("nome")

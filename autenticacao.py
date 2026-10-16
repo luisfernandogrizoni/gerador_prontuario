@@ -57,6 +57,7 @@ BLOQUEIO = timedelta(minutes=10)
 DURACAO_LOGIN = timedelta(hours=10)
 OCIOSO = timedelta(minutes=30)                 # sem usar o sistema por este tempo, a sessão acaba (a página avisa 5 minutos antes)
 AVISO_DE_OCIOSO = timedelta(minutes=25)
+ENDERECOS_LOCAIS = {"127.0.0.1", "::1"}       # o próprio servidor (ou um proxy sem repassar quem acessa): não há endereço de rede para limitar
 LIMITE_POR_ENDERECO = 15                       # senhas ou códigos errados vindos do mesmo computador...
 JANELA_POR_ENDERECO = timedelta(minutes=10)    # ...nesta janela de tempo bloqueiam aquele computador
 VALIDADE_DO_CODIGO = 300                       # segundos para digitar o código do autenticador depois de acertar a senha
@@ -203,7 +204,7 @@ def entrar(nome, senha):
     usuario = buscar_por_login(nome)
     agora = datetime.now()
     endereco = _endereco()
-    if endereco and auditoria.falhas_do_endereco(endereco, agora - JANELA_POR_ENDERECO) >= LIMITE_POR_ENDERECO:
+    if endereco and endereco not in ENDERECOS_LOCAIS and auditoria.falhas_do_endereco(endereco, agora - JANELA_POR_ENDERECO) >= LIMITE_POR_ENDERECO:
         auditoria.registrar("login.bloqueado_endereco", usuario=usuario.nome if usuario else "")
         return None, "Muitas tentativas erradas vindas deste computador. Espere alguns minutos e tente de novo."
     if usuario and usuario.bloqueado_ate and usuario.bloqueado_ate > agora:
@@ -348,6 +349,10 @@ def cabecalhos_de_seguranca(resposta):
     resposta.headers["X-Content-Type-Options"] = "nosniff"
     resposta.headers["X-Frame-Options"] = "DENY"
     resposta.headers["Referrer-Policy"] = "same-origin"
+    if current_app.config.get("SESSION_COOKIE_SECURE"):
+        # o sistema só se entende por HTTPS (cookie só-HTTPS): o navegador passa a recusar abrir este endereço sem HTTPS por 1 ano
+        # (só vale quando a resposta vem por HTTPS; por http o navegador ignora o cabeçalho)
+        resposta.headers["Strict-Transport-Security"] = "max-age=31536000"
     if request.endpoint != "static":
         resposta.headers["Cache-Control"] = "no-store"
     return resposta
