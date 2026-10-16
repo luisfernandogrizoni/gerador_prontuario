@@ -35,6 +35,7 @@ CATEGORIA_BACKUP = "Backup do banco"
 # Cópia criptografada em pen-drives em rodízio (copia_externa.py): não configurada, pen-drive fora, hora de trocar, teste por fazer
 CATEGORIA_BACKUP_EXTERNO = "Cópia externa do backup"
 CATEGORIA_REDE = "Segurança da rede"             # o HTTPS ainda não está ligado, ou o http da rede local ainda não foi fechado (servidor.py, modos de rede)
+CATEGORIA_MANUTENCAO = "Manutenção"             # o que se esquece com o tempo (manutencao.py): bibliotecas, servidor, revisão dos acessos e do plano; só o administrador vê
 CATEGORIA_CONTA = "Sua conta"                    # o que a própria pessoa ainda precisa fazer na segurança dela (contas.pendencias_da_conta)
 
 
@@ -61,7 +62,7 @@ def tempo_decorrido(dias):
     return "hoje" if dias == 0 else f"há {dias} dia{'' if dias == 1 else 's'}"
 
 
-def gerar_avisos(pode_servico_social=False, da_conta=()):
+def gerar_avisos(pode_servico_social=False, da_conta=(), de_manutencao=()):
     """`pode_servico_social`: quem olha é do Serviço Social (ou administrador); só para ele o aviso do acolhimento social
     leva direto ao formulário (os outros vão à ficha, onde veem se já foi feito, sem o conteúdo)."""
     avisos = []
@@ -158,12 +159,14 @@ def gerar_avisos(pode_servico_social=False, da_conta=()):
     avisos.extend(_avisos_do_backup_externo())
     avisos.extend(_avisos_de_rede())
     avisos.extend(Aviso(CATEGORIA_CONTA, texto, url_for("seguranca"), chave, dispensavel=False, rotulo_url="Abrir Minha segurança") for chave, texto in da_conta)
+    avisos.extend(Aviso(CATEGORIA_MANUTENCAO, texto, url_for(endpoint) if endpoint else "", chave, dispensavel=False, rotulo_url=rotulo or "Abrir")
+                  for chave, texto, endpoint, rotulo in de_manutencao)
 
     grupos = defaultdict(list)
     for a in avisos:
         grupos[a.categoria].append(a)
     # o backup, o envelope pendente e o acolhimento social são tarefas, não correções de cadastro: vêm primeiro
-    tarefas = (CATEGORIA_CONTA, CATEGORIA_REDE, CATEGORIA_BACKUP, CATEGORIA_BACKUP_EXTERNO, CATEGORIA_ENVELOPE, CATEGORIA_REJEICAO, CATEGORIA_ACOLHIMENTO)
+    tarefas = (CATEGORIA_CONTA, CATEGORIA_REDE, CATEGORIA_MANUTENCAO, CATEGORIA_BACKUP, CATEGORIA_BACKUP_EXTERNO, CATEGORIA_ENVELOPE, CATEGORIA_REJEICAO, CATEGORIA_ACOLHIMENTO)
     return dict(sorted(grupos.items(), key=lambda g: (g[0] not in tarefas, g[0])))
 
 

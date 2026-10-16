@@ -91,6 +91,7 @@ import declaracoes
 import documentos
 import email_envio
 import exclusao
+import manutencao
 import impressos
 import painel
 import permissoes
@@ -384,7 +385,8 @@ def sessao_ping():
 def home():
     hoje = date.today()
     lista_de_vagas = gerar_vagas()
-    return render_template("home.html", avisos=gerar_avisos(_pode_servico_social(), contas.pendencias_da_conta(g.usuario)), vagas=lista_de_vagas, vagas_total=totais(lista_de_vagas),
+    return render_template("home.html", avisos=gerar_avisos(_pode_servico_social(), contas.pendencias_da_conta(g.usuario),
+                                                  manutencao.avisos(app.instance_path) if _e_administrador() else ()), vagas=lista_de_vagas, vagas_total=totais(lista_de_vagas),
                            resumo=painel.resumo(), agenda=painel.agenda(hoje=hoje),
                            para_imprimir=painel.impressos_da_internacao(hoje=hoje) if permissoes.pode("documentos") else {"total": 0, "itens": []},
                            dias_da_agenda=painel.DIAS_DA_AGENDA, fim_do_tratamento=painel.tratamentos_a_finalizar(hoje=hoje),
@@ -1116,6 +1118,27 @@ def pagina_backup():
     except (OSError, ValueError):
         ultimo = None
     return render_template("cadastro_backup.html", externo=copia_externa.resumo(app.instance_path), ultimo_backup=ultimo, agora=datetime.now())
+
+
+# A revisão trimestral dos acessos (só o administrador): cada login, o funcionário, o nível, a última entrada e o que merece atenção; mais a
+# revisão semestral do plano de segurança. Marcar como revisado apaga o aviso da página inicial até o prazo vencer (manutencao.py).
+@app.get("/cadastros/revisao-de-acessos")
+def revisao_de_acessos():
+    agora = datetime.now()
+    return render_template("cadastro_revisao.html", situacao=manutencao.situacao_dos_acessos(agora), agora=agora, prazo_acessos=manutencao.DIAS_ACESSOS, prazo_plano=manutencao.DIAS_PLANO,
+                           revisao_acessos=manutencao.ultima_revisao(app.instance_path, "acessos"), revisao_plano=manutencao.ultima_revisao(app.instance_path, "plano"),
+                           dependencias=manutencao.resumo_dependencias(app.instance_path, agora), servidor=manutencao.resumo_verificacao(app.instance_path, agora))
+
+
+@app.post("/cadastros/revisao-de-acessos")
+def marcar_revisao():
+    o_que = request.form.get("o_que")
+    if o_que not in ("acessos", "plano"):
+        abort(400)
+    manutencao.marcar_revisao(app.instance_path, o_que, g.usuario.nome)
+    auditoria.registrar("revisao.acessos" if o_que == "acessos" else "revisao.plano")
+    flash("Revisão dos acessos marcada como feita." if o_que == "acessos" else "Revisão do plano de segurança marcada como feita.")
+    return redirect(url_for("revisao_de_acessos"))
 
 
 # O que cada nível pode fazer (permissoes.py). Quem tem "cadastros" vê; só o administrador ("acessos") altera.

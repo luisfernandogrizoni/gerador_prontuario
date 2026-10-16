@@ -1,4 +1,4 @@
-{# Abas da área de Cadastros. `atual` = 'convenios', 'funcionarios', 'niveis', 'permissoes', 'auditoria', 'backup' ou 'lixeira' (as três últimas só o administrador vê). #}
+{# Abas da área de Cadastros. `atual` = 'convenios', 'funcionarios', 'niveis', 'permissoes', 'auditoria', 'revisao', 'backup' ou 'lixeira' (as quatro últimas só o administrador vê). #}
 {% macro abas(atual) -%}
 <div class="ferramentas">
   <div class="segmentado" role="group" aria-label="Cadastros">
@@ -7,6 +7,7 @@
     <a href="{{ url_for('lista_niveis') }}" class="{{ 'ativo' if atual == 'niveis' }}"><svg class="icone"><use href="#i-cadeado"/></svg>Níveis de acesso</a>
     <a href="{{ url_for('lista_permissoes') }}" class="{{ 'ativo' if atual == 'permissoes' }}"><svg class="icone"><use href="#i-ok"/></svg>Permissões</a>
     {% if pode('auditoria') %}<a href="{{ url_for('pagina_auditoria') }}" class="{{ 'ativo' if atual == 'auditoria' }}"><svg class="icone"><use href="#i-busca"/></svg>Auditoria</a>{% endif %}
+    {% if pode('acessos') %}<a href="{{ url_for('revisao_de_acessos') }}" class="{{ 'ativo' if atual == 'revisao' }}"><svg class="icone"><use href="#i-ok"/></svg>Revisão</a>{% endif %}
     {% if pode('backup') %}<a href="{{ url_for('pagina_backup') }}" class="{{ 'ativo' if atual == 'backup' }}"><svg class="icone"><use href="#i-baixar"/></svg>Backup</a>{% endif %}
     {% if e_administrador %}<a href="{{ url_for('lixeira') }}" class="{{ 'ativo' if atual == 'lixeira' }}"><svg class="icone"><use href="#i-lixeira"/></svg>Lixeira</a>{% endif %}
   </div>

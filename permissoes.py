@@ -203,6 +203,7 @@ REGRAS = {
     "novo_nivel": "acessos", "editar_nivel": "acessos", "mover_nivel": "acessos", "salvar_permissoes": "acessos",
     "lixeira": "lixeira", "restaurar_registro": "lixeira", "apagar_registro": "lixeira", "pagina_backup": "backup",
     "pagina_auditoria": "auditoria", "exportar_auditoria": "auditoria",
+    "revisao_de_acessos": "acessos", "marcar_revisao": "acessos",
 }
 
 

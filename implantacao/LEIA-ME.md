@@ -85,8 +85,12 @@ registros (`logs`) ficam com acesso só do SISTEMA, dos administradores e de que
    anote os 8 códigos de recuperação** (aparecem uma vez só; guarde fora do computador, junto da frase do backup). Dali em
    diante a entrada pede a senha e o código do app. Celular perdido: use um código de recuperação, ou, no servidor,
    `.\.venv\Scripts\python.exe -m flask --app app desativar-segundo-fator luis`.
-7. **Testar** a partir de outro computador: abra o endereço que o instalador mostrou e entre. Salve como favorito.
-8. **Aposente o banco antigo.** Depois de conferir que os dados estão no servidor, renomeie o `instance\internos.db` do
+7. **Manutenção** (uma vez, como Administrador, no servidor): `implantacao\auditar-dependencias.ps1 -Agendar` confere as bibliotecas do sistema
+   contra a lista pública de vulnerabilidades e agenda a conferência mensal; `implantacao\verificar-servidor.ps1` confere o Windows (disco
+   criptografado, atualizações, antivírus, portas) e deve ser repetido a cada 3 meses. O passo a passo do que só você pode fazer (roteador, contas do
+   Windows, sala, impressora) está em `implantacao\ROTEIRO-DO-WINDOWS-E-DA-REDE.md`. A página inicial avisa o administrador quando algo vence.
+8. **Testar** a partir de outro computador: abra o endereço que o instalador mostrou e entre. Salve como favorito.
+9. **Aposente o banco antigo.** Depois de conferir que os dados estão no servidor, renomeie o `instance\internos.db` do
    projeto de desenvolvimento (por exemplo para `internos_ANTIGO_nao_usar.db`). Dois bancos em uso ao mesmo tempo
    significam dados espalhados e perdidos.
 

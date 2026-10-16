@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% from "_abas_cadastros.html" import abas with context %}
+{% from "_voltar.html" import linha_voltar with context %}
+{% from "_cartao.html" import cartao %}
+
+{% block titulo %}Cadastros · Revisão de acessos{% endblock %}
+
+{% block estilo %}
+  .revisao-grade { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 var(--e4); align-items: start; }
+  @media (max-width: 1000px) { .revisao-grade { grid-template-columns: minmax(0, 1fr); } }
+  .revisao-linha { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .revisao-linha p { margin: 0; }
+  .revisao-linha form { margin: 0; }
+  .atencao-lista { margin: 4px 0 0; padding-left: 18px; color: var(--texto); font-size: .86rem; }
+  .atencao-lista li { margin: 2px 0; }
+  .sem-nada { color: var(--suave); font-size: .86rem; }
+  .rolagem { overflow-x: auto; }
+  .acessos-lista { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  .acessos-lista th { text-align: left; padding: 8px 10px; color: var(--suave); font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--borda); white-space: nowrap; }
+  .acessos-lista td { padding: 11px 10px; border-bottom: 1px solid var(--borda); vertical-align: top; }
+  .acessos-lista tr:last-child td { border-bottom: 0; }
+  .acessos-lista .nome { font-weight: 600; }
+  .acessos-lista small { display: block; color: var(--suave); font-size: .8rem; margin-top: 2px; }
+  .acessos-lista .selo.pendente { background: var(--amarelo); color: var(--ambar); }
+  .lista-simples { margin: 0; padding-left: 18px; font-size: .9rem; }
+  @media (max-width: 760px) {
+    .acessos-lista thead { display: none; }
+    .acessos-lista, .acessos-lista tbody, .acessos-lista tr { display: block; }
+    .acessos-lista tr { padding: 10px 0; border-bottom: 1px solid var(--borda); }
+    .acessos-lista tr:last-child { border-bottom: 0; }
+    .acessos-lista td { display: block; padding: 3px 0; border: 0; }
+    .acessos-lista td[data-rotulo]::before { content: attr(data-rotulo) ": "; color: var(--suave); font-size: .8rem; }
+  }
+{% endblock %}
+
+{% block conteudo %}
+<main class="largo">
+  {{ linha_voltar(url_for('home')) }}
+  <div class="pagina-topo">
+    <div class="titulo">
+      <h1>Cadastros</h1>
+    </div>
+  </div>
+
+  {% with msgs = get_flashed_messages() %}
+    {% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
+  {% endwith %}
+
+  {{ abas('revisao') }}
+
+  <div class="revisao-grade">
+    <div>
+      {% call cartao('Revisão dos acessos', 'usuarios', 'azul', id='acessos') %}
+        <div class="revisao-linha">
+          {% set feita, por = revisao_acessos %}
+          <p>
+            {% if feita %}Última revisão: <strong>{{ feita.strftime('%d/%m/%Y') }}</strong> por {{ por }}
+              {% if (agora - feita).days > prazo_acessos %}<span class="selo pendente">Venceu: a cada {{ prazo_acessos }} dias</span>{% else %}<span class="selo ativo">Em dia</span>{% endif %}
+            {% else %}<span class="selo pendente">Nunca foi feita</span>{% endif %}
+          </p>
+          <form method="post" action="{{ url_for('marcar_revisao') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="o_que" value="acessos">
+            <button class="botao">Marcar como revisada</button>
+          </form>
+        </div>
+      {% endcall %}
+      <div style="height: var(--e4)"></div>
+      {% call cartao('Revisão do plano de segurança', 'documento', 'roxo', id='plano') %}
+        <div class="revisao-linha">
+          {% set feita_plano, por_plano = revisao_plano %}
+          <p>
+            {% if feita_plano %}Última revisão: <strong>{{ feita_plano.strftime('%d/%m/%Y') }}</strong> por {{ por_plano }}
+              {% if (agora - feita_plano).days > prazo_plano %}<span class="selo pendente">Venceu: a cada {{ prazo_plano }} dias</span>{% else %}<span class="selo ativo">Em dia</span>{% endif %}
+            {% else %}<span class="selo pendente">Nunca foi feita</span>{% endif %}
+          </p>
+          <form method="post" action="{{ url_for('marcar_revisao') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="o_que" value="plano">
+            <button class="botao secundario">Marcar como revisado</button>
+          </form>
+        </div>
+      {% endcall %}
+    </div>
+    <div>
+      {% call cartao('Servidor e bibliotecas', 'alerta', 'amarelo', id='servidor') %}
+        <ul class="lista-simples">
+          <li>Bibliotecas do sistema:
+            {% if not dependencias.existe %}<span class="selo pendente">auditoria nunca feita</span>
+            {% elif dependencias.vulneraveis %}<span class="selo pendente">{{ dependencias.vulneraveis | length }} com vulnerabilidade conhecida</span>
+            {% else %}<span class="selo ativo">sem vulnerabilidade conhecida</span> ({{ dependencias.pacotes }} conferidas há {{ dependencias.dias }} dias){% endif %}
+          </li>
+          <li>Verificação do servidor:
+            {% if not servidor.existe %}<span class="selo pendente">nunca feita</span>
+            {% elif servidor.atencao %}<span class="selo pendente">{{ servidor.atencao | length }} para corrigir</span>
+            {% else %}<span class="selo ativo">sem pendências</span> (há {{ servidor.dias }} dias){% endif %}
+          </li>
+        </ul>
+      {% endcall %}
+    </div>
+  </div>
+
+  <div style="height: var(--e4)"></div>
+  {% call cartao('Quem tem acesso', 'usuario', 'neutro', id='lista') %}
+    <div class="rolagem">
+    <table class="acessos-lista">
+      <thead><tr><th>Usuário</th><th>Funcionário</th><th>Nível</th><th>Última entrada</th><th>Atenção</th></tr></thead>
+      <tbody>
+        {% for l in situacao.linhas %}
+        <tr>
+          <td class="nome" data-rotulo="Usuário">{{ l.usuario }}{% if l.administrador %} <span class="selo ativo">Administrador</span>{% endif %}{% if l.totp %} <span class="selo ativo">Autenticador</span>{% endif %}</td>
+          <td data-rotulo="Funcionário">
+            {% if l.funcionario %}<a href="{{ url_for('editar_funcionario', id=l.funcionario.id) }}">{{ l.funcionario.nome }}</a>{% if not l.ativo %}<small>desativado</small>{% endif %}
+            {% else %}<span class="sem-nada">sem funcionário</span>{% endif %}
+          </td>
+          <td data-rotulo="Nível">{{ l.nivel or '—' }}</td>
+          <td data-rotulo="Última entrada">
+            {% if l.ultima_entrada %}{{ l.ultima_entrada.strftime('%d/%m/%Y %H:%M') }}<small>há {{ l.dias_sem_entrar }} dia{{ '' if l.dias_sem_entrar == 1 else 's' }}</small>{% else %}<span class="sem-nada">nunca</span>{% endif %}
+          </td>
+          <td data-rotulo="Atenção">
+            {% if l.pontos %}<ul class="atencao-lista">{% for p in l.pontos %}<li>{{ p }}</li>{% endfor %}</ul>{% else %}<span class="sem-nada">nada a corrigir</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% if situacao.ativos_sem_login %}
+      <p class="sem-nada" style="margin: 12px 0 0">Funcionários ativos sem login (não entram no sistema): {{ situacao.ativos_sem_login | map(attribute='nome') | join(', ') }}.</p>
+    {% endif %}
+  {% endcall %}
+</main>
+{% endblock %}

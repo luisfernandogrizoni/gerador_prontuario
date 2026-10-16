@@ -24,3 +24,4 @@ backups/
 # servidor do escritório: registros de erro e o ambiente virtual do Python (veja implantacao/LEIA-ME.md)
 logs/
 .venv/
+.venv-auditoria/        # o ambiente do pip-audit (implantacao/auditar-dependencias.ps1)

@@ -70,6 +70,9 @@ ACOES = {
     "ver.niveis": ("leitura", "Abriu os níveis de acesso"),
     "ver.permissoes": ("leitura", "Abriu as permissões"),
     "ver.backup": ("leitura", "Abriu a situação do backup"),
+    "ver.revisao": ("leitura", "Abriu a revisão dos acessos"),
+    "revisao.acessos": ("administracao", "Marcou a revisão trimestral dos acessos como feita"),
+    "revisao.plano": ("administracao", "Marcou a revisão semestral do plano de segurança como feita"),
     "auditoria.ver": ("leitura", "Abriu a trilha de auditoria"),
     "auditoria.exportar": ("leitura", "Baixou a trilha de auditoria"),
     # ---- alterações nos registros dos acolhidos
@@ -175,6 +178,7 @@ LEITURAS = {
     "lista_niveis": lambda: ("ver.niveis", "", None, None, ""),
     "lista_permissoes": lambda: ("ver.permissoes", "", None, None, ""),
     "pagina_backup": lambda: ("ver.backup", "", None, None, ""),
+    "revisao_de_acessos": lambda: ("ver.revisao", "", None, None, ""),
 }
 
 # registradas no ponto exato em que a ação deu certo (app.py, autenticacao.py, permissoes.py)
@@ -183,7 +187,7 @@ EXPLICITAS = {
     "gerar", "lancar_parcela", "excluir_parcela", "adendo_social", "excluir_registro", "restaurar_registro", "apagar_registro",
     "novo_convenio", "editar_convenio", "novo_funcionario", "novo_nivel", "editar_nivel", "mover_nivel", "salvar_permissoes",
     "pagina_auditoria", "exportar_auditoria", "login_codigo", "esqueci_senha", "redefinir_senha", "enviar_codigo_email", "confirmar_email",
-    "ativar_autenticador", "desativar_autenticador",
+    "ativar_autenticador", "desativar_autenticador", "marcar_revisao",
 }
 
 # o que não se registra, e por quê
