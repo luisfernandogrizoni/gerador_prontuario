@@ -60,8 +60,11 @@ registros (`logs`) ficam com acesso só do SISTEMA, dos administradores e de que
 
    Entre com ele, abra *Cadastros > Funcionários*, edite o seu cadastro e, em *Acesso ao sistema*, escolha o seu usuário
    em *Usuário de login* (o seu cadastro é o do nível Administrador). Daí em diante só o administrador cria usuários:
-   em *Novo funcionário* (ou editando a pessoa), preencha *Criar um usuário novo*, a senha e o **e-mail** da pessoa. A senha
-   que o administrador define é **provisória**: no primeiro acesso a pessoa é levada à troca e escolhe a dela. O sistema barra
+   em *Novo funcionário* (ou editando a pessoa), preencha *Criar um usuário novo*, a senha e o **e-mail** da pessoa (obrigatório
+   para quem vai ter acesso; não pode se repetir entre funcionários). A senha que o administrador define é **provisória**: no
+   primeiro acesso a pessoa é levada à troca e escolhe a dela e, **em seguida, confirma o e-mail** com o código que chega nele
+   (o sistema só abre depois disso; quem já tinha acesso antes não é barrado). A pessoa pode entrar digitando o usuário **ou** o
+   e-mail já confirmado. O sistema barra
    senhas fáceis de adivinhar (`1234567890`, `senha2024`, o nome da pessoa...); uma frase de várias palavras serve.
 4. **Ligar o e-mail do sistema** (código de confirmação, "esqueci minha senha", avisos de segurança e o aviso da troca do
    pen-drive). Uma vez, como Administrador, neste computador:
@@ -182,6 +185,7 @@ O banco se atualiza sozinho na subida. Se algo falhar, o sistema volta a ligar n
 | --- | --- |
 | Outro computador não abre a página | O servidor está ligado? O IP mudou (`ipconfig`)? Ambos na mesma rede/roteador? Tente pelo IP, não pelo nome. |
 | A página abre, mas alguém não consegue entrar | 5 senhas erradas seguidas bloqueiam o usuário por 10 minutos (e mais de 15 erradas em 10 minutos vindas do mesmo computador bloqueiam aquele computador). Quem tem o e-mail confirmado usa *Esqueci minha senha* na tela de entrada. Senão, o administrador preenche *Nova senha* no cadastro da pessoa (*Cadastros > Funcionários*; a senha é provisória, a pessoa troca ao entrar). Se não houver nenhum administrador que consiga entrar: `.\.venv\Scripts\python.exe -m flask --app app redefinir-senha maria`. |
+| Uma pessoa nova não consegue confirmar o e-mail e não entra | Confira se o e-mail do cadastro está certo e se o envio funciona (linha abaixo). Em emergência, o administrador libera no servidor: `.\.venv\Scripts\python.exe -m flask --app app confirmar-email maria` (marca o e-mail como confirmado). |
 | O e-mail não chega (código, *Esqueci minha senha*) | O e-mail está configurado (`implantacao\configurar-email.ps1`)? Confira a caixa de spam. `.\.venv\Scripts\python.exe -m flask --app app testar-email alguem@restauracao.org.br` mostra o erro (senha da caixa, servidor, porta). O sistema nunca escreve o conteúdo dos e-mails nem a senha em `logs\servidor.log`. |
 | A pessoa perdeu o celular do segundo fator | Se ela tem os códigos de recuperação, entra com um deles. Senão, o administrador marca *Desativar o aplicativo autenticador desta pessoa* no cadastro dela, ou, no servidor, `flask --app app desativar-segundo-fator USUARIO`. Ela entra só com a senha e liga o app de novo. |
 | A pessoa é desconectada sozinha | É o tempo ocioso: 30 minutos sem usar o sistema encerram a sessão (aos 25 aparece um aviso com a contagem). |

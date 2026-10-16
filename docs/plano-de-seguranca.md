@@ -189,6 +189,17 @@ ninguém trocou, computador esquecido logado, tentativa em massa de um mesmo com
 - **Senha provisória**: a que o administrador define para outra pessoa (cadastro novo ou redefinição) vale só para entrar e trocar:
   até a troca, nenhuma outra tela abre (nem os dados) e o menu fica escondido. A do próprio administrador, definida por ele, não é
   provisória.
+- **Acesso novo = e-mail obrigatório e confirmado antes de usar** (decidido em 2026-10-16): não se cria um acesso (usuário novo, ou ligar um
+  usuário a um funcionário que não tinha) sem informar o e-mail da pessoa, e **o e-mail não se repete entre funcionários** (o sistema diz de
+  quem é). No primeiro acesso a pessoa troca a senha e, em seguida, **confirma o e-mail com o código**; só então o sistema abre (até lá só
+  abrem a confirmação, a troca de senha e o "Sair"). **Vale só para acessos novos**: quem já tinha acesso entra como antes e vê o aviso
+  "Sua conta" até confirmar. A confirmação **não é cobrada** se o envio de e-mail não está configurado ou se o funcionário ficou sem
+  e-mail (senão ninguém novo entraria); em emergência o administrador marca no servidor:
+  `flask --app app confirmar-email USUARIO` (fica na auditoria como feito pelo terminal).
+- **Entrar com o usuário ou com o e-mail**: o campo da entrada (e do "esqueci minha senha") aceita os dois. Só vale como login o e-mail **já
+  confirmado** e de **um** funcionário só (se, em banco antigo, dois funcionários tiverem o mesmo e-mail, ele não vale como login: o usuário
+  continua valendo). A resposta de erro é a mesma de sempre. O login só por e-mail foi descartado: o primeiro administrador nasce no
+  terminal, quem ainda não confirmou ficaria sem entrar e a auditoria usa o nome de usuário.
 - **Tempo ocioso** (decidido: sim): **30 minutos** sem uso encerram a sessão; aos 25 abre um aviso com a contagem ("Manter conectado" ou
   "Sair agora"). Digitar, clicar, rolar e tocar contam como uso, em qualquer aba do navegador; **a lista que se atualiza sozinha a cada
   30 segundos não conta** (senão uma lista esquecida aberta seguraria a sessão para sempre). O teto absoluto de 10 horas continua. A

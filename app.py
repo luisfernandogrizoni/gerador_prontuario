@@ -151,7 +151,7 @@ def _pode_servico_social():
 # pode('triagem') nos templates esconde o que a pessoa não pode usar; permissoes_js() leva o mesmo ao JavaScript das listas
 app.context_processor(lambda: {"usuario_atual": g.get("usuario"), "e_administrador": _e_administrador(),
                                "pode_servico_social": _pode_servico_social(),
-                               "pode": permissoes.pode, "permissoes_js": permissoes.do_usuario,
+                               "pode": permissoes.pode, "permissoes_js": permissoes.do_usuario, "restricao_da_conta": g.get("restricao_da_conta"),
                                "ocioso_segundos": int(autenticacao.OCIOSO.total_seconds()), "aviso_de_ocioso_segundos": int(autenticacao.AVISO_DE_OCIOSO.total_seconds())})
 
 # filtros usados nos templates: {{ p.cpf | cpf }}, {{ i.inicio | data }} ...
@@ -323,7 +323,11 @@ def enviar_codigo_email():
 
 @app.post("/seguranca/email/confirmar")
 def confirmar_email():
-    flash(contas.confirmar_email(g.usuario, request.form.get("codigo")) or "E-mail confirmado.")
+    era_obrigatorio = g.get("restricao_da_conta") == "email"
+    erro = contas.confirmar_email(g.usuario, request.form.get("codigo"))
+    flash(erro or "E-mail confirmado.")
+    if era_obrigatorio and not erro:                 # acesso novo: com o e-mail confirmado o sistema abre
+        return redirect(url_for("home"))
     return redirect(url_for("seguranca") + "#email")
 
 

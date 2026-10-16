@@ -155,15 +155,27 @@ def pode_gerenciar_acessos(usuario):
     return usuario is not None and any(a.usuario == usuario.nome for a in admins)
 
 
+def quem_usa_o_email(email, funcionario=None):
+    """O outro funcionário que já tem este e-mail (o e-mail não se repete: é por ele que a pessoa entra e recupera a senha), ou None."""
+    consulta = db.select(Funcionario).filter(db.func.lower(Funcionario.email) == (email or "").strip().lower())
+    if funcionario is not None and funcionario.id is not None:
+        consulta = consulta.filter(Funcionario.id != funcionario.id)
+    return db.session.execute(consulta).scalars().first()
+
+
 def _validar_acesso(form, funcionario, ativo):
     """Os campos de acesso do formulário do funcionário (só o administrador chega aqui)."""
     erros = {}
     email = (form.get("email") or "").strip()
+    escolhido, novo = (form.get("usuario") or "").strip(), (form.get("novo_usuario") or "").strip().lower()
     if email and not email_envio.endereco_valido(email):
         erros["email"] = "Informe um e-mail válido (ex.: nome@restauracao.org.br)."
+    elif email and (outro := quem_usa_o_email(email, funcionario)):
+        erros["email"] = f"Este e-mail já é de {outro.nome}. Cada pessoa precisa de um e-mail só dela."
+    elif not email and (novo or (escolhido and escolhido != (funcionario.usuario if funcionario is not None else ""))):
+        erros["email"] = "Informe o e-mail da pessoa: é por ele que ela confirma a conta e recupera a senha."
     if (form.get("nivel_id") or "") not in {i for i, _ in niveis_para_escolher(funcionario)}:
         erros["nivel_id"] = "Escolha o nível de acesso."
-    escolhido, novo = (form.get("usuario") or "").strip(), (form.get("novo_usuario") or "").strip().lower()
     senha, confirmacao = form.get("senha") or "", form.get("confirmacao") or ""
     if escolhido and escolhido not in usuarios_para_vincular(funcionario):
         erros["usuario"] = "Esse usuário não existe ou já pertence a outro funcionário."
@@ -269,7 +281,7 @@ def _gravar_acesso(form, funcionario, por=None):
     escolhido, novo = (form.get("usuario") or "").strip(), (form.get("novo_usuario") or "").strip().lower()
     senha = form.get("senha") or ""
     if novo:
-        usuario, erro = autenticacao.criar_usuario(novo, senha, confirmar=False, provisoria=True, nomes=[funcionario.nome])
+        usuario, erro = autenticacao.criar_usuario(novo, senha, confirmar=False, provisoria=True, nomes=[funcionario.nome], exigir_email=True)
         if erro:
             return {"novo_usuario": erro}
         funcionario.usuario = usuario.nome

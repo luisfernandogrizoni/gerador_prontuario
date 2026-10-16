@@ -75,6 +75,11 @@ def migrar(db):
         db.session.execute(text("ALTER TABLE usuarios ADD COLUMN totp_recuperacao VARCHAR(2000) NOT NULL DEFAULT ''"))
         db.session.commit()
 
+    # 6b) acesso novo: o e-mail precisa ser confirmado antes de usar o sistema
+    if "exigir_email" not in _colunas(db, "usuarios"):
+        db.session.execute(text("ALTER TABLE usuarios ADD COLUMN exigir_email BOOLEAN NOT NULL DEFAULT FALSE"))
+        db.session.commit()
+
     # 6) o relatório de rejeição virou o parecer do acolhimento social: o que já foi escrito passa para lá
     _rejeicoes_para_o_acolhimento(db)
 

@@ -16,8 +16,9 @@
 
 {% block conteudo %}
 <main class="largo">
-  {{ linha_voltar(url_for('home')) }}
-  <h1>Minha segurança</h1>
+  {% if not restricao_da_conta %}{{ linha_voltar(url_for('home')) }}{% endif %}
+  <h1>{{ 'Confirme o seu e-mail' if restricao_da_conta else 'Minha segurança' }}</h1>
+  {% if restricao_da_conta %}<p class="caixa-info" role="status">Para começar a usar o sistema, confirme o seu e-mail: peça o código e digite o que chegar.</p>{% endif %}
 
   {% with msgs = get_flashed_messages() %}
     {% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
@@ -47,6 +48,7 @@
       {% endif %}
     {% endcall %}
 
+    {% if not restricao_da_conta %}
     {% call cartao('Aplicativo autenticador', 'cadeado', 'roxo', id='autenticador') %}
       {% if totp_ativo %}
         <div class="estado">
@@ -71,6 +73,7 @@
     {% call cartao('Senha', 'cadeado', 'neutro', id='senha') %}
       <div class="acoes-cartao" style="margin-top: 0"><a class="botao secundario" href="{{ url_for('alterar_senha') }}">Alterar minha senha</a></div>
     {% endcall %}
+    {% endif %}
   </div>
 </main>
 {% endblock %}

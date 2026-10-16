@@ -28,7 +28,7 @@ import autenticacao
 import cadastros
 import email_envio
 import totp
-from modelos import CodigoSeguranca, Usuario, db
+from modelos import CodigoSeguranca, Funcionario, Usuario, db
 
 log = logging.getLogger(__name__)
 
@@ -142,6 +142,7 @@ def confirmar_email(usuario, digitado, agora=None):
         return "Esse código não confere."
     codigo.usado_em = agora
     funcionario.email_confirmado_em = agora
+    usuario.exigir_email = False                 # (acesso novo: com o e-mail confirmado, o sistema abre)
     db.session.commit()
     auditoria.registrar("email.confirmado", "funcionario", funcionario.id, detalhe=email_envio.mascarar(funcionario.email))
     return None
@@ -165,7 +166,7 @@ def pedir_redefinicao(nome, endereco="", agora=None):
     Devolve o texto de um problema que vale para QUALQUER pessoa (envio não configurado), ou None."""
     agora = _agora(agora)
     config = email_envio.carregar(_instance())
-    usuario = autenticacao.buscar_usuario(nome)
+    usuario = autenticacao.buscar_por_login(nome)
     auditoria.registrar("senha.pedido_reset", usuario=usuario.nome if usuario else "")
     if config is None or not config["endereco_do_sistema"]:
         return MENSAGEM_ENVIO_NAO_CONFIGURADO
@@ -360,6 +361,22 @@ def registrar_comandos(app):
         except email_envio.ErroDeEmail as erro:
             raise click.ClickException(str(erro)) from erro
         click.echo(f"E-mail de teste enviado para {destino}.")
+
+    @app.cli.command("confirmar-email")
+    @click.argument("nome")
+    def confirmar_email_cmd(nome):
+        """Marca como confirmado o e-mail de um usuário (emergência: o envio de e-mail está fora do ar e uma pessoa nova precisa entrar)."""
+        usuario = autenticacao.buscar_usuario(nome)
+        dono = db.session.execute(db.select(Funcionario).filter_by(usuario=usuario.nome)).scalars().first() if usuario else None
+        if usuario is None or dono is None:
+            raise click.ClickException(f"Não achei um funcionário com o usuário {nome}.")
+        if not dono.email:
+            raise click.ClickException("Esse funcionário ainda não tem e-mail cadastrado (Cadastros > Funcionários).")
+        dono.email_confirmado_em = datetime.now()
+        usuario.exigir_email = False
+        db.session.commit()
+        auditoria.registrar("email.confirmado", "funcionario", dono.id, usuario="terminal", detalhe=f"pelo terminal ({email_envio.mascarar(dono.email)})")
+        click.echo(f"E-mail de {usuario.nome} marcado como confirmado.")
 
     @app.cli.command("desativar-segundo-fator")
     @click.argument("nome")

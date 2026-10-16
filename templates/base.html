@@ -494,7 +494,7 @@
         <span><strong>Casa de Acolhida Restauração</strong><small>SISTEMA DE PRONTUÁRIOS</small></span>
       </a>
       {% if usuario_atual %}
-      {% if not usuario_atual.trocar_senha %}{# com a senha provisória nada abre antes da troca: o menu espera #}
+      {% if not restricao_da_conta %}{# com a senha provisória (ou o e-mail de um acesso novo por confirmar) nada abre antes: o menu espera #}
       <div class="menu">
       <a class="item {{ 'atual' if request.path == '/' }}" href="{{ url_for('home') }}">Início</a>
       <a class="item {{ 'atual' if request.path.startswith('/triagens') }}" href="{{ url_for('lista_triagens') }}">Triagens</a>
@@ -522,7 +522,7 @@
   </div>
   {% endif %}
   {% block conteudo %}{% endblock %}
-  {% if usuario_atual and not usuario_atual.trocar_senha %}
+  {% if usuario_atual and restricao_da_conta != "senha" %}
   <dialog id="aviso-ocioso" aria-labelledby="titulo-ocioso">
     <h2 id="titulo-ocioso"><span class="icone-lembrete"><svg class="icone"><use href="#i-relogio"/></svg></span>Você ainda está aí?</h2>
     <p>Por segurança, a sessão termina em <strong id="ocioso-contagem">5:00</strong> se o sistema não for usado.</p>
