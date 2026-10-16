@@ -31,7 +31,7 @@ com banco SQLite, sem custo de hospedagem. Isso tem uma vantagem de segurança (
 | Rede | Porta aberta só para a sub-rede local (firewall); sem acesso externo; **fase 4**: HTTPS pelo Tailscale (certificado que ele emite e renova), com modo de transição e modo final que fecha o http da rede local | Até o usuário ligar, **HTTP sem criptografia** (a página inicial lembra); depois, quem não tem o Tailscale não abre |
 | Navegador | Cookie HttpOnly e SameSite=Lax; nosniff; X-Frame-Options; sem cache das páginas; **fase 7**: token CSRF em todo envio, política de conteúdo (CSP) com nonce, Permissions-Policy e COOP/CORP | `style="..."` dentro das tags ainda é permitido; o ViaCEP recebe o CEP digitado |
 | Dados | Excluir é em duas etapas (lixeira); banco fora do git; hook que barra dado real no repositório; **fase 5**: cópia externa criptografada em pen-drives em rodízio, conferida na hora, com aviso, tela de situação e teste de restauração | Depende de alguém trocar o pen-drive toda semana (o sistema avisa) e de a frase de recuperação estar em papel; o backup do dia (`.db`) segue sem criptografia no computador |
-| Servidor | Tarefas agendadas, firewall, pasta `instance/` protegida | Roda como SYSTEM; disco sem criptografia (a verificar); roteador e Windows sem checklist |
+| Servidor | Tarefas agendadas, firewall, pasta `instance/` protegida; **fase 6**: roteiro do Windows e do roteador e verificador que confere sozinho (avisa na página inicial); **fase 9**: auditoria mensal das bibliotecas, revisão trimestral dos acessos e semestral do plano | Roda como SYSTEM (a troca por conta limitada ficou para um dia, feita junto); o roteiro depende de alguém percorrê-lo |
 | Papel | — | Sem inventário de dados, política de retenção nem plano de resposta a incidente (o termo de sigilo foi dispensado: decisão da casa, 2026-10-16) |
 
 ## 3. Ameaças que o plano cobre (da mais provável para a menos)
@@ -60,10 +60,10 @@ fase 10 (VPN), nunca abrindo porta no roteador.
 | 3 | Contas e sessões mais fortes: tempo ocioso, e-mail validado, "esqueci minha senha" e segundo fator | Sistema + usuário (senha da caixa de envio no servidor, e-mail de cada funcionário e celular com app autenticador) | **Feita** (2026-10-15); falta o usuário configurar |
 | 4 | HTTPS (celular e todos os navegadores) | Sistema + usuário (instalar o Tailscale) | **Feita** (2026-10-16); falta o usuário ligar |
 | 5 | Backup que sobrevive ao computador | Sistema + usuário (pen-drives e rotina) | **Feita** (2026-10-15); falta o usuário configurar |
-| 6 | Servidor Windows, rede e roteador | Quase tudo o usuário (roteiro passo a passo) | A fazer |
+| 6 | Servidor Windows, rede e roteador | Quase tudo o usuário (roteiro passo a passo e verificador) | **Feita** (2026-10-16); o usuário percorre o roteiro; a conta limitada no lugar de SISTEMA ficou de fora de propósito |
 | 7 | Token CSRF e CSP | Sistema | **Feita** (2026-10-16) |
 | 8 | LGPD no papel | Usuário, com modelos prontos do sistema | A fazer |
-| 9 | Manutenção contínua | Sistema (avisos) + usuário | A fazer |
+| 9 | Manutenção contínua | Sistema (avisos) + usuário | **Feita** (2026-10-16); falta rodar `auditar-dependencias.ps1 -Agendar` uma vez |
 | 10 | Segundo polo e acesso de fora do escritório (VPN) | Sistema + usuário (instalar o Tailscale) | **Feita** (2026-10-16); falta o usuário ligar |
 
 Ordem sugerida: 1 → 5 → 2 → 3 → 4 + 10 (juntas: HTTPS pela VPN e o segundo polo) → 7 → 6 → 8 → 9. O backup (5) sobe na frente porque
@@ -362,18 +362,27 @@ computador ou no HD fixo; e depende de uma pessoa trocar o pen-drive toda semana
 arquivo cortado, banco grande, pen-drive clonado, disco cheio, cópia que não abre, retenção, rodízio, avisos, comandos
 interativos) e `teste_backup_externo_app.py` (25: página inicial e tela de backup).
 
-### Fase 6 — Servidor Windows, rede e roteador
+### Fase 6 — Servidor Windows, rede e roteador (entregue em 2026-10-16; o usuário faz o que é físico)
 
-Roteiro com o passo a passo, quase tudo manual, em `implantacao/`:
+Quase tudo aqui é físico (o roteador, a sala, a impressora, a senha do Windows): **só uma pessoa na casa pode fazer**. O que o sistema pôde fazer
+foi tornar isso **uma lista curta, com o motivo de cada item**, e **conferir sozinho o que dá para conferir**.
 
-- **Disco criptografado**: o Windows 11 Home tem a "Criptografia de dispositivo" se o computador tiver TPM e atender aos
-  requisitos (Configurações → Privacidade e segurança → Criptografia de dispositivo). Guardar a chave de recuperação em papel.
-- **Serviço com conta limitada** no lugar de SYSTEM: se alguém explorar o sistema, não ganha o computador inteiro.
-- **Windows**: atualizações automáticas ligadas; Microsoft Defender ligado; conta de administrador do Windows com senha forte e
-  conta comum para o dia a dia; bloqueio de tela por inatividade; computador em sala que se tranca.
-- **Rede**: perfil "Privada"; o firewall só abre a porta para a sub-rede (já está); sem encaminhamento de portas no roteador
-  (UPnP desligado); senha de administração do roteador trocada; Wi-Fi com WPA2/WPA3 e senha forte; **rede de visitantes separada**.
-- **Impressão**: a impressora fica onde só a equipe passa; documento com dado sensível não fica na bandeja.
+- **`implantacao/ROTEIRO-DO-WINDOWS-E-DA-REDE.md`**: o passo a passo, em português, com caixas para marcar: disco criptografado (e a chave de
+  recuperação em papel), atualizações do Windows, antivírus, uma conta de administrador e outra comum, senha em todas as contas, sem entrada
+  automática, bloqueio de tela, área de trabalho remota e compartilhamento desligados, sala trancada; no roteador, senha do painel trocada, Wi-Fi
+  WPA2/WPA3 com senha forte, **rede de visitantes separada**, UPnP e encaminhamento de portas desligados, administração remota desligada,
+  firmware em dia, reserva de IP; impressão (impressora onde só a equipe passa, nada na bandeja, papel picotado); e a rotina trimestral.
+- **`implantacao/verificar-servidor.ps1`** (só lê, não muda nada; Administrador): confere disco criptografado, espaço em disco, atualizações,
+  antivírus, firewall, tipo de rede, **portas abertas para a rede** (RDP, telnet, FTP, WinRM, VNC, compartilhamento de arquivos), área de
+  trabalho remota, SMB1, contas sem senha, administradores, entrada automática, bloqueio de tela, relógio (os códigos do autenticador
+  dependem dele), permissões da pasta `instance`, tarefas do sistema, backup do dia e o modo de rede do sistema. Cada item sai **OK**,
+  **ATENCAO** ou **VERIFICAR**, com o que fazer. O resultado vai para `instance/verificacao_servidor.json` e a **página inicial avisa o
+  administrador** se achou algo para corrigir ou se passou de 100 dias sem rodar. (Testado de verdade num Windows 11: o script roda, e o
+  sistema lê o JSON que ele grava.)
+- **Serviço com conta limitada no lugar de SISTEMA: NÃO foi automatizado, de propósito.** Trocar a conta mexe em permissões de pasta, em direitos
+  de logon e nas tarefas agendadas; um erro derruba o sistema ou o backup e isso não se testa sem o computador do escritório. O que ele evitaria
+  já está coberto por outras camadas (pasta `instance` fechada, sistema só em `127.0.0.1` no modo `https`, firewall, CSRF e política de conteúdo).
+  O roteiro explica como fazer **junto**, com backup recém-feito e janela de manutenção, se a casa quiser.
 
 ### Fase 7 — Defesa do navegador (entregue em 2026-10-16)
 
@@ -433,12 +442,27 @@ Modelos prontos em `docs/lgpd/`, para a casa preencher e assinar:
 - A associação provavelmente se enquadra como agente de tratamento de **pequeno porte** (Resolução CD/ANPD nº 2/2022), com
   obrigações simplificadas, mas ainda precisa de canal de atendimento e das medidas acima. Confirmar com a contabilidade ou o jurídico.
 
-### Fase 9 — Manutenção contínua
+### Fase 9 — Manutenção contínua (entregue em 2026-10-16)
 
-- **Auditoria mensal das dependências** (`pip-audit`) em um script de `implantacao/`, com aviso na página inicial se houver
-  vulnerabilidade conhecida.
-- **Revisão trimestral dos acessos**: lista de usuários × funcionários ativos × nível, com aviso no quadro de avisos.
-- **Teste de restauração do backup** trimestral (fase 5) e revisão deste plano a cada semestre.
+O que se esquece com o tempo, o sistema lembra (`manutencao.py`; os avisos só aparecem **para o administrador** e **no servidor do escritório**,
+na categoria "Manutenção" do quadro da página inicial):
+
+- **Auditoria das bibliotecas** (`implantacao/auditar-dependencias.ps1 -Agendar`, uma vez): roda o **pip-audit** (a lista pública de
+  vulnerabilidades de bibliotecas Python) sobre as bibliotecas que o sistema usa de verdade e **agenda uma por mês** (a cada 4 semanas, como
+  SISTEMA). O pip-audit mora num ambiente separado (`.venv-auditoria`) para não misturar as bibliotecas dele com as do sistema. O aviso diz o
+  pacote, a versão e a versão que corrige; avisa também se a auditoria falhou (sem internet) ou se parou de rodar (mais de 45 dias). pip,
+  setuptools e wheel (ferramentas de instalação) não viram aviso, e o script atualiza o pip. Precisa de internet. (Testado de verdade: o pip-audit
+  rodou sobre as bibliotecas do ambiente de teste e o sistema leu o JSON que ele produz.)
+- **Revisão trimestral dos acessos** (**Cadastros > Revisão**, só o administrador): cada login com o funcionário, o nível, a última entrada e os
+  **pontos de atenção** (login sem funcionário, funcionário desativado, nunca entrou, não entra há mais de 90 dias, administrador sem o
+  autenticador, e-mail sem confirmar, senha provisória que ninguém trocou; e os funcionários ativos sem login). Botão **"Marcar como
+  revisada"** (fica na auditoria) e o aviso volta em 90 dias.
+- **Revisão semestral do plano de segurança**: o mesmo botão, a cada 180 dias.
+- **Verificação do servidor** (fase 6): aviso se achou algo ou se passou de 100 dias.
+- **Teste de restauração do backup** trimestral: já cobrado pela cópia externa (fase 5), no mesmo quadro de avisos.
+
+**Como conferir.** `teste_manutencao.py` (47+ verificações: o resultado do pip-audit, avisos em cada estado, a situação de cada login, a tela e os
+botões, só o administrador) e a execução real dos dois scripts.
 
 ### Fase 10 — Segundo polo e acesso de fora do escritório (entregue em 2026-10-16; falta o usuário ligar)
 
@@ -489,7 +513,8 @@ o aviso de aparelho novo em cada situação e a política do Tailscale).
 | Agora | Desativar o funcionário de quem saiu da casa (o login deixa de entrar na hora) |
 | Fase 5 | Comprar **2 pen-drives** (marca conhecida, 32 GB bastam), rodar `configurar-backup-externo.ps1`, **anotar a frase em papel e guardar fora do computador**, preparar cada pen-drive e combinar quem troca na sexta (o pen-drive que sai do computador vai para a gaveta trancada) |
 | Fase 5 | A cada 3 meses, fazer o teste de restauração (2 minutos, `implantacao/RESTAURAR.md`) |
-| Fase 6 | Seguir o roteiro do Windows e do roteador |
+| Fase 6 | Percorrer `implantacao\ROTEIRO-DO-WINDOWS-E-DA-REDE.md` (disco criptografado, contas, roteador, rede de visitantes...) e rodar `implantacao\verificar-servidor.ps1` a cada 3 meses |
+| Fase 9 | Rodar `implantacao\auditar-dependencias.ps1 -Agendar` uma vez (agenda a auditoria mensal das bibliotecas) e, a cada 3 meses, fazer a **Cadastros > Revisão** de acessos |
 | Fase 3 | Rodar `implantacao\configurar-email.ps1` no servidor e **digitar a senha da caixa `sistema@`** (e trocá-la, se já apareceu em conversa); cadastrar o **e-mail de cada funcionário** (Cadastros > Funcionários); cada pessoa confirma o seu em **Minha segurança**; o administrador **liga o aplicativo autenticador** no celular e guarda os 8 códigos de recuperação em papel |
 | Fase 4 | Criar a conta do Tailscale (com verificação em duas etapas), instalar nos aparelhos, ligar o HTTPS no painel, rodar `configurar-https.ps1` no servidor, migrar os aparelhos e, no fim, `-FecharHttp` (LEIA-ME, parte 5) |
 | Fase 10 | Convidar cada pessoa do polo 2 no Tailscale (conta própria), colar a política de acesso (`configurar-https.ps1 -MostrarPolitica`), instalar nos aparelhos do polo (LEIA-ME, parte 5) |
