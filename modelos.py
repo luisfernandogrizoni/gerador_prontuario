@@ -504,6 +504,9 @@ class Usuario(db.Model):
     bloqueado_ate: Mapped[datetime | None] = mapped_column(DateTime)
     # senha que o administrador definiu: a pessoa tem de trocá-la antes de usar qualquer outra tela
     trocar_senha: Mapped[bool] = mapped_column(default=False)
+    # acesso novo, criado pelo administrador: antes de usar o sistema a pessoa confirma o e-mail com o código (contas.py). Só vale para quem
+    # nasceu assim; quem já tinha acesso não é barrado (vê o aviso "Sua conta" até confirmar).
+    exigir_email: Mapped[bool] = mapped_column(default=False)
     # segundo fator (aplicativo autenticador no celular, TOTP; totp.py). O segredo fica CIFRADO com uma chave que não vai no banco
     # (instance/secret.key), para um backup do banco sozinho não bastar. `totp_ativo` só vale depois de a pessoa digitar um código
     # que o aplicativo gerou (até lá o segredo é só de uma ativação pendente).
