@@ -47,7 +47,7 @@ ACOES = {
     "login.codigo_errado": ("entrada", "Código do aplicativo autenticador errado"),
     "login.aparelho_novo": ("entrada", "Entrou por um aparelho que ainda não tinha usado (a pessoa e, se for administrador, a casa foram avisadas por e-mail)"),
     "login.bloqueado_endereco": ("entrada", "Entrada bloqueada: muitas tentativas erradas vindas deste computador"),
-    "sessao.expirada": ("entrada", "Sessão encerrada (sem uso por 30 minutos, ou mais de 10 horas)"),
+    "sessao.expirada": ("entrada", "Sessão encerrada (passou de 10 horas desde a entrada; antes de 2026-10-19 também por 30 minutos sem uso)"),
     "senha.pedido_reset": ("entrada", "Pediu para redefinir a senha pelo e-mail"),
     "login.desativado": ("entrada", "Entrada recusada: o funcionário está desativado"),
     "sair": ("entrada", "Saiu do sistema"),
@@ -201,7 +201,6 @@ NAO_REGISTRA = {
     "lista_convenios": "convênios não são dado pessoal",
     "relatorio_de_rejeicao": "redireciona para o acolhimento social, que é registrado",
     "seguranca": "a página da própria pessoa (as ações dela são registradas quando acontecem)",
-    "sessao_ping": "só avisa que a pessoa continua usando o sistema (renova o tempo de inatividade)",
 }
 
 

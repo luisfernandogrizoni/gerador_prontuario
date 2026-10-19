@@ -158,8 +158,7 @@ def _pode_servico_social():
 # pode('triagem') nos templates esconde o que a pessoa não pode usar; permissoes_js() leva o mesmo ao JavaScript das listas
 app.context_processor(lambda: {"usuario_atual": g.get("usuario"), "e_administrador": _e_administrador(),
                                "pode_servico_social": _pode_servico_social(),
-                               "pode": permissoes.pode, "permissoes_js": permissoes.do_usuario, "restricao_da_conta": g.get("restricao_da_conta"),
-                               "ocioso_segundos": int(autenticacao.OCIOSO.total_seconds()), "aviso_de_ocioso_segundos": int(autenticacao.AVISO_DE_OCIOSO.total_seconds())})
+                               "pode": permissoes.pode, "permissoes_js": permissoes.do_usuario, "restricao_da_conta": g.get("restricao_da_conta")})
 
 # filtros usados nos templates: {{ p.cpf | cpf }}, {{ i.inicio | data }} ...
 app.jinja_env.filters.update(cpf=fmt_cpf, rg=fmt_rg, cep=fmt_cep, data=fmt_data, hora=fmt_hora,
@@ -220,8 +219,7 @@ def login():
     if g.usuario:
         return redirect(url_for("home"))
     proximo = request.values.get("next", "")
-    aviso = {"ocioso": "A sua sessão terminou por falta de uso. Entre de novo."}.get(request.args.get("encerrada")) \
-        or ("Senha alterada. Entre com a senha nova." if request.args.get("redefinida") else None)
+    aviso = "Senha alterada. Entre com a senha nova." if request.args.get("redefinida") else None
     if request.method == "POST":
         usuario, erro = autenticacao.entrar(request.form.get("usuario"), request.form.get("senha"))
         if usuario and cadastros_.acesso_desativado(usuario):     # a senha confere, mas o funcionário foi desativado
@@ -372,12 +370,6 @@ def desativar_autenticador():
 def csp_relatorio():
     """O navegador conta aqui quando a política de conteúdo barra alguma coisa (csrf.relatorio: uma linha curta no registro do servidor)."""
     return csrf.relatorio()
-
-
-@app.post("/sessao/ping")
-def sessao_ping():
-    """A página avisa que a pessoa continua usando o sistema (usuario_da_sessao já renovou o tempo de inatividade)."""
-    return jsonify(ok=True)
 
 
 # ===================================================================== home

@@ -257,10 +257,6 @@
     dialog h2 { margin-top: 0; }
     dialog .grade { margin-bottom: 14px; }
     dialog .botoes { display: flex; gap: 8px; justify-content: flex-end; }
-    #aviso-ocioso h2 { display: flex; align-items: center; gap: 12px; font-size: 1.1rem; }
-    #aviso-ocioso .icone-lembrete { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border-radius: var(--r-md); background: var(--atencao-suave); color: var(--atencao); }
-    #aviso-ocioso p { margin: 0 0 18px; }
-    #aviso-ocioso strong { font-variant-numeric: tabular-nums; }
     .botoes-form { display: flex; gap: 10px; flex-wrap: wrap; }
     .segmentado { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
     .segmentado::-webkit-scrollbar { display: none; }
@@ -524,18 +520,6 @@
   </div>
   {% endif %}
   {% block conteudo %}{% endblock %}
-  {% if usuario_atual and restricao_da_conta != "senha" %}
-  <dialog id="aviso-ocioso" aria-labelledby="titulo-ocioso">
-    <h2 id="titulo-ocioso"><span class="icone-lembrete"><svg class="icone"><use href="#i-relogio"/></svg></span>Você ainda está aí?</h2>
-    <p>Por segurança, a sessão termina em <strong id="ocioso-contagem">5:00</strong> se o sistema não for usado.</p>
-    <div class="botoes">
-      <button type="button" class="botao secundario" id="ocioso-sair">Sair agora</button>
-      <button type="button" class="botao" id="ocioso-continuar">Manter conectado</button>
-    </div>
-  </dialog>
-  <script src="{{ url_for('static', filename='ociosidade.js') }}" data-ocioso="{{ ocioso_segundos }}" data-aviso="{{ aviso_de_ocioso_segundos }}"
-          data-ping="{{ url_for('sessao_ping') }}" data-sair="{{ url_for('login', encerrada='ocioso') }}" data-sair-agora="{{ url_for('sair') }}"></script>
-  {% endif %}
   <script nonce="{{ csp_nonce() }}">
     // "Voltar" volta uma página no histórico (a lista continua como estava); sem histórico, segue o endereço do botão.
     // Os botões marcados com data-substituir (colunas e quem assina nos relatórios) trocam a página em vez de empilhar histórico.
