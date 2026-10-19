@@ -54,17 +54,15 @@ log = logging.getLogger(__name__)
 SENHA_MINIMA = 10
 MAX_FALHAS = 5
 BLOQUEIO = timedelta(minutes=10)
-DURACAO_LOGIN = timedelta(hours=10)
-OCIOSO = timedelta(minutes=30)                 # sem usar o sistema por este tempo, a sessão acaba (a página avisa 5 minutos antes)
-AVISO_DE_OCIOSO = timedelta(minutes=25)
+DURACAO_LOGIN = timedelta(hours=10)            # a sessão acaba 10 horas depois da entrada, usando ou não (não há tempo de inatividade)
 ENDERECOS_LOCAIS = {"127.0.0.1", "::1"}       # o próprio servidor (ou um proxy sem repassar quem acessa): não há endereço de rede para limitar
 LIMITE_POR_ENDERECO = 15                       # senhas ou códigos errados vindos do mesmo computador...
 JANELA_POR_ENDERECO = timedelta(minutes=10)    # ...nesta janela de tempo bloqueiam aquele computador
 VALIDADE_DO_CODIGO = 300                       # segundos para digitar o código do autenticador depois de acertar a senha
 # páginas que funcionam sem a pessoa ter entrado (e o que ela pode abrir com a senha provisória, antes de trocá-la)
 ROTAS_LIVRES = {"login", "static", "login_codigo", "esqueci_senha", "redefinir_senha", "csp_relatorio"}
-ROTAS_COM_SENHA_PROVISORIA = {"alterar_senha", "sair", "sessao_ping", "static"}
-ROTAS_COM_EMAIL_PENDENTE = {"seguranca", "enviar_codigo_email", "confirmar_email", "alterar_senha", "sair", "sessao_ping", "static"}
+ROTAS_COM_SENHA_PROVISORIA = {"alterar_senha", "sair", "static"}
+ROTAS_COM_EMAIL_PENDENTE = {"seguranca", "enviar_codigo_email", "confirmar_email", "alterar_senha", "sair", "static"}
 ROTAS_COM_SEGUNDO_FATOR_PENDENTE = ROTAS_COM_EMAIL_PENDENTE | {"ativar_autenticador"}
 COMANDOS_DE_USUARIO = {"criar-usuario", "redefinir-senha"}
 # hash de uma senha qualquer: testar um usuário que não existe gasta o mesmo tempo
@@ -237,21 +235,17 @@ def abrir_sessao(usuario):
     session.clear()    # nunca reaproveita uma sessão que veio de antes do login
     session["usuario_id"] = usuario.id
     session["versao"] = _versao(usuario)
-    session["inicio"] = session["ultimo_uso"] = time.time()
+    session["inicio"] = time.time()
     session.permanent = True
 
 
 def usuario_da_sessao():
-    """O usuário da sessão, ou None. A sessão acaba por inatividade (OCIOSO) e no máximo em DURACAO_LOGIN; cada pedido conta como uso.
-    Quando acaba por tempo, `g.sessao_encerrada` diz qual foi o motivo (a página de entrada explica)."""
+    """O usuário da sessão, ou None. Não há tempo de inatividade: a pessoa fica conectada enquanto usa (ou deixa aberto) o sistema, e a sessão
+    acaba no máximo em DURACAO_LOGIN depois da entrada. Quando acaba por isso, `g.sessao_encerrada` avisa (exigir_login registra e pede a entrada)."""
     usuario_id = session.get("usuario_id")
     if not usuario_id:
         return None
     agora = time.time()
-    if agora - session.get("ultimo_uso", agora) > OCIOSO.total_seconds():
-        g.sessao_encerrada, g.sessao_de = "ocioso", usuario_id
-        session.clear()
-        return None
     if agora - session.get("inicio", agora) > DURACAO_LOGIN.total_seconds():
         g.sessao_encerrada, g.sessao_de = "duracao", usuario_id
         session.clear()
@@ -261,8 +255,6 @@ def usuario_da_sessao():
         session.clear()
         return None
     session.setdefault("inicio", agora)
-    if request.headers.get("X-Atualizacao-Automatica") != "1":      # a lista que se atualiza sozinha não conta como uso (static/tabela.js)
-        session["ultimo_uso"] = agora
     return usuario
 
 
@@ -333,7 +325,7 @@ def exigir_login():
     g.usuario = usuario_da_sessao()
     if g.get("sessao_encerrada"):
         antigo = db.session.get(Usuario, g.sessao_de)
-        auditoria.registrar("sessao.expirada", usuario=antigo.nome if antigo else "", detalhe="sem uso por 30 minutos" if g.sessao_encerrada == "ocioso" else "passou de 10 horas")
+        auditoria.registrar("sessao.expirada", usuario=antigo.nome if antigo else "", detalhe="passou de 10 horas")
     g.restricao_da_conta = restricao_da_conta(g.usuario)
     if g.restricao_da_conta == "senha" and request.endpoint not in ROTAS_COM_SENHA_PROVISORIA:
         if request.path.startswith("/api/") or request.is_json:
@@ -351,10 +343,9 @@ def exigir_login():
         return None
     if request.path.startswith("/api/") or request.is_json:
         # chamadas do JavaScript: responde em JSON (o formato de erro é o que a tela já espera)
-        motivo = "Sessão encerrada por falta de uso. Entre de novo." if g.get("sessao_encerrada") == "ocioso" else "Sessão expirada. Entre de novo."
-        return jsonify(ok=False, erros={"sessao": motivo}), 401
+        return jsonify(ok=False, erros={"sessao": "Sessão expirada. Entre de novo."}), 401
     destino = request.path + ("?" + request.query_string.decode() if request.query_string else "")
-    return redirect(url_for("login", next=destino if request.method == "GET" else None, encerrada="ocioso" if g.get("sessao_encerrada") == "ocioso" else None))
+    return redirect(url_for("login", next=destino if request.method == "GET" else None))
 
 
 def cabecalhos_de_seguranca(resposta):

@@ -178,7 +178,7 @@ def _quem_edita():
 # (relatorio_social e adendo_social só pedem "ver" aqui: o sigilo do acolhimento é conferido na própria rota, com o aviso
 # explicando por que não abriu — veja _pode_servico_social em app.py.)
 REGRAS = {
-    "sair": LIVRE, "alterar_senha": LIVRE, "sessao_ping": LIVRE, "seguranca": LIVRE, "enviar_codigo_email": LIVRE, "confirmar_email": LIVRE,
+    "sair": LIVRE, "alterar_senha": LIVRE, "seguranca": LIVRE, "enviar_codigo_email": LIVRE, "confirmar_email": LIVRE,
     "ativar_autenticador": LIVRE, "desativar_autenticador": LIVRE,       # (a página de entrada, o código e o "esqueci minha senha" são autenticacao.ROTAS_LIVRES)
 
     "home": "ver", "api_pessoas": "ver", "lista_triagens": "ver", "api_triagens": "ver", "lista_internos": "ver",

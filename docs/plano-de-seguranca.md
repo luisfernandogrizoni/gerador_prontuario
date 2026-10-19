@@ -57,7 +57,7 @@ fase 10 (VPN), nunca abrindo porta no roteador.
 |---|---|---|---|
 | 1 | Cascata de acesso por nível | Sistema | **Feita** (nesta entrega) |
 | 2 | Trilha de auditoria (com tela dentro do sistema, só administrador) | Sistema | **Feita** (2026-10-15) |
-| 3 | Contas e sessões mais fortes: tempo ocioso, e-mail validado, "esqueci minha senha" e segundo fator | Sistema + usuário (senha da caixa de envio no servidor, e-mail de cada funcionário e celular com app autenticador) | **Feita** (2026-10-15); falta o usuário configurar |
+| 3 | Contas e sessões mais fortes: e-mail validado, "esqueci minha senha" e segundo fator | Sistema + usuário (senha da caixa de envio no servidor, e-mail de cada funcionário e celular com app autenticador) | **Feita** (2026-10-15); falta o usuário configurar |
 | 4 | HTTPS (celular e todos os navegadores) | Sistema + usuário (instalar o Tailscale) | **Feita** (2026-10-16); falta o usuário ligar |
 | 5 | Backup que sobrevive ao computador | Sistema + usuário (pen-drives e rotina) | **Feita** (2026-10-15); falta o usuário configurar |
 | 6 | Servidor Windows, rede e roteador | Quase tudo o usuário (roteiro passo a passo e verificador) | **Feita** (2026-10-16); o usuário percorre o roteiro; a conta limitada no lugar de SISTEMA ficou de fora de propósito |
@@ -200,10 +200,12 @@ ninguém trocou, computador esquecido logado, tentativa em massa de um mesmo com
   confirmado** e de **um** funcionário só (se, em banco antigo, dois funcionários tiverem o mesmo e-mail, ele não vale como login: o usuário
   continua valendo). A resposta de erro é a mesma de sempre. O login só por e-mail foi descartado: o primeiro administrador nasce no
   terminal, quem ainda não confirmou ficaria sem entrar e a auditoria usa o nome de usuário.
-- **Tempo ocioso** (decidido: sim): **30 minutos** sem uso encerram a sessão; aos 25 abre um aviso com a contagem ("Manter conectado" ou
-  "Sair agora"). Digitar, clicar, rolar e tocar contam como uso, em qualquer aba do navegador; **a lista que se atualiza sozinha a cada
-  30 segundos não conta** (senão uma lista esquecida aberta seguraria a sessão para sempre). O teto absoluto de 10 horas continua. A
-  entrada explica "a sua sessão terminou por falta de uso" e o encerramento fica na auditoria (`sessao.expirada`).
+- **Tempo ocioso: RETIRADO em 2026-10-19, a pedido do usuário** ("tira o tempo de inatividade; pode manter a pessoa conectada"). Entregue
+  em 2026-10-15 (30 minutos sem uso encerravam a sessão, com aviso aos 25), saiu por inteiro: o aviso "Você ainda está aí?", o script
+  `static/ociosidade.js`, a rota `/sessao/ping` e a distinção da lista que se atualiza sozinha. Ficou **o teto absoluto de 10 horas**
+  desde a entrada (usando ou não): quem entra de manhã volta a entrar no dia seguinte, e o encerramento fica na auditoria
+  (`sessao.expirada`). O custo é que um computador deixado logado continua aberto até esse teto: valem o bloqueio de tela do Windows
+  (Win+L ao sair da sala, roteiro da fase 6) e a conferência dos acessos da fase 9.
 - **Limite por endereço**: mais de 15 senhas ou códigos errados em 10 minutos vindos do mesmo computador bloqueiam as tentativas **dele**
   (até com a senha certa), além dos 5 erros por usuário que já existiam (quem errava trocava de usuário a cada 5).
 - **E-mail do funcionário, confirmado**: só o administrador cadastra (Cadastros > Funcionários) e só vale depois de a própria pessoa
@@ -249,12 +251,12 @@ senha nova do administrador troca no primeiro acesso. A sessão agora termina po
 mesmo cuidado com computador compartilhado de sempre. E-mail comum não é canal seguro: por isso o link vale 30 minutos e uma vez, e
 o administrador precisa do segundo fator. O token CSRF e a política de conteúdo do navegador ficam para a fase 7.
 
-**Como conferir.** `teste_contas.py` (227 verificações: senhas, provisória, tempo ocioso, limite por endereço, e-mail, "esqueci minha
+**Como conferir.** `teste_contas.py` (senhas, provisória, teto de 10 horas da sessão, limite por endereço, e-mail, "esqueci minha
 senha" com todos os casos de recusa, segundo fator com repetição, recuperação e bloqueio, comandos do servidor), `teste_email.py` (63:
 servidores SMTP de mentira com SSL, STARTTLS e certificado autoassinado; certificado recusado; senha recusada; servidor travado;
 injeção de cabeçalho; nada de segredo no registro), `teste_aviso_email.py` (32: avisos do pen-drive), `teste_migracao_contas.py` e
 `teste_contas_pg.py` (banco antigo aberto pelo código novo, no SQLite e no Postgres, e `copiar_banco.py` com banco de origem antigo).
-Também foi conferido no navegador (computador e celular), inclusive o aviso de tempo ocioso com os tempos encurtados.
+Também foi conferido no navegador (computador e celular).
 
 ### Fase 4 — HTTPS na rede interna (entregue em 2026-10-16; falta o usuário ligar)
 
@@ -492,7 +494,7 @@ parte 5), e esta fase entrega o que faltava para isso ser seguro:
 - **Cada pessoa do polo 2 com a própria conta** do Tailscale (convite por usuário; até 6 no plano gratuito), nunca a conta da casa compartilhada.
 - **Roteiro de liberação e do dia a dia** no LEIA-ME, parte 5: antes de liberar, durante e quando alguém sai ou perde um aparelho.
 
-**Pré-requisitos** (todos entregues): HTTPS (fase 4), segundo fator do administrador e tempo ocioso (fase 3), trilha de auditoria com o
+**Pré-requisitos** (todos entregues): HTTPS (fase 4), segundo fator do administrador (fase 3), trilha de auditoria com o
 endereço de cada acesso (fase 2), backup externo (fase 5). O **termo de sigilo** foi dispensado por decisão da casa (2026-10-16): os computadores
 que acessam o sistema são todos patrimônio da instituição, e a proteção está nos logins e nos dados.
 
@@ -530,7 +532,7 @@ o aviso de aparelho novo em cada situação e a política do Tailscale).
 3. Grade de fábrica: unificar e cadastros só do administrador; parcelas ficam com o operador. Níveis: Administrador, Operador e
    Consulta; o administrador reorganiza na tela quando precisar.
 4. Auditoria: registrar tudo, com tela dentro do sistema que só o administrador vê (fase 2, entregue).
-5. Tempo ocioso: sim (fase 3). Validação de e-mail, "esqueci minha senha" e bloqueio após 5 erros: sim (fase 3; o bloqueio já existe).
+5. Tempo ocioso: foi sim (fase 3) e **saiu em 2026-10-19** por decisão do usuário (fica só o teto de 10 horas). Validação de e-mail, "esqueci minha senha" e bloqueio após 5 erros: sim (fase 3; o bloqueio já existe).
 6. O pen-drive que sai do computador fica **na gaveta trancada do escritório** (risco aceito: não protege de incêndio nem de roubo do
    escritório inteiro).
 7. O e-mail institucional é da **Hostinger** (envio por SMTP com senha: mais simples que o Microsoft 365).

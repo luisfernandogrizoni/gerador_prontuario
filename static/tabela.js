@@ -39,7 +39,7 @@ class TabelaDinamica {
         this.aoMudar();
       });
     });
-    if (atualizarMs) setInterval(() => this.carregar(true), atualizarMs);
+    if (atualizarMs) setInterval(() => this.carregar(), atualizarMs);
 
     // a rolagem é restaurada por aqui (o conteúdo chega depois da página, o navegador não acerta)
     if ("scrollRestoration" in history) history.scrollRestoration = "manual";
@@ -114,10 +114,8 @@ class TabelaDinamica {
     } catch {}
   }
 
-  // `automatico`: a atualização que a página faz sozinha. Ela avisa o servidor (cabeçalho), que NÃO conta isso como uso do sistema:
-  // senão uma lista esquecida aberta manteria a sessão viva para sempre (tempo ocioso: autenticacao.OCIOSO)
-  async carregar(automatico = false) {
-    const resposta = await fetch(this.url, automatico ? { headers: { "X-Atualizacao-Automatica": "1" } } : undefined);
+  async carregar() {
+    const resposta = await fetch(this.url);
     if (resposta.status === 401) { location.reload(); return; }   // login expirou: o servidor leva à tela de entrar
     this.itens = await resposta.json();
     this.aoCarregar(this.itens);
