@@ -15,6 +15,7 @@ from datetime import date, datetime, timedelta
 from flask import current_app, url_for
 
 import copia_externa
+import ficha_saude
 import servico_social
 from banco import arquivo_ultimo_backup
 from modelos import ENVELOPE_PENDENTE, AvisoDispensado, Internacao, Pessoa, db
@@ -27,6 +28,10 @@ PRAZO_ENVELOPE_DIAS = 7
 CATEGORIA_ENVELOPE = "Prontuário a receber da casa de acolhida"
 CATEGORIA_REJEICAO = "Parecer da rejeição a escrever"          # rejeitado na triagem, e a assistente social ainda não finalizou o parecer
 CATEGORIA_ACOLHIMENTO = "Acolhimento social a finalizar"        # a triagem já aconteceu e o acolhimento social não foi finalizado
+CATEGORIA_SAUDE = "Ficha de saúde a finalizar"                  # a pessoa foi internada há pouco e a anamnese da ficha de saúde não foi finalizada (só a enfermeira vê)
+# Só cobra a ficha de quem entrou nos últimos dias: quem já estava na casa quando a ficha passou a ser digital tem a dela no papel, e cobrar de todos de
+# uma vez encheria a página inicial de pendências antigas (a ficha desses continua aberta para preencher).
+PRAZO_FICHA_DE_SAUDE_DIAS = 15
 
 # No servidor do escritório (servidor.py), o backup diário (backup.py) anota quando terminou. Passou deste
 # prazo sem backup, a página inicial avisa. 3 dias cobrem um fim de semana prolongado com o computador desligado.
@@ -62,9 +67,10 @@ def tempo_decorrido(dias):
     return "hoje" if dias == 0 else f"há {dias} dia{'' if dias == 1 else 's'}"
 
 
-def gerar_avisos(pode_servico_social=False, da_conta=(), de_manutencao=()):
+def gerar_avisos(pode_servico_social=False, da_conta=(), de_manutencao=(), pode_assinar_saude=False):
     """`pode_servico_social`: quem olha é do Serviço Social (ou administrador); só para ele o aviso do acolhimento social
-    leva direto ao formulário (os outros vão à ficha, onde veem se já foi feito, sem o conteúdo)."""
+    leva direto ao formulário (os outros vão à ficha, onde veem se já foi feito, sem o conteúdo). `pode_assinar_saude`: quem olha é a enfermeira (assina
+    a ficha de saúde); só para ela aparece o aviso das fichas de saúde a finalizar."""
     avisos = []
     pessoas = db.session.execute(db.select(Pessoa)).scalars().all()
     internacoes = db.session.execute(db.select(Internacao)).scalars().all()
@@ -124,6 +130,12 @@ def gerar_avisos(pode_servico_social=False, da_conta=(), de_manutencao=()):
                                     f"{nome}: triagem em {i.data_triagem.strftime('%d/%m/%Y')}, e o acolhimento social ainda não foi finalizado "
                                     f"({'em rascunho' if situacao else 'não iniciado'}).",
                                     aonde, f"acolhimento:{i.id}", dispensavel=False))
+        if (pode_assinar_saude and i.status == "ativo" and i.inicio and 0 <= (hoje_no_brasil() - i.inicio).days <= PRAZO_FICHA_DE_SAUDE_DIAS
+                and ficha_saude.estado(i.ficha_saude) != "finalizado"):
+            avisos.append(Aviso(CATEGORIA_SAUDE,
+                                f"{nome}: internado em {i.inicio.strftime('%d/%m/%Y')}, e a ficha de saúde ainda não foi finalizada "
+                                f"({'em rascunho' if ficha_saude.estado(i.ficha_saude) else 'não iniciada'}).",
+                                url_for("ficha_saude", id=i.id), f"saude:{i.id}", dispensavel=False, rotulo_url="Abrir a ficha de saúde"))
         if (i.status in ("em_admissao", "lista_espera") and i.internacao_agendada
                 and i.internacao_agendada < date.today()):
             avisos.append(Aviso("Internação agendada já passou",
@@ -166,7 +178,7 @@ def gerar_avisos(pode_servico_social=False, da_conta=(), de_manutencao=()):
     for a in avisos:
         grupos[a.categoria].append(a)
     # o backup, o envelope pendente e o acolhimento social são tarefas, não correções de cadastro: vêm primeiro
-    tarefas = (CATEGORIA_CONTA, CATEGORIA_REDE, CATEGORIA_MANUTENCAO, CATEGORIA_BACKUP, CATEGORIA_BACKUP_EXTERNO, CATEGORIA_ENVELOPE, CATEGORIA_REJEICAO, CATEGORIA_ACOLHIMENTO)
+    tarefas = (CATEGORIA_CONTA, CATEGORIA_REDE, CATEGORIA_MANUTENCAO, CATEGORIA_BACKUP, CATEGORIA_BACKUP_EXTERNO, CATEGORIA_ENVELOPE, CATEGORIA_REJEICAO, CATEGORIA_ACOLHIMENTO, CATEGORIA_SAUDE)
     return dict(sorted(grupos.items(), key=lambda g: (g[0] not in tarefas, g[0])))
 
 

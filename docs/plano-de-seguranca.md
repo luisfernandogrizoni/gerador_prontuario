@@ -130,6 +130,32 @@ some do menu. O administrador pode devolver qualquer uma ao Operador na grade, a
 cerca de 60 rotas, tela escondendo botões, edição da matriz (valor ruim, campo ausente, nível desativado, mover nível),
 acolhimento pela marca, funcionário desativado com sessão aberta, rota sem regra.
 
+**Atualização de 2026-10-19 — relatórios sigilosos por função e leitura à parte.** Os níveis (Administrador, Operador, Consulta) são uma cascata e não
+cobrem tudo: o acolhimento social e a ficha de saúde (dado de saúde sensível: HIV, tuberculose, uso de drogas) pedem acessos que atravessam os níveis.
+Por isso eles ficam **fora da cascata**, em três coisas que o administrador dá pessoa a pessoa em Cadastros > Funcionários:
+
+- **Função na equipe** (assistente social, enfermeiro(a), médico(a), nutricionista, psicólogo(a), coordenação operacional, outro profissional), com o
+  registro do conselho (CRESS, COREN, CRM, CRN, CRP). Quem tem conselho não é salvo sem o registro. O **COREN é conferido no formato** (UF, número e
+  categoria, como `COREN-SP 123.456-ENF`) e só a categoria ENF (enfermeiro) vale como a enfermeira da ficha de saúde; o sistema **não consulta o
+  Conselho** (não há consulta automática gratuita): a conferência do número no site do Conselho fica com o administrador.
+- **Escrever**: a assistente social escreve o acolhimento social; a **enfermeira com COREN válido** escreve a ficha de saúde e é a única que finaliza e
+  assina (o administrador só prepara o rascunho da anamnese); cada profissional da equipe escreve a sua anotação na evolução multiprofissional, na
+  categoria da função dele.
+- **Ler sem editar**, uma permissão à parte (`Lê os relatórios sigilosos`): vale em qualquer nível, para o acolhimento social e para a ficha de saúde
+  **depois de finalizados** (a psicóloga, a gerente técnica...). Quem tem só essa permissão abre os impressos sigilosos mesmo num nível sem a
+  permissão de documentos; os outros impressos continuam pedindo `documentos`. Tirar a permissão corta a leitura na hora.
+
+Quem não tem nada disso vê só se a ficha foi feita e quando, e quem imprime leva a ficha de saúde em branco. Tudo fica na trilha de auditoria (`ver.saude`,
+`saude.*`), sem o conteúdo. A ficha só abre depois da internação, e a página inicial avisa a enfermeira das fichas a finalizar de quem entrou nos últimos 15 dias.
+
+**Sem adendos; alterar o finalizado, com histórico de versões (2026-10-20).** Os relatórios não têm mais adendos. Finalizar guarda a data, a hora e a
+assinatura; depois disso a assistente social (acolhimento social) e a enfermeira com COREN válido (ficha de saúde) continuam podendo **alterar** o
+relatório, valendo o mesmo mínimo de quando finalizou. O documento mostra sempre a versão de agora, sem marca de alteração. Cada alteração vira uma
+**versão** no histórico (o relatório inteiro daquele momento, quem alterou, quando e quais perguntas mudaram; alterar sem mudar nada não vira versão), e a
+trilha de auditoria registra `acolhimento.alterar` ou `saude.alterar` com o número da versão e o nome das perguntas, nunca o conteúdo. O **histórico é só do
+administrador** (na ficha do acolhido, "Histórico de versões", que também abre o documento de cada versão; abrir fica na trilha como `ver.historico`). Os
+adendos que já existiam foram trazidos para o histórico, onde o administrador os vê: nada foi apagado.
+
 ### Fase 2 — Trilha de auditoria (entregue em 2026-10-15)
 
 **Para quê.** Responder, depois do fato, "quem abriu, alterou, baixou ou apagou isto, e quando?". É o que a ANPD espera para
@@ -145,7 +171,7 @@ investigar um incidente e o que dissuade o curioso. Decisão do usuário: **regi
   funcionário, lista de funcionários, níveis, permissões, backup; e a própria trilha (ver e exportar).
 - **Alterações** (só quando **deu certo**; formulário recusado não vira "alterou"): triagem e prontuário (criou, ou editou e **quais
   campos**), situação, baixa, envelope, parcelas, unificação, excluir, restaurar e apagar de vez, acolhimento (rascunho, finalizar,
-  adendo) e "Ciente" de aviso.
+  alterar o finalizado) e "Ciente" de aviso.
 - **Administração**: funcionário criado e editado (quais campos), usuário criado, senha redefinida pelo administrador, senha trocada
   pela própria pessoa, níveis, **permissões (de qual nível para qual)** e convênios.
 - **Acessos negados**: cada 403, com a permissão que faltou.
@@ -540,6 +566,8 @@ o aviso de aparelho novo em cada situação e a política do Tailscale).
 9. Segundo fator (aplicativo autenticador no celular): sim, para o administrador; vale para quem quiser. Passa a ser necessário para o administrador redefinir a senha pelo e-mail.
 10. Termo de sigilo: dispensado (2026-10-16). Os computadores que acessam o sistema são todos patrimônio da instituição; o foco é proteger os
     dados e criar logins seguros.
+11. Ficha de saúde (2026-10-19): escrita pela enfermeira com COREN válido (ENF), só depois da internação; leitura sem edição por permissão à parte, dada pessoa a pessoa
+    (psicóloga e gerente técnica); a evolução multiprofissional é escrita por cada profissional da equipe na sua categoria. Ver a atualização na fase 1.
 
 **Em aberto**
 

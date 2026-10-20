@@ -31,9 +31,15 @@ Telas:
                                     de orientação, ficha multiprofissional, capa do envelope, relatório do Serviço Social)
                                     num documento só
     /internacoes/<id>/relatorio-social   o acolhimento social: a assistente social preenche a ficha, escreve o relatório, classifica
-                                    o risco e dá o parecer no sistema (sigiloso: só Serviço Social e administrador); finalizar
-                                    trava e um parecer "não condizente" marca a triagem como "Rejeitado na triagem"
-    /internacoes/<id>/relatorio-social/adendo   correção ou informação nova num acolhimento já finalizado
+                                    o risco e dá o parecer no sistema (sigiloso: só Serviço Social e administrador); depois de finalizado
+                                    ela ainda o altera, cada alteração vira uma versão do histórico; um parecer "não condizente" marca a
+                                    triagem como "Rejeitado na triagem"
+    /internacoes/<id>/saude        a ficha de saúde (anamnese) de quem já foi internado, escrita pela enfermeira (COREN válido); sigilosa;
+                                    depois de finalizada ela ainda a altera (versões no histórico); /saude/enfermagem são os registros de
+                                    enfermagem (sinais vitais, glicemia, perdas) e /saude/evolucao a evolução multiprofissional, cada
+                                    profissional na sua categoria
+    /internacoes/<id>/historico/<social|saude>   (administrador) o histórico de versões do acolhimento social ou da ficha de saúde e,
+                                    em /<n>, o documento daquela versão
     /internacoes/<id>/excluir      exclui o registro: o operador só tira de circulação; o administrador também apaga de vez
     /cadastros/lixeira              (administrador) o que foi excluído: restaurar ou apagar do banco
 
@@ -50,7 +56,8 @@ Organização:
                    senhas_fracas.py barra as senhas fáceis de adivinhar
     catalogo.py    o que o sistema sabe de cada convênio (lido do cadastro, uma vez por requisição)
     cadastros.py   cadastros de convênios e de funcionários
-    fichas.py      pedido de exames, enxoval, capa do envelope e ficha multiprofissional (em branco)
+    fichas.py      pedido de exames, enxoval, capa do envelope e ficha multiprofissional (em branco ou com o que foi escrito no sistema)
+    ficha_saude.py a ficha de saúde: perguntas da anamnese, registros de enfermagem e evolução multiprofissional
     manual_de_orientacao.py  o manual que a família recebe na internação (o texto fica lá)
     servico_social.py  o acolhimento social: perguntas, classificação, parecer, gravação e documento
     exclusao.py   excluir em duas etapas: some de tudo sem sair do banco, até o administrador apagar de vez
@@ -89,8 +96,10 @@ import csrf
 import copia_externa
 import declaracoes
 import documentos
+import fichas
 import email_envio
 import exclusao
+import ficha_saude
 import manutencao
 import impressos
 import painel
@@ -99,6 +108,7 @@ import relatorios
 import servico_social
 import servicos
 import totp
+import versoes
 from avisos import dias_de_espera, gerar_avisos, tempo_decorrido
 from banco import arquivo_ultimo_backup
 from modelos import (ENVELOPE_RECEBIDO, STATUS_INTERNACAO, STATUS_TRIAGEM, AvisoDispensado, Convenio, Funcionario,
@@ -155,9 +165,52 @@ def _pode_servico_social():
     return g.pode_servico_social
 
 
+class _SobDemanda:
+    """Um sim/não que só é calculado se o template perguntar ({% if pode_ler_saude %}): cada um custa algumas consultas, e a maioria das telas
+    não usa nenhum."""
+
+    def __init__(self, funcao):
+        self._funcao = funcao
+
+    def __bool__(self):
+        return bool(self._funcao())
+
+
+def _pode(chave, funcao):
+    """Uma das regras de relatórios sigilosos de cadastros.py (pode_ler_social, pode_escrever_saude...) para quem está logado, guardada por requisição."""
+    if chave not in g:
+        setattr(g, chave, funcao(g.get("usuario")))
+    return g.get(chave)
+
+
+def _pode_ler_social():
+    """Lê o acolhimento social finalizado: quem escreve (Serviço Social e administrador) e quem recebeu a permissão de ler os sigilosos."""
+    return _pode("pode_ler_social", cadastros_.pode_ler_social)
+
+
+def _pode_escrever_saude():
+    """Abre a ficha de saúde para escrever: a enfermeira com COREN válido e o administrador."""
+    return _pode("pode_escrever_saude", cadastros_.pode_escrever_saude)
+
+
+def _pode_assinar_saude():
+    """Assina o que é da enfermagem (finalizar e alterar a anamnese, registros): só a enfermeira com COREN válido."""
+    return _pode("pode_assinar_saude", cadastros_.pode_assinar_saude)
+
+
+def _pode_ler_saude():
+    return _pode("pode_ler_saude", cadastros_.pode_ler_saude)
+
+
+def _pode_evoluir():
+    return _pode("pode_evoluir", cadastros_.pode_evoluir)
+
+
 # pode('triagem') nos templates esconde o que a pessoa não pode usar; permissoes_js() leva o mesmo ao JavaScript das listas
 app.context_processor(lambda: {"usuario_atual": g.get("usuario"), "e_administrador": _e_administrador(),
-                               "pode_servico_social": _pode_servico_social(),
+                               "pode_servico_social": _pode_servico_social(), "pode_ler_social": _SobDemanda(_pode_ler_social),
+                               "pode_escrever_saude": _SobDemanda(_pode_escrever_saude), "pode_assinar_saude": _SobDemanda(_pode_assinar_saude),
+                               "pode_ler_saude": _SobDemanda(_pode_ler_saude), "pode_evoluir": _SobDemanda(_pode_evoluir),
                                "pode": permissoes.pode, "permissoes_js": permissoes.do_usuario, "restricao_da_conta": g.get("restricao_da_conta")})
 
 # filtros usados nos templates: {{ p.cpf | cpf }}, {{ i.inicio | data }} ...
@@ -378,7 +431,8 @@ def home():
     hoje = date.today()
     lista_de_vagas = gerar_vagas()
     return render_template("home.html", avisos=gerar_avisos(_pode_servico_social(), contas.pendencias_da_conta(g.usuario),
-                                                  manutencao.avisos(app.instance_path) if _e_administrador() else ()), vagas=lista_de_vagas, vagas_total=totais(lista_de_vagas),
+                                                  manutencao.avisos(app.instance_path) if _e_administrador() else (),
+                                                  pode_assinar_saude=_pode_assinar_saude()), vagas=lista_de_vagas, vagas_total=totais(lista_de_vagas),
                            resumo=painel.resumo(), agenda=painel.agenda(hoje=hoje),
                            para_imprimir=painel.impressos_da_internacao(hoje=hoje) if permissoes.pode("documentos") else {"total": 0, "itens": []},
                            dias_da_agenda=painel.DIAS_DA_AGENDA, fim_do_tratamento=painel.tratamentos_a_finalizar(hoje=hoje),
@@ -437,7 +491,7 @@ def api_triagens():
     itens = db.session.execute(
         db.select(Internacao).filter(Internacao.status.in_(STATUS_TRIAGEM))
         .order_by(Internacao.primeiro_contato.desc().nulls_last(), Internacao.id.desc())).scalars()
-    pode = _pode_servico_social()       # a classificação de risco é do sigilo do Serviço Social: só vai para quem pode vê-la
+    pode = _pode_ler_social()           # a classificação de risco é do sigilo do Serviço Social: só vai para quem pode vê-la
     return jsonify([{**i.para_triagem(), **({"classificacao": servico_social.classificacao(i.relatorio_social)} if pode else {})}
                     for i in itens])
 
@@ -578,7 +632,7 @@ def ficha(id):
         if internacao.inicio and (internacao.status == "ativo" or internacao.termino) else None
     return render_template("ficha.html", i=internacao, envelope_atrasado=atrasado,
                            envelope_tempo=tempo_decorrido(dias) if dias is not None else "",
-                           acolhimento=_resumo_do_acolhimento(internacao),
+                           acolhimento=_resumo_do_acolhimento(internacao), saude=_resumo_da_saude(internacao),
                            idade=calcular_idade(p.nascimento, hoje),
                            previsao=previsao_termino(internacao.inicio, internacao.tratamento_ate) if internacao.inicio else None,
                            permanencia=_duracao(permanencia) if permanencia is not None and permanencia >= 0 else "",
@@ -598,16 +652,29 @@ def _duracao(dias):
 
 def _resumo_do_acolhimento(internacao):
     """O que a ficha mostra do acolhimento social. Quem não é do Serviço Social (nem administrador) só fica sabendo se
-    foi feito e quando: a classificação, o parecer, quem escreveu e os adendos são do sigilo."""
+    foi feito e quando: a classificação, o parecer e quem escreveu são do sigilo. O histórico de versões é só do administrador."""
     relatorio = internacao.relatorio_social
     situacao = servico_social.estado(relatorio)
     resumo = {"estado": situacao, "em": None}
     if situacao:
         resumo["em"] = relatorio.finalizado_em if situacao == "finalizado" else relatorio.atualizado_em
-    if situacao and _pode_servico_social():
+    if situacao and _pode_ler_social():
         resumo.update(por=(relatorio.assinatura or relatorio.finalizado_por) if situacao == "finalizado" else relatorio.atualizado_por,
-                      risco=servico_social.classificacao(relatorio), parecer=servico_social.resposta(relatorio, "parecer"),
-                      adendos=list(relatorio.adendos))
+                      risco=servico_social.classificacao(relatorio), parecer=servico_social.resposta(relatorio, "parecer"))
+    resumo["historico"] = bool(situacao) and _e_administrador() and versoes.tem_historico(internacao, versoes.SOCIAL)
+    return resumo
+
+
+def _resumo_da_saude(internacao):
+    """O que a ficha do acolhido mostra da ficha de saúde (só de quem já foi internado): em que pé está e quando. O conteúdo é sigiloso: quem não
+    pode lê-lo só fica sabendo se foi feita; quem pode vê também quem assinou. O histórico de versões é só do administrador."""
+    if internacao.e_triagem:
+        return None
+    resumo = ficha_saude.resumo(internacao)
+    ficha = internacao.ficha_saude
+    if resumo["estado"] and _pode_ler_saude():
+        resumo.update(por=(ficha.assinatura or ficha.finalizado_por) if resumo["estado"] == "finalizado" else ficha.atualizado_por)
+    resumo["historico"] = bool(resumo["estado"]) and _e_administrador() and versoes.tem_historico(internacao, versoes.SAUDE)
     return resumo
 
 
@@ -663,14 +730,15 @@ def _escolha_de_emissor():
     return request.args.get("emissor", type=int)
 
 
-def _barra(emissor_id, colunas=()):
+def _barra(emissor_id, colunas=(), detalhar=None):
     """Opções que aparecem acima do documento (só na tela): quem assina, se houver mais de um funcionário ativo,
-    e os botões de colunas do relatório anual. `colunas` = [(convênio, ativa, endereço de quem clicar), ...]."""
+    e os botões de colunas do relatório anual. `colunas` = [(convênio, ativa, endereço de quem clicar), ...]. `detalhar`: a escolha dos meses
+    cujas internações o relatório anual detalha ({"anos": relatorios.meses_disponiveis, "marcados": quantos, "sem": endereço sem o detalhamento})."""
     ativos = [f for f in cadastros_.funcionarios() if f.ativo]
     return {"emissor_id": emissor_id,
             "emissores": [(f.id, cadastros_.rotulo_do_emissor(f), cadastros_.sem_registro(f)) for f in ativos] if len(ativos) > 1 else [],
             "colunas": [{"nome": c.nome_tela, "tipo": c.cor, "ativa": ativa, "url": url} for c, ativa, url in colunas],
-            "manter": {k: v for k, v in request.args.items() if k == "colunas"}}
+            "manter": [(k, v) for k, v in request.args.items(multi=True) if k in ("colunas", "mes")], "detalhar": detalhar}
 
 
 def _mostrar(doc, docx, voltar, avisos=(), barra=None):
@@ -712,8 +780,8 @@ def baixar_declaracao(id):
 # envelope, relatório do Serviço Social) saem num documento só; ?itens=a,b escolhe quais (veja impressos.py).
 def _impresso(id):
     internacao = _buscar(Internacao, id)
-    itens = impressos.ler_itens(request.args.get("itens"), internacao, _pode_servico_social())
-    return internacao, itens, impressos.documento(internacao, itens, relatorios.hoje_no_brasil())
+    itens = impressos.ler_itens(request.args.get("itens"), internacao, _pode_ler_social())
+    return internacao, itens, impressos.documento(internacao, itens, relatorios.hoje_no_brasil(), saude=_pode_ler_saude())
 
 
 def _anotar_impressao(internacao, itens):
@@ -731,7 +799,7 @@ def ver_impressos(id):
     if request.args.get("imprimir"):                      # só quem vai imprimir; ver o documento não conta como impresso
         _anotar_impressao(internacao, itens)
     barra = {"itens": impressos.barra(internacao, itens, lambda novos: url_for("ver_impressos", id=id, itens=",".join(novos)),
-                                      _pode_servico_social())}
+                                      _pode_ler_social(), _pode_ler_saude())}
     return _mostrar(doc, url_for("baixar_impressos", id=id, itens=",".join(itens)), url_for("ficha", id=id), barra=barra)
 
 
@@ -746,8 +814,10 @@ def baixar_impressos(id):
 # Ficha, relatório livre, classificação de risco e parecer da assistente social (servico_social.py). Sigiloso: só o
 # Serviço Social e o administrador abrem; os outros veem na ficha se foi feito (e a folha-resumo nos impressos).
 def _so_servico_social(id):
-    """Quem não é do Serviço Social (nem administrador) volta para a ficha com o aviso, sem ver nada do conteúdo."""
-    flash("O acolhimento social é sigiloso: só a assistente social e o administrador abrem.")
+    """Quem não é do Serviço Social (nem administrador) volta para a ficha com o aviso, sem ver nada do conteúdo. Quem só tem a permissão de
+    ler os sigilosos lê o acolhimento finalizado, mas não escreve."""
+    flash("Você lê o acolhimento social depois de finalizado, mas só a assistente social e o administrador o escrevem." if _pode_ler_social()
+          else "O acolhimento social é sigiloso: só a assistente social e o administrador abrem.")
     return redirect(url_for("ficha", id=id))
 
 
@@ -758,28 +828,40 @@ def _tela_relatorio(internacao, form, erros, status=200):
         else servico_social.valores(internacao, relatorio, servico_social.campos_para(internacao))
     anterior = servico_social.anterior(internacao) if relatorio is None and form is None else None      # readmissão: de onde vieram as respostas
     return render_template("servico_social_form.html", i=internacao, secoes=servico_social.secoes_para(internacao), visual=servico_social.VISUAL, v=valores, erros=erros,
-                           relatorio=relatorio, acolhido=acolhido, responsavel=responsavel, anterior=anterior), status
+                           relatorio=relatorio, acolhido=acolhido, responsavel=responsavel, anterior=anterior,
+                           alteracao=versoes.ultima_alteracao(internacao, versoes.SOCIAL)), status
 
 
 @app.route("/internacoes/<int:id>/relatorio-social", methods=["GET", "POST"])
 def relatorio_social(id):
     internacao = _buscar(Internacao, id)
     if not _pode_servico_social():
+        finalizado = internacao.relatorio_social is not None and internacao.relatorio_social.finalizado
+        if request.method == "GET" and finalizado and _pode_ler_social():       # só leitura: abre o documento finalizado
+            return redirect(url_for("ver_impressos", id=id, itens="relatorio-social"))
         return _so_servico_social(id)
     relatorio = internacao.relatorio_social
-    if relatorio is not None and relatorio.finalizado:          # finalizado não se edita: abre o documento (e o adendo é na ficha)
-        if request.method == "POST":
-            flash("Este acolhimento social já foi finalizado. Para corrigir ou acrescentar, escreva um adendo.")
-            return redirect(url_for("ficha", id=id) + "#acolhimento")
-        return redirect(url_for("ver_impressos", id=id, itens="relatorio-social"))
+    finalizado = relatorio is not None and relatorio.finalizado
     if request.method == "POST":
         acao = request.form.get("acao")
-        if acao == "finalizar" and cadastros_.registro_pendente(g.get("usuario")):       # finalizar assina com o CRESS: sem ele, não
+        if finalizado and acao == "finalizar":
+            acao = "salvar"                                     # já finalizado: o que existe é alterar
+        if (acao == "finalizar" or finalizado) and cadastros_.registro_pendente(g.get("usuario")):       # finalizar e alterar levam o CRESS: sem ele, não
             return _tela_relatorio(internacao, request.form, {"_": cadastros_.MENSAGEM_SEM_CRESS}, 400)
+        antes = versoes.quantas(internacao, versoes.SOCIAL)
         _, erros = servicos.salvar_relatorio_social(internacao, request.form, _nome_do_usuario(), finalizar=acao == "finalizar",
                                                     assinatura=cadastros_.assinatura_do_usuario(g.get("usuario")))
         if erros:
             return _tela_relatorio(internacao, request.form, erros, 400)
+        if finalizado:
+            if versoes.quantas(internacao, versoes.SOCIAL) > antes:
+                auditoria.registrar("acolhimento.alterar", "internacao", id, internacao.pessoa_id, versoes.descricao_da_ultima(internacao, versoes.SOCIAL))
+                flash("Alterações salvas.")
+            else:
+                flash("Nada foi alterado.")
+            if acao == "imprimir":
+                return redirect(url_for("ver_impressos", id=id, itens="relatorio-social", imprimir=1))
+            return redirect(url_for("ficha", id=id) + "#acolhimento")
         auditoria.registrar("acolhimento.finalizar" if acao == "finalizar" else "acolhimento.salvar", "internacao", id, internacao.pessoa_id,
                             "a triagem foi marcada como rejeitada" if acao == "finalizar" and internacao.status == "rejeitado" else "")
         if acao == "finalizar":
@@ -793,25 +875,194 @@ def relatorio_social(id):
     return _tela_relatorio(internacao, None, {})
 
 
-@app.post("/internacoes/<int:id>/relatorio-social/adendo")
-def adendo_social(id):
-    internacao = _buscar(Internacao, id)
-    if not _pode_servico_social():
-        return _so_servico_social(id)
-    if cadastros_.registro_pendente(g.get("usuario")):          # o adendo também leva a assinatura, com o CRESS
-        flash(cadastros_.MENSAGEM_SEM_CRESS)
-        return redirect(url_for("ficha", id=id) + "#acolhimento")
-    erro = servicos.adicionar_adendo(internacao, request.form.get("texto"), cadastros_.assinatura_do_usuario(g.get("usuario")))
-    if not erro:
-        auditoria.registrar("acolhimento.adendo", "internacao", id, internacao.pessoa_id)
-    flash(erro or "Adendo registrado.")
-    return redirect(url_for("ficha", id=id) + "#acolhimento")
-
-
 @app.get("/internacoes/<int:id>/rejeicao")
 def relatorio_de_rejeicao(id):
     """O relatório de rejeição virou o parecer do acolhimento social: o endereço antigo continua levando para lá."""
     return redirect(url_for("relatorio_social", id=id))
+
+
+# ------------------------------------------------------- ficha de saúde
+# A anamnese, os registros de enfermagem e a evolução multiprofissional (ficha_saude.py), só depois que a pessoa foi internada. Escreve a
+# enfermagem (a enfermeira, com COREN válido, que também assina; o administrador só prepara o rascunho da anamnese) e, na evolução, cada
+# profissional da equipe na sua categoria. Lê quem escreve e quem recebeu a permissão de ler os relatórios sigilosos.
+def _internado(id):
+    """(internação, None) se a pessoa já foi internada; senão, (None, o redirecionamento para a ficha, com o aviso)."""
+    internacao = _buscar(Internacao, id)
+    if internacao.e_triagem:
+        flash("A ficha de saúde abre depois que a pessoa é internada.")
+        return None, redirect(url_for("ficha", id=id))
+    return internacao, None
+
+
+def _sem_acesso_a_saude(id):
+    flash("A ficha de saúde é sigilosa: só a enfermeira, o administrador e quem recebeu a permissão de ler os relatórios sigilosos abrem.")
+    return redirect(url_for("ficha", id=id))
+
+
+def _abas_da_saude(internacao, atual):
+    return {"atual": atual, "registros": len(internacao.registros_enfermagem), "evolucoes": len(internacao.evolucoes_saude)}
+
+
+def _tela_saude(internacao, form, erros, status=200):
+    ficha = internacao.ficha_saude
+    valores = ficha_saude.valores_do_formulario(form) if form is not None else ficha_saude.valores(internacao, ficha)
+    return render_template("saude_form.html", i=internacao, secoes=ficha_saude.SECOES, visual=ficha_saude.VISUAL, v=valores, erros=erros, ficha=ficha,
+                           abas=_abas_da_saude(internacao, "anamnese"), alteracao=versoes.ultima_alteracao(internacao, versoes.SAUDE)), status
+
+
+@app.route("/internacoes/<int:id>/saude", methods=["GET", "POST"], endpoint="ficha_saude")
+def saude_anamnese(id):
+    internacao, desvio = _internado(id)
+    if desvio:
+        return desvio
+    if not _pode_ler_saude():
+        return _sem_acesso_a_saude(id)
+    ficha = internacao.ficha_saude
+    finalizada = ficha is not None and ficha.finalizado
+    if finalizada and request.method == "GET" and not _pode_assinar_saude():     # finalizada: só a enfermeira a abre para alterar; os outros abrem o documento
+        return redirect(url_for("ver_impressos", id=id, itens="multiprofissional"))
+    if not _pode_escrever_saude():                           # só leitura (a permissão de ler os sigilosos): lê depois de finalizada
+        flash("Você lê a ficha de saúde, mas só a enfermeira a escreve." if request.method == "POST"
+              else "A ficha de saúde ainda não foi finalizada: você a lê depois que a enfermeira finalizar.")
+        return redirect(url_for("ficha", id=id))
+    if request.method == "POST":
+        acao = request.form.get("acao")
+        if finalizada and not _pode_assinar_saude():
+            flash("Só a enfermeira altera a ficha de saúde já finalizada.")
+            return redirect(url_for("ficha", id=id) + "#saude")
+        if finalizada and acao == "finalizar":
+            acao = "salvar"                                     # já finalizada: o que existe é alterar
+        if acao == "finalizar" and not _pode_assinar_saude():     # finalizar assina com o COREN: sem ele (ou sem ser a enfermeira), não
+            return _tela_saude(internacao, request.form, {"_": cadastros_.MENSAGEM_SEM_COREN}, 400)
+        antes = versoes.quantas(internacao, versoes.SAUDE)
+        _, erros = servicos.salvar_ficha_saude(internacao, request.form, _nome_do_usuario(), finalizar=acao == "finalizar",
+                                               assinatura=cadastros_.assinatura_do_usuario(g.get("usuario")))
+        if erros:
+            return _tela_saude(internacao, request.form, erros, 400)
+        if finalizada:
+            if versoes.quantas(internacao, versoes.SAUDE) > antes:
+                auditoria.registrar("saude.alterar", "internacao", id, internacao.pessoa_id, versoes.descricao_da_ultima(internacao, versoes.SAUDE))
+                flash("Alterações salvas.")
+            else:
+                flash("Nada foi alterado.")
+            if acao == "imprimir":
+                return redirect(url_for("ver_impressos", id=id, itens="multiprofissional", imprimir=1))
+            return redirect(url_for("ficha", id=id) + "#saude")
+        auditoria.registrar("saude.finalizar" if acao == "finalizar" else "saude.salvar", "internacao", id, internacao.pessoa_id)
+        if acao == "finalizar":
+            flash("Ficha de saúde finalizada.")
+            return redirect(url_for("ficha", id=id) + "#saude")
+        if acao == "imprimir":
+            return redirect(url_for("ver_impressos", id=id, itens="multiprofissional", imprimir=1))
+        flash("Rascunho salvo.")
+        return redirect(url_for("ficha_saude", id=id))
+    return _tela_saude(internacao, None, {})
+
+
+# ------------------------------------------------------- histórico de versões (só o administrador)
+def _historico_do_administrador(id, tipo):
+    """(internação, None) para o administrador; para os outros, (None, o redirecionamento para a ficha, com o aviso)."""
+    if tipo not in versoes.TIPOS:
+        abort(404)
+    internacao = _buscar(Internacao, id)
+    if not _e_administrador():
+        flash("O histórico de versões é do administrador.")
+        return None, redirect(url_for("ficha", id=id))
+    return internacao, None
+
+
+@app.get("/internacoes/<int:id>/historico/<tipo>", endpoint="historico_do_relatorio")
+def historico_de_versoes(id, tipo):
+    internacao, desvio = _historico_do_administrador(id, tipo)
+    if desvio:
+        return desvio
+    return render_template("historico_relatorio.html", i=internacao, tipo=tipo, titulo=versoes.TIPOS[tipo], itens=list(reversed(versoes.historico(internacao, tipo))))
+
+
+@app.get("/internacoes/<int:id>/historico/<tipo>/<int:numero>", endpoint="ver_versao_do_relatorio")
+def abrir_versao(id, tipo, numero):
+    """O documento do relatório como estava naquela versão (só para ler e imprimir)."""
+    internacao, desvio = _historico_do_administrador(id, tipo)
+    if desvio:
+        return desvio
+    versao = versoes.versao(internacao, tipo, numero) or abort(404)
+    hoje = relatorios.hoje_no_brasil()
+    if tipo == versoes.SOCIAL:
+        blocos = [documentos.Pagina(), *servico_social.blocos(internacao, versoes.como_relatorio(internacao.relatorio_social, versao), hoje)]
+    else:
+        ficha = versoes.como_relatorio(internacao.ficha_saude, versao)
+        blocos = fichas.anamnese(internacao.pessoa.nome, ficha_saude.Conteudo(v=ficha_saude.valores(internacao, ficha), ficha=ficha))
+    titulo = f"{versoes.TIPOS[tipo]} - versão {numero} - {internacao.pessoa.nome}"
+    return _mostrar(documentos.Documento(nome_arquivo=titulo, titulo=titulo, blocos=blocos, fonte="Arial", tamanho=12, margem_lateral=720), "",
+                    url_for("historico_do_relatorio", id=id, tipo=tipo))
+
+
+def _tela_registros(internacao, aba, form=None, erros=None, status=200, categoria=""):
+    """Registros de enfermagem ou evolução multiprofissional: lista (a mais nova em cima) e, para quem escreve, o formulário."""
+    erros = erros or {}
+    if aba == "enfermagem":
+        itens = sorted(internacao.registros_enfermagem, key=lambda r: (r.quando, r.id), reverse=True)
+        pode_escrever = _pode_assinar_saude()
+        categorias = []
+    else:
+        categorias = [(chave, ficha_saude.CATEGORIAS_DE_EVOLUCAO[chave][0]) for chave in _categorias_de_evolucao()]
+        itens = [e for e in sorted(internacao.evolucoes_saude, key=lambda e: (e.criado_em, e.id), reverse=True) if not categoria or e.categoria == categoria]
+        pode_escrever = _pode_evoluir()
+    agora = datetime.now().strftime("%Y-%m-%dT%H:%M")
+    return render_template("saude_registros.html", i=internacao, aba=aba, itens=itens, pode_escrever=pode_escrever,
+                           d=form if form else ({"quando": agora} if aba == "enfermagem" else {}), erros=erros,
+                           abas=_abas_da_saude(internacao, aba), categorias=categorias, categoria=categoria,
+                           nomes_das_categorias={k: v[0] for k, v in ficha_saude.CATEGORIAS_DE_EVOLUCAO.items()}, finalizada=bool(internacao.ficha_saude and internacao.ficha_saude.finalizado)), status
+
+
+def _categorias_de_evolucao():
+    """As categorias em que quem está logado escreve na evolução: a da função dele na equipe (o administrador, sem função, escreve como
+    'outros profissionais', e também nela se tiver uma função)."""
+    funcionario = cadastros_.funcionario_do_usuario(g.get("usuario"))
+    propria = ficha_saude.categoria_do(cadastros_.profissao_de(funcionario))
+    return [propria] + (["outros"] if _e_administrador() and propria != "outros" else [])
+
+
+@app.route("/internacoes/<int:id>/saude/enfermagem", methods=["GET", "POST"], endpoint="saude_enfermagem")
+def saude_registros_de_enfermagem(id):
+    internacao, desvio = _internado(id)
+    if desvio:
+        return desvio
+    if not _pode_ler_saude():
+        return _sem_acesso_a_saude(id)
+    if request.method == "POST":
+        if not _pode_assinar_saude():
+            flash(cadastros_.MENSAGEM_SEM_COREN if _pode_escrever_saude() else "Só a enfermeira faz registros de enfermagem.")
+            return redirect(url_for("saude_enfermagem", id=id))
+        registro, erros = servicos.registrar_enfermagem(internacao, request.form, cadastros_.assinatura_do_usuario(g.get("usuario")))
+        if erros:
+            return _tela_registros(internacao, "enfermagem", request.form, erros, 400)
+        auditoria.registrar("saude.enfermagem", "internacao", id, internacao.pessoa_id)
+        flash("Registro de enfermagem salvo.")
+        return redirect(url_for("saude_enfermagem", id=id))
+    return _tela_registros(internacao, "enfermagem")
+
+
+@app.route("/internacoes/<int:id>/saude/evolucao", methods=["GET", "POST"], endpoint="saude_evolucao")
+def saude_evolucao_multiprofissional(id):
+    internacao, desvio = _internado(id)
+    if desvio:
+        return desvio
+    if not (_pode_ler_saude() or _pode_evoluir()):           # quem escreve na evolução também a lê
+        return _sem_acesso_a_saude(id)
+    if request.method == "POST":
+        if not _pode_evoluir():
+            flash("Só quem tem função na equipe escreve na evolução multiprofissional. O administrador define a função em Cadastros > Funcionários.")
+            return redirect(url_for("saude_evolucao", id=id))
+        erro = servicos.registrar_evolucao(internacao, request.form.get("texto"), request.form.get("categoria"), _categorias_de_evolucao(),
+                                           cadastros_.assinatura_do_usuario(g.get("usuario")))
+        if erro:
+            return _tela_registros(internacao, "evolucao", request.form, {"_": erro}, 400)
+        auditoria.registrar("saude.evolucao", "internacao", id, internacao.pessoa_id, "categoria: " + request.form.get("categoria", ""))
+        flash("Anotação registrada.")
+        return redirect(url_for("saude_evolucao", id=id))
+    categoria = request.args.get("categoria", "")
+    return _tela_registros(internacao, "evolucao", categoria=categoria if categoria in ficha_saude.CATEGORIAS_DE_EVOLUCAO else "")
 
 
 # ----------------------------------------------------------- excluir registros
@@ -923,23 +1174,27 @@ def ver_relatorio_anual():
     emissor, emissor_id = _emissor()
     escolhidas, disponiveis = _colunas_do_relatorio_anual(hoje)
     ativas = {c.slug for c in escolhidas}
+    meses = relatorios.ler_meses(request.args.getlist("mes"), hoje)
 
-    def endereco(slugs, endpoint="ver_relatorio_anual"):
+    def endereco(slugs, endpoint="ver_relatorio_anual", com_meses=True):
         # a ordem das colunas é sempre a do cadastro, qualquer que seja a ordem dos cliques
         ordenados = [c.slug for c in disponiveis if c.slug in slugs]
-        return url_for(endpoint, colunas=",".join(ordenados) or None, emissor=_escolha_de_emissor())
+        return url_for(endpoint, colunas=",".join(ordenados) or None, emissor=_escolha_de_emissor(),
+                       mes=[f"{a}-{m:02d}" for a, m in meses] if com_meses and meses else None)
 
     botoes = [(c, c.slug in ativas, endereco(ativas - {c.slug} if c.slug in ativas else ativas | {c.slug}))
               for c in disponiveis]
-    return _mostrar(relatorios.documento_anual(hoje, escolhidas, emissor), endereco(ativas, "baixar_relatorio_anual"),
-                    url_for("pagina_relatorios"), barra=_barra(emissor_id, botoes),
+    anos = relatorios.meses_disponiveis(hoje, set(meses))
+    detalhar = {"anos": anos, "marcados": len(meses), "sem": endereco(ativas, com_meses=False)} if anos else None
+    return _mostrar(relatorios.documento_anual(hoje, escolhidas, emissor, meses), endereco(ativas, "baixar_relatorio_anual"),
+                    url_for("pagina_relatorios"), barra=_barra(emissor_id, botoes, detalhar),
                     avisos=[t for t in (relatorios.aviso_do_resumo(relatorios.resumo_anual(hoje)),) if t])
 
 
 @app.get("/relatorios/passaram-pela-casa.docx")
 def baixar_relatorio_anual():
     hoje = relatorios.hoje_no_brasil()
-    return _baixar(relatorios.documento_anual(hoje, _colunas_do_relatorio_anual(hoje)[0], _emissor()[0]))
+    return _baixar(relatorios.documento_anual(hoje, _colunas_do_relatorio_anual(hoje)[0], _emissor()[0], relatorios.ler_meses(request.args.getlist("mes"), hoje)))
 
 
 # ================================================================= cadastros
@@ -999,10 +1254,12 @@ def editar_convenio(id):
 def lista_funcionarios():
     lista = cadastros_.funcionarios()
     logins = {u.nome: u for u in db.session.execute(db.select(Usuario)).scalars()}
-    return render_template("cadastro_funcionarios.html", funcionarios=lista, logins=logins)
+    return render_template("cadastro_funcionarios.html", funcionarios=lista, logins=logins, funcoes=cadastros_.PROFISSOES)
 
 
-CAMPOS_DO_FUNCIONARIO = ("nome", "cargo", "ativo", "padrao", "usuario", "nivel_id", "servico_social", "registro_profissional")
+CAMPOS_DO_FUNCIONARIO = ("nome", "cargo", "ativo", "padrao", "usuario", "nivel_id", "profissao", "le_sigilosos", "registro_profissional")
+EXEMPLOS_DE_REGISTRO = {"assistente_social": "ex.: CRESS 12345 · 6ª Região", "enfermeiro": "ex.: COREN-SP 123.456-ENF", "medico": "ex.: CRM-SP 123456",
+                        "nutricionista": "ex.: CRN-3 12345", "psicologo": "ex.: CRP 06/12345"}
 
 
 def _foto_do_funcionario(funcionario):
@@ -1031,6 +1288,9 @@ def _tela_funcionario(funcionario, dados, erros, status=200):
     dados = {k: v for k, v in dados.items() if k not in ("senha", "confirmacao")}
     login_do_usuario = autenticacao.buscar_usuario(login) if login else None
     return render_template("cadastro_funcionario_form.html", d=dados, erros=erros, funcionario=funcionario,
+                           profissoes=[(chave, rotulo) for chave, (rotulo, _) in cadastros_.PROFISSOES.items()],
+                           funcao_atual=cadastros_.PROFISSOES.get(cadastros_.profissao_de(funcionario), ("",))[0],
+                           exemplos_de_registro=EXEMPLOS_DE_REGISTRO,
                            usuarios=cadastros_.usuarios_para_vincular(funcionario), niveis=cadastros_.niveis_para_escolher(funcionario),
                            pode_acessos=cadastros_.pode_gerenciar_acessos(g.usuario), login_atual=login, nivel_atual=nivel,
                            totp_ativo=bool(login_do_usuario and login_do_usuario.totp_ativo)), status
@@ -1069,7 +1329,8 @@ def editar_funcionario(id):
         return _tela_funcionario(funcionario, request.form, erros, 400)
     dados = {"nome": funcionario.nome, "cargo": funcionario.cargo, "usuario": funcionario.usuario,
              "nivel_id": str(funcionario.nivel_id or ""), "ativo": "1" if funcionario.ativo else "",
-             "padrao": "1" if funcionario.padrao else "", "servico_social": "1" if funcionario.servico_social else "",
+             "padrao": "1" if funcionario.padrao else "", "profissao": cadastros_.profissao_de(funcionario),
+             "le_sigilosos": "1" if funcionario.le_sigilosos else "",
              "registro_profissional": funcionario.registro_profissional, "email": funcionario.email}
     return _tela_funcionario(funcionario, dados, {})
 

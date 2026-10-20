@@ -14,8 +14,9 @@ Como funciona (plano de segurança, fase 1 — docs/plano-de-seguranca.md):
     logado conta como administrador (cadastros.pode_gerenciar_acessos), senão ninguém conseguiria vincular o primeiro.
   * Login sem funcionário ativo vinculado tem o nível de menos acesso (o último da cascata); login de funcionário
     **desativado** não entra (cadastros.acesso_desativado), nem com a sessão já aberta.
-  * Fora da cascata: o acolhimento social (sigiloso) é pela marca "Serviço Social" no cadastro do funcionário
-    (cadastros.pode_servico_social), porque é uma função, não uma hierarquia.
+  * Fora da cascata: o acolhimento social e a ficha de saúde (sigilosos) são pela função da pessoa no cadastro do funcionário (assistente
+    social, enfermeira com COREN válido: cadastros.pode_servico_social e pode_assinar_saude) e, para só ler, por uma permissão dada pessoa a pessoa
+    (cadastros.pode_ler_sigilosos), porque são funções e acessos pontuais, não uma hierarquia.
   * O que só o administrador faz (criar usuário e senha, mexer nos níveis e nas permissões, lixeira) é fixo: não se configura.
 
 Toda negação vai para o registro do servidor (logs/servidor.log), com quem foi, o quê e qual permissão faltou.
@@ -84,8 +85,9 @@ PERMISSOES = tuple(p for grupo in GRUPOS for p in grupo.permissoes)
 POR_CHAVE = {p.chave: p for p in PERMISSOES}
 CONFIGURAVEIS = tuple(p for p in PERMISSOES if not p.fixa and not p.todos)
 
-# O acolhimento social não está na cascata: quem lê e escreve é o administrador e quem tem a marca "Serviço Social" no
-# cadastro do funcionário (cadastros.pode_servico_social). A tela de permissões mostra isso numa linha à parte.
+# O acolhimento social e a ficha de saúde não estão na cascata: quem escreve é o administrador e quem tem a função no cadastro do funcionário
+# (cadastros.pode_servico_social, pode_escrever_saude); quem só lê recebeu a permissão `le_sigilosos` (cadastros.pode_ler_sigilosos). A tela de
+# permissões mostra isso em linhas à parte.
 ACOLHIMENTO_SOCIAL = "Acolhimento social (sigiloso)"
 
 
@@ -174,19 +176,34 @@ def _quem_edita():
     return "triagem" if internacao is not None and internacao.e_triagem else "internacao"
 
 
-# Uma permissão, várias (basta uma delas) ou uma função que devolve isso. Rota que não está aqui fica FECHADA.
-# (relatorio_social e adendo_social só pedem "ver" aqui: o sigilo do acolhimento é conferido na própria rota, com o aviso
-# explicando por que não abriu — veja _pode_servico_social em app.py.)
+# Os impressos dos relatórios sigilosos (o acolhimento social e a ficha de saúde): pedidos sozinhos, quem pode lê-los (quem escreve e quem recebeu a
+# permissão de ler os sigilosos) os abre mesmo num nível sem "documentos". Pedidos com outros impressos (prontuário, exames...) continuam pedindo
+# "documentos".
+QUEM_LE_O_IMPRESSO = {"relatorio-social": cadastros.pode_ler_social, "resumo-social": cadastros.pode_ler_social, "multiprofissional": cadastros.pode_ler_saude}
+
+
+def _quem_imprime():
+    itens = {p.strip() for p in (request.args.get("itens") or "").split(",") if p.strip()}
+    if itens and itens <= set(QUEM_LE_O_IMPRESSO) and all(QUEM_LE_O_IMPRESSO[item](g.get("usuario")) for item in itens):
+        return LIVRE
+    return "documentos"
+
+
+# Uma permissão, várias (basta uma delas) ou uma função que devolve isso (ou LIVRE). Rota que não está aqui fica FECHADA.
+# (relatorio_social, o histórico de versões e as rotas da ficha de saúde só pedem "ver" aqui: o sigilo é conferido na própria rota, com o aviso
+# explicando por que não abriu — veja _pode_servico_social, _pode_ler_saude e _pode_assinar_saude em app.py.)
 REGRAS = {
     "sair": LIVRE, "alterar_senha": LIVRE, "seguranca": LIVRE, "enviar_codigo_email": LIVRE, "confirmar_email": LIVRE,
     "ativar_autenticador": LIVRE, "desativar_autenticador": LIVRE,       # (a página de entrada, o código e o "esqueci minha senha" são autenticacao.ROTAS_LIVRES)
 
     "home": "ver", "api_pessoas": "ver", "lista_triagens": "ver", "api_triagens": "ver", "lista_internos": "ver",
-    "api_internos": "ver", "ficha": "ver", "relatorio_social": "ver", "adendo_social": "ver", "relatorio_de_rejeicao": "ver",
+    "api_internos": "ver", "ficha": "ver", "relatorio_social": "ver", "relatorio_de_rejeicao": "ver",
+    "ficha_saude": "ver", "saude_enfermagem": "ver", "saude_evolucao": "ver",
+    "historico_do_relatorio": "ver", "ver_versao_do_relatorio": "ver",
     "aviso_ciente": ("triagem", "internacao", "baixa"),
 
     "ver_prontuario": "documentos", "baixar_prontuario": "documentos", "ver_declaracao": "documentos",
-    "baixar_declaracao": "documentos", "ver_impressos": "documentos", "baixar_impressos": "documentos",
+    "baixar_declaracao": "documentos", "ver_impressos": _quem_imprime, "baixar_impressos": _quem_imprime,
     "pagina_relatorios": "relatorios", "ver_relatorio": "relatorios", "baixar_relatorio": "relatorios",
     "ver_relatorio_anual": "relatorios", "baixar_relatorio_anual": "relatorios",
 
@@ -227,6 +244,8 @@ def exigir_permissao():
     if regra == LIVRE:
         return None
     chaves = regra() if callable(regra) else regra
+    if chaves == LIVRE:
+        return None
     chaves = (chaves,) if isinstance(chaves, str) else tuple(chaves)
     if pode(*chaves, usuario=usuario):
         return None

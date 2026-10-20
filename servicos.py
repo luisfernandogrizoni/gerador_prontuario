@@ -1,6 +1,6 @@
 """
 Regras de negócio: validar e gravar triagens e prontuários, mudar status, gravar o acolhimento social (ficha, relatório
-e parecer da assistente social, com finalização e adendos), lançar parcelas e unificar cadastros duplicados.
+e parecer da assistente social, com finalização e histórico de versões), lançar parcelas e unificar cadastros duplicados.
 
 As rotas (app.py) só chamam estas funções. Cada função de gravação devolve
 (objeto, erros): se `erros` vier preenchido, nada foi gravado e o formulário
@@ -10,9 +10,11 @@ volta para a tela com as mensagens ao lado de cada campo.
 from datetime import date, datetime
 
 import catalogo
+import ficha_saude
 import servico_social
-from modelos import (ENVELOPE_PENDENTE, ENVELOPE_RECEBIDO, STATUS, STATUS_TRIAGEM, AdendoSocial, Internacao, Parcela,
-                     Pessoa, RelatorioSocial, db)
+import versoes
+from modelos import (ENVELOPE_PENDENTE, ENVELOPE_RECEBIDO, STATUS, STATUS_TRIAGEM, EvolucaoSaude, FichaSaude,
+                     Internacao, Parcela, Pessoa, RegistroEnfermagem, RelatorioSocial, db)
 from prontuario import CONVENIO_A_DEFINIR, ler_data, ler_valor
 from relatorios import hoje_no_brasil
 from validacao import cpf_valido, fmt_cpf, ler_hora, normalizar_nome, rg_valido, so_digitos
@@ -245,42 +247,88 @@ def registrar_envelope(internacao, situacao):
 
 # ------------------------------------------------------- acolhimento social
 def salvar_relatorio_social(internacao, form, usuario="", finalizar=False, assinatura=""):
-    """Grava o que a assistente social digitou (veja servico_social.py). Devolve (relatório, erros): com erros, nada foi
-    gravado. `finalizar`: confere o mínimo da conclusão (relatório, classificação geral e parecer), trava o acolhimento
-    com data, hora e `assinatura` de quem finalizou e, se o parecer é 'não condizente', marca a triagem como rejeitada.
-    Depois de finalizado só entra adendo (adicionar_adendo)."""
+    """Grava o que a assistente social digitou (veja servico_social.py). Devolve (relatório, erros): com erros, nada foi gravado. `finalizar`: confere
+    o mínimo da conclusão (relatório, classificação geral e parecer), guarda data, hora e `assinatura` de quem finalizou e, se o parecer é 'não
+    condizente', marca a triagem como rejeitada. Um acolhimento já finalizado continua podendo ser alterado (sem adendos): vale o mesmo mínimo, e cada
+    alteração vira uma versão no histórico (versoes.py); se nada mudou, não vira nada."""
     relatorio = internacao.relatorio_social
-    if relatorio is not None and relatorio.finalizado:
-        return None, {"_": "Este acolhimento social já foi finalizado. Para corrigir ou acrescentar, escreva um adendo."}
+    finalizado = relatorio is not None and relatorio.finalizado
     dados, erros = servico_social.ler_formulario(form, servico_social.campos_para(internacao))
-    if finalizar:
+    if finalizar or finalizado:
         erros = {**servico_social.validar_finalizacao(dados, internacao), **erros}
     if erros:
         return None, erros
+    campos = versoes.campos_alterados(versoes.SOCIAL, relatorio.dados if relatorio is not None else {}, dados)
+    if finalizado and not campos:
+        return relatorio, {}                    # nada mudou: não é uma versão nova
+    if finalizado:
+        versoes.garantir_original(internacao, versoes.SOCIAL, relatorio)      # antes de trocar as respostas
     relatorio = relatorio or RelatorioSocial(internacao=internacao)
     relatorio.dados = dados                 # um dicionário novo: é assim que o SQLAlchemy percebe a mudança no JSON
     relatorio.atualizado_por = usuario[:50]
-    if finalizar:
-        relatorio.situacao, relatorio.finalizado_em = "finalizado", datetime.now()
+    agora = datetime.now()
+    if finalizar and not finalizado:
+        relatorio.situacao, relatorio.finalizado_em = "finalizado", agora
         relatorio.finalizado_por, relatorio.assinatura = usuario[:50], assinatura[:200]
-        if dados["parecer"] == servico_social.NAO_CONDIZENTE and internacao.e_triagem:
-            internacao.status = "rejeitado"
+        versoes.registrar(internacao, versoes.SOCIAL, versoes.FINALIZADO, dados, [], assinatura or usuario, agora)
+    elif finalizado:
+        versoes.registrar(internacao, versoes.SOCIAL, versoes.ALTERADO, dados, campos, assinatura or usuario, agora)
+    if (finalizar or finalizado) and dados["parecer"] == servico_social.NAO_CONDIZENTE and internacao.e_triagem:
+        internacao.status = "rejeitado"
     db.session.add(relatorio)
     db.session.commit()
     return relatorio, {}
 
 
-def adicionar_adendo(internacao, texto, assinatura):
-    """Acrescenta um adendo a um acolhimento social já finalizado (não se edita nem se apaga). Devolve o erro, ou None."""
-    relatorio = internacao.relatorio_social
-    texto = (texto or "").strip()
-    if relatorio is None or not relatorio.finalizado:
-        return "O adendo só vale depois de finalizar o acolhimento social."
-    if not texto:
-        return "Escreva o adendo."
-    if len(texto) > 3000:
-        return f"O adendo pode ter até 3000 caracteres (tem {len(texto)})."
-    relatorio.adendos.append(AdendoSocial(texto=texto, criado_por=assinatura[:200]))
+# ------------------------------------------------------- ficha de saúde (ficha_saude.py)
+def salvar_ficha_saude(internacao, form, usuario="", finalizar=False, assinatura=""):
+    """Grava a anamnese que a enfermagem digitou. Devolve (ficha, erros): com erros, nada foi gravado. `finalizar` confere o mínimo (altura, peso e
+    as respostas sobre alergia, HIV/AIDS e tuberculose) e guarda data, hora e a `assinatura` de quem finalizou. Uma ficha já finalizada continua podendo
+    ser alterada (sem adendos): vale o mesmo mínimo, e cada alteração vira uma versão no histórico (versoes.py); se nada mudou, não vira nada."""
+    ficha = internacao.ficha_saude
+    finalizada = ficha is not None and ficha.finalizado
+    dados, erros = ficha_saude.ler_formulario(form)
+    if finalizar or finalizada:
+        erros = {**ficha_saude.validar_finalizacao(dados), **erros}
+    if erros:
+        return None, erros
+    campos = versoes.campos_alterados(versoes.SAUDE, ficha.dados if ficha is not None else {}, dados)
+    if finalizada and not campos:
+        return ficha, {}                        # nada mudou: não é uma versão nova
+    if finalizada:
+        versoes.garantir_original(internacao, versoes.SAUDE, ficha)           # antes de trocar as respostas
+    ficha = ficha or FichaSaude(internacao=internacao)
+    ficha.dados = dados                     # um dicionário novo: é assim que o SQLAlchemy percebe a mudança no JSON
+    ficha.atualizado_por = usuario[:50]
+    agora = datetime.now()
+    if finalizar and not finalizada:
+        ficha.situacao, ficha.finalizado_em = "finalizado", agora
+        ficha.finalizado_por, ficha.assinatura = usuario[:50], assinatura[:200]
+        versoes.registrar(internacao, versoes.SAUDE, versoes.FINALIZADO, dados, [], assinatura or usuario, agora)
+    elif finalizada:
+        versoes.registrar(internacao, versoes.SAUDE, versoes.ALTERADO, dados, campos, assinatura or usuario, agora)
+    db.session.add(ficha)
+    db.session.commit()
+    return ficha, {}
+
+
+def registrar_enfermagem(internacao, form, assinatura, agora=None):
+    """Um registro novo da Sistematização da Assistência de Enfermagem (sinais vitais, glicemia, perdas e evolução). Devolve (registro, erros)."""
+    dados, erros = ficha_saude.ler_registro(form, agora)
+    if erros:
+        return None, erros
+    registro = RegistroEnfermagem(internacao=internacao, criado_por=assinatura[:200], **dados)
+    db.session.add(registro)
+    db.session.commit()
+    return registro, {}
+
+
+def registrar_evolucao(internacao, texto, categoria, permitidas, assinatura):
+    """Uma anotação nova na evolução multiprofissional, na `categoria` (uma das `permitidas` a quem escreve). Devolve o erro, ou None."""
+    texto, erro = ficha_saude.ler_evolucao(texto, categoria, permitidas)
+    if erro:
+        return erro
+    db.session.add(EvolucaoSaude(internacao=internacao, categoria=categoria, texto=texto, criado_por=assinatura[:200]))
     db.session.commit()
     return None
 

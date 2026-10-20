@@ -298,6 +298,12 @@ def fecho(hoje, emissor=None):
 
 
 # ============================================================ gerador do Word
+def _quebras(texto):
+    """O navegador envia o Enter de um campo de texto como CR+LF, e o Word conta o CR e o LF como duas quebras: cada Enter virava uma linha em
+    branco no documento. Aqui toda quebra vira uma só (LF)."""
+    return (texto or "").replace("\r\n", "\n").replace("\r", "\n")
+
+
 def _fonte(run, nome, tamanho, negrito=False, italico=False, cor=None, sublinhado=False):
     run.bold, run.italic, run.underline = negrito, italico, sublinhado
     run.font.size = Pt(tamanho)
@@ -470,7 +476,7 @@ def _paragrafo_docx(d, doc, bloco, alvo=None, quebra=None):
     if bloco.numero:
         _fonte(p.add_run(bloco.numero + "\t"), fonte, tamanho)
     for t in bloco.trechos():
-        _fonte(p.add_run(t.texto), fonte, tamanho, t.negrito, t.italico, sublinhado=t.sublinhado)
+        _fonte(p.add_run(_quebras(t.texto)), fonte, tamanho, t.negrito, t.italico, sublinhado=t.sublinhado)
     return p
 
 
@@ -495,7 +501,7 @@ def _tabela_docx(d, doc, bloco):
             p = celula.paragraphs[0]
             p.paragraph_format.space_after = Pt(0)
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER if cabecalho else ALINHAMENTO_DOCX[bloco.colunas[coluna].alinhamento]
-            _fonte(p.add_run(str(valor)), doc.fonte, bloco.tamanho, negrito=cabecalho or negrito)
+            _fonte(p.add_run(_quebras(str(valor))), doc.fonte, bloco.tamanho, negrito=cabecalho or negrito)
             if cabecalho and bloco.sombreado:
                 _filho(celula._tc.get_or_add_tcPr(), "w:shd", val="clear", color="auto", fill="D9D9D9")
 
@@ -523,7 +529,7 @@ def _formulario_docx(d, doc, bloco):
             p = alvo.paragraphs[0]
             p.paragraph_format.space_after = Pt(3)
             if celula.texto:
-                _fonte(p.add_run(celula.texto), doc.fonte, bloco.tamanho, negrito=celula.negrito)
+                _fonte(p.add_run(_quebras(celula.texto)), doc.fonte, bloco.tamanho, negrito=celula.negrito)
             coluna += celula.span
 
 
@@ -606,7 +612,7 @@ def para_docx(doc):
                 _paragrafo_docx(d, doc, bloco, quebra=quebra)
             elif bloco.tipo in ("tabela", "formulario", "pauta", "assinaturas", "colunas"):
                 if bloco.antes:                              # o espaço antes de uma tabela é um parágrafo vazio
-                    _paragrafo_docx(d, doc, Paragrafo([""], antes=bloco.antes, tamanho=1))
+                    _paragrafo_docx(d, doc, Paragrafo([""], antes=bloco.antes, tamanho=1, unido_ao_proximo=True))      # junto da tabela: a pergunta que vem antes não se solta das linhas dela
                 if bloco.tipo in ("tabela", "formulario"):
                     {"tabela": _tabela_docx, "formulario": _formulario_docx}[bloco.tipo](d, doc, bloco)
                 else:

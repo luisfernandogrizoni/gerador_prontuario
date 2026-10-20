@@ -116,7 +116,37 @@
                 {% if loop.first %}
                 <td><span class="celula"><span class="sinal sim" aria-hidden="true">✓</span><span class="so-leitor">Pode</span><span class="nome-nivel">{{ n.nome }}</span></span></td>
                 {% elif loop.index == 2 %}
-                <td colspan="{{ niveis | length - 1 }}"><span class="pilula-marca">Quem tem a marca Serviço Social no cadastro do funcionário</span></td>
+                <td colspan="{{ niveis | length - 1 }}"><span class="pilula-marca">Quem tem a função Assistente social no cadastro do funcionário</span></td>
+                {% endif %}
+              {% endfor %}
+            </tr>
+            <tr>
+              <th scope="row"><svg class="icone" aria-hidden="true"><use href="#i-cadeado"/></svg>Escrever a ficha de saúde<small>Anamnese e registros de enfermagem; só finaliza e assina com COREN válido</small></th>
+              {% for n in niveis %}
+                {% if loop.first %}
+                <td><span class="celula"><span class="sinal sim" aria-hidden="true">✓</span><span class="so-leitor">Pode</span><span class="nome-nivel">{{ n.nome }}</span></span></td>
+                {% elif loop.index == 2 %}
+                <td colspan="{{ niveis | length - 1 }}"><span class="pilula-marca">A enfermeira: função Enfermeiro(a) e COREN válido no cadastro do funcionário</span></td>
+                {% endif %}
+              {% endfor %}
+            </tr>
+            <tr>
+              <th scope="row"><svg class="icone" aria-hidden="true"><use href="#i-cadeado"/></svg>Escrever na evolução multiprofissional<small>Cada profissional escreve na sua categoria</small></th>
+              {% for n in niveis %}
+                {% if loop.first %}
+                <td><span class="celula"><span class="sinal sim" aria-hidden="true">✓</span><span class="so-leitor">Pode</span><span class="nome-nivel">{{ n.nome }}</span></span></td>
+                {% elif loop.index == 2 %}
+                <td colspan="{{ niveis | length - 1 }}"><span class="pilula-marca">Quem tem função na equipe no cadastro do funcionário</span></td>
+                {% endif %}
+              {% endfor %}
+            </tr>
+            <tr>
+              <th scope="row"><svg class="icone" aria-hidden="true"><use href="#i-cadeado"/></svg>Ler os relatórios sigilosos, sem editar<small>Acolhimento social e ficha de saúde, depois de finalizados</small></th>
+              {% for n in niveis %}
+                {% if loop.first %}
+                <td><span class="celula"><span class="sinal sim" aria-hidden="true">✓</span><span class="so-leitor">Pode</span><span class="nome-nivel">{{ n.nome }}</span></span></td>
+                {% elif loop.index == 2 %}
+                <td colspan="{{ niveis | length - 1 }}"><span class="pilula-marca">Quem recebeu essa permissão no cadastro do funcionário (a psicóloga, a gerente técnica...): vale em qualquer nível</span></td>
                 {% endif %}
               {% endfor %}
             </tr>

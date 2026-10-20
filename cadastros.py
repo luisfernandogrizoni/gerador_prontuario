@@ -4,9 +4,11 @@ Cadastros: convênios e funcionários.
   * Convênios (Cadastros > Convênios): nome, vagas, cor. Um convênio novo aparece sozinho nos formulários, no quadro
     de vagas, na página de relatórios e entre as colunas do relatório anual (veja catalogo.py).
   * Funcionários (Cadastros > Funcionários): quem pode assinar como responsável pela emissão dos documentos, o login
-    de cada um (o administrador cria o usuário e a senha aqui mesmo) e o nível de acesso. Quem é do Serviço Social
-    (marca 'Assina o Serviço Social' e registro profissional, o CRESS) lê e escreve o acolhimento social, que é sigiloso:
-    pode_servico_social.
+    de cada um (o administrador cria o usuário e a senha aqui mesmo) e o nível de acesso. A função de cada um na equipe
+    (PROFISSOES) e o registro do conselho dela (CRESS, COREN, CRM...) assinam o que a pessoa escreve. Quem é assistente
+    social lê e escreve o acolhimento social, que é sigiloso (pode_servico_social); quem é enfermeiro(a), com COREN válido,
+    escreve a ficha de saúde (pode_enfermagem). Ler, sem editar, esses dois relatórios é uma permissão à parte, dada pessoa
+    a pessoa (`le_sigilosos`; pode_ler_social e pode_ler_saude).
   * Níveis de acesso (Cadastros > Níveis de acesso): uma cascata, do que tem mais acesso para o que tem menos. O
     primeiro da cascata é o do administrador. A regra do próprio acesso é pode_gerenciar_acessos (criar usuário e senha,
     vincular login, mudar o nível de alguém, mexer nos níveis e nas permissões). O que cada nível pode fazer no resto do
@@ -27,9 +29,23 @@ import email_envio
 from catalogo import CATEGORIAS_RESERVADAS, CORES
 from documentos import Emissor
 from modelos import Convenio, Funcionario, NivelAcesso, Usuario, db
-from validacao import normalizar_nome
+from validacao import EXEMPLO_DE_COREN, ler_coren, normalizar_nome
 
 NOMES_DE_CONVENIO_RESERVADOS = ["A definir", "Particular"]    # valores que o sistema já usa para outra coisa
+
+# A função de cada funcionário na equipe: chave -> (como aparece, o registro do conselho dela; "" = não tem conselho). Quem tem conselho
+# assina com o registro e não é salvo sem ele. O registro das outras funções só precisa estar preenchido; o COREN também é conferido no
+# formato (UF, número e categoria) e só a categoria ENF (enfermeiro) vale como "enfermeira" da ficha de saúde.
+PROFISSOES = {
+    "assistente_social": ("Assistente social", "CRESS"),
+    "enfermeiro": ("Enfermeiro(a)", "COREN"),
+    "medico": ("Médico(a)", "CRM"),
+    "nutricionista": ("Nutricionista", "CRN"),
+    "psicologo": ("Psicólogo(a)", "CRP"),
+    "coordenacao": ("Coordenação operacional", ""),
+    "outro": ("Outro profissional", ""),
+}
+DA_EQUIPE = tuple(PROFISSOES)                       # quem escreve na evolução multiprofissional (cada um com a sua categoria)
 
 
 # ====================================================================== convênios
@@ -206,9 +222,42 @@ def _validar_acesso(form, funcionario, ativo):
     return erros
 
 
+def profissao_do_formulario(form, funcionario=None, pode_acessos=True):
+    """A função na equipe que o formulário deixa ('' = nenhuma). Só o administrador a muda: para os outros vale a que já está no cadastro.
+    (A marca antiga `servico_social=1`, de antes das funções, equivale a 'assistente_social'.)"""
+    if not pode_acessos:
+        return profissao_de(funcionario)
+    if "profissao" in form:
+        return (form.get("profissao") or "").strip()
+    return "assistente_social" if form.get("servico_social") == "1" else ""
+
+
+def profissao_de(funcionario):
+    """A função do funcionário (a chave de PROFISSOES, ou '')."""
+    if funcionario is None:
+        return ""
+    return funcionario.profissao or ("assistente_social" if funcionario.servico_social else "")
+
+
+def _erro_do_registro(profissao, registro):
+    """O que falta no registro do conselho de quem tem uma função com conselho (None se está certo)."""
+    conselho = PROFISSOES[profissao][1]
+    if not registro:
+        if profissao == "assistente_social":
+            return "Informe o registro profissional (CRESS): ele assina os documentos e o relatório da assistente social."
+        return f"Informe o registro profissional ({conselho}): ele assina o que {PROFISSOES[profissao][0].lower()} escreve no sistema."
+    if profissao == "enfermeiro":
+        canonico, categoria = ler_coren(registro)
+        if canonico is None:
+            return f"Escreva o COREN completo, com a UF, o número e a categoria. Exemplo: {EXEMPLO_DE_COREN}."
+        if categoria != "ENF":
+            return "Este COREN não é de enfermeiro(a): a ficha de saúde é da enfermeira (categoria ENF, no fim do número)."
+    return None
+
+
 def validar_funcionario(form, funcionario=None, pode_acessos=True):
-    """`pode_acessos` = quem está salvando é o administrador: só ele muda nível, usuário e senha (para os outros, esses
-    campos nem são lidos)."""
+    """`pode_acessos` = quem está salvando é o administrador: só ele muda nível, usuário, senha, função na equipe e a leitura dos
+    relatórios sigilosos (para os outros, esses campos nem são lidos)."""
     erros = {}
     nome, cargo = (form.get("nome") or "").strip(), (form.get("cargo") or "").strip()
     if not nome:
@@ -225,12 +274,15 @@ def validar_funcionario(form, funcionario=None, pode_acessos=True):
     if funcionario is not None and funcionario.padrao and not padrao:
         erros["padrao"] = "Para trocar quem assina por padrão, marque a outra pessoa como padrão."
     registro = (form.get("registro_profissional") or "").strip()
-    # quem é (ou vai ser) assistente social: o administrador decide pela marca; para os outros vale a que já está no cadastro
-    eh_social = form.get("servico_social") == "1" if pode_acessos else bool(funcionario is not None and funcionario.servico_social)
-    if len(registro) > 30:
+    profissao = profissao_do_formulario(form, funcionario, pode_acessos)
+    if profissao and profissao not in PROFISSOES:
+        erros["profissao"] = "Escolha uma das funções da lista."
+    elif len(registro) > 30:
         erros["registro_profissional"] = "O registro pode ter até 30 caracteres."
-    elif eh_social and not registro:
-        erros["registro_profissional"] = "Informe o registro profissional (CRESS): ele assina os documentos e o relatório da assistente social."
+    elif profissao and PROFISSOES[profissao][1]:
+        erro = _erro_do_registro(profissao, registro)
+        if erro:
+            erros["registro_profissional"] = erro
     if pode_acessos:
         erros.update(_validar_acesso(form, funcionario, ativo))
     return erros
@@ -249,10 +301,17 @@ def salvar_funcionario(form, funcionario=None, por=None):
         db.session.add(funcionario)
     funcionario.nome, funcionario.cargo = form["nome"].strip(), form["cargo"].strip()
     funcionario.ativo = form.get("ativo") == "1"
-    funcionario.registro_profissional = (form.get("registro_profissional") or "").strip()
+    profissao = profissao_do_formulario(form, funcionario, pode)
+    registro = (form.get("registro_profissional") or "").strip()
+    if profissao == "enfermeiro":
+        registro = ler_coren(registro)[0] or registro           # guardado na forma padrão: COREN-SP 123.456-ENF
+    funcionario.registro_profissional = registro
     try:
         if pode:
-            funcionario.servico_social = form.get("servico_social") == "1"     # dar acesso ao sigilo é coisa do administrador
+            # dar função e acesso ao sigilo é coisa do administrador (`servico_social` acompanha a função de assistente social)
+            funcionario.profissao = profissao
+            funcionario.servico_social = profissao == "assistente_social"
+            funcionario.le_sigilosos = form.get("le_sigilosos") == "1"
             funcionario.nivel_id = int(form["nivel_id"])
             novo_email = (form.get("email") or "").strip().lower()
             if novo_email != (funcionario.email or "").lower():       # e-mail novo ou trocado: só vale depois de confirmado de novo
@@ -308,26 +367,33 @@ class ErroDeAssinatura(Exception):
     """Quem ia assinar é assistente social e está sem o CRESS no cadastro: o documento não sai sem ele."""
 
 
+MENSAGEM_SEM_COREN = ("Só a enfermeira, com o COREN válido no cadastro de funcionários, finaliza e assina a ficha de saúde. "
+                      "Peça ao administrador para conferir a sua função e o seu COREN em Cadastros > Funcionários.")
 MENSAGEM_SEM_CRESS = ("O seu CRESS não está no cadastro de funcionários, e a assistente social assina com ele. "
                       "Peça ao administrador para preenchê-lo em Cadastros > Funcionários.")
 
 
+def conselho_de(funcionario):
+    """O conselho do registro profissional da função dele ('CRESS', 'COREN'...), ou '' se a função não tem conselho."""
+    return PROFISSOES.get(profissao_de(funcionario), ("", ""))[1]
+
+
 def sem_registro(funcionario):
-    """Assistente social (marca 'Assina o Serviço Social') sem o registro profissional (CRESS) no cadastro."""
-    return bool(funcionario is not None and funcionario.servico_social and not (funcionario.registro_profissional or "").strip())
+    """Quem tem uma função com conselho (assistente social, enfermeiro(a), médico(a)...) e está sem o registro profissional no cadastro."""
+    return bool(conselho_de(funcionario) and not (funcionario.registro_profissional or "").strip())
 
 
 def registro_pendente(usuario):
-    """Quem está logado é assistente social e está sem o CRESS no cadastro (não pode finalizar nem escrever adendo)."""
+    """Quem está logado tem uma função com conselho e está sem o registro no cadastro (não pode finalizar nem alterar o que já finalizou)."""
     return sem_registro(funcionario_do_usuario(usuario))
 
 
 def rotulo_do_emissor(funcionario):
-    """Como a pessoa aparece na lista de quem assina: 'Nome — cargo · CRESS' (e o aviso, se for assistente social sem o CRESS)."""
+    """Como a pessoa aparece na lista de quem assina: 'Nome — cargo · registro' (e o aviso, se falta o registro: 'falta o CRESS')."""
     texto = f"{funcionario.nome} — {funcionario.cargo}"
     if (funcionario.registro_profissional or "").strip():
         texto += f" · {funcionario.registro_profissional.strip()}"
-    return texto + (" (falta o CRESS)" if sem_registro(funcionario) else "")
+    return texto + (f" (falta o {conselho_de(funcionario)})" if sem_registro(funcionario) else "")
 
 
 def emissor_para(usuario=None, escolhido_id=None):
@@ -343,7 +409,8 @@ def emissor_para(usuario=None, escolhido_id=None):
     if escolhido is None:
         return Emissor(), None
     if sem_registro(escolhido):
-        raise ErroDeAssinatura(f"O cadastro de {escolhido.nome} (Serviço Social) está sem o CRESS, que assina junto do nome. "
+        funcao = "Serviço Social" if profissao_de(escolhido) == "assistente_social" else PROFISSOES[profissao_de(escolhido)][0]
+        raise ErroDeAssinatura(f"O cadastro de {escolhido.nome} ({funcao}) está sem o {conselho_de(escolhido)}, que assina junto do nome. "
                                "Preencha em Cadastros > Funcionários (o administrador) ou escolha outra pessoa para assinar.")
     return Emissor(escolhido.nome, escolhido.cargo, (escolhido.registro_profissional or "").strip()), escolhido.id
 
@@ -398,6 +465,56 @@ def pode_servico_social(usuario):
         return True
     funcionario = funcionario_do_usuario(usuario)
     return bool(funcionario and funcionario.servico_social)
+
+
+# ------------------------------------------------------------- relatórios sigilosos: ler e escrever
+# Escrever é de quem tem a função (assistente social: o acolhimento social; enfermeira com COREN: a ficha de saúde) e do administrador.
+# Ler sem escrever é uma permissão à parte (`le_sigilosos`), dada pelo administrador pessoa a pessoa (a psicóloga, a gerente técnica...),
+# porque os níveis de acesso são uma cascata e esta permissão atravessa os níveis.
+def pode_ler_sigilosos(usuario):
+    """Pode ler (sem editar) o acolhimento social e a ficha de saúde: o administrador e quem recebeu a permissão `le_sigilosos`."""
+    if pode_gerenciar_acessos(usuario):
+        return True
+    funcionario = funcionario_do_usuario(usuario)
+    return bool(funcionario and funcionario.le_sigilosos)
+
+
+def pode_ler_social(usuario):
+    """Lê o acolhimento social (a ficha, o relatório e o parecer finalizados): quem escreve e quem pode ler os sigilosos."""
+    return pode_servico_social(usuario) or pode_ler_sigilosos(usuario)
+
+
+def e_enfermeira(usuario):
+    """O funcionário de quem está logado é enfermeiro(a) com o COREN válido (UF, número e categoria ENF): é quem assina a ficha de saúde."""
+    funcionario = funcionario_do_usuario(usuario)
+    if funcionario is None or profissao_de(funcionario) != "enfermeiro":
+        return False
+    canonico, categoria = ler_coren(funcionario.registro_profissional)
+    return canonico is not None and categoria == "ENF"
+
+
+def pode_escrever_saude(usuario):
+    """Abre a ficha de saúde para escrever: a enfermeira com COREN válido e o administrador (que só prepara o rascunho: ver pode_assinar_saude)."""
+    return pode_gerenciar_acessos(usuario) or e_enfermeira(usuario)
+
+
+def pode_assinar_saude(usuario):
+    """Finaliza e altera a ficha de saúde e faz registros de enfermagem: só a enfermeira, porque tudo isso leva o nome e o COREN dela."""
+    return e_enfermeira(usuario)
+
+
+def pode_ler_saude(usuario):
+    """Lê a ficha de saúde: quem escreve e quem pode ler os sigilosos."""
+    return pode_escrever_saude(usuario) or pode_ler_sigilosos(usuario)
+
+
+def pode_evoluir(usuario):
+    """Escreve na evolução multiprofissional: o administrador e quem tem função na equipe (cada um na sua categoria). Quem tem função com
+    conselho precisa do registro no cadastro (é ele que assina)."""
+    if pode_gerenciar_acessos(usuario):
+        return True
+    funcionario = funcionario_do_usuario(usuario)
+    return bool(funcionario and profissao_de(funcionario) in DA_EQUIPE and not sem_registro(funcionario))
 
 
 def assinatura_do_usuario(usuario):

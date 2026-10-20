@@ -183,6 +183,13 @@ powershell -ExecutionPolicy Bypass -File implantacao\atualizar.ps1
 Faz um backup (e **cancela se o backup falhar**), para o sistema, baixa a versão nova, instala o que mudou e liga de novo.
 O banco se atualiza sozinho na subida. Se algo falhar, o sistema volta a ligar na versão que estava.
 
+**Depois da atualização que trouxe a ficha de saúde** (uma vez, em *Cadastros > Funcionários*, o administrador): em cada funcionário, escolha a *Função na
+equipe* e o *Registro profissional* (a enfermeira: *Enfermeiro(a)* e o COREN completo, como `COREN-SP 123.456-ENF`; quem já tinha a marca do Serviço Social
+já aparece como *Assistente social*) e marque *Lê os relatórios sigilosos* só em quem precisa ler, sem editar, o acolhimento social e a ficha de saúde (a
+psicóloga, a gerente técnica). Sem isso, só o administrador abre esses relatórios. A ficha de saúde abre na ficha de quem já foi internado.
+Os relatórios não têm mais adendos: depois de finalizados, a assistente social e a enfermeira os alteram direto, e cada alteração fica no *Histórico de versões*
+da ficha do acolhido (só o administrador vê). Os adendos que já existiam passam sozinhos para esse histórico na subida: nada se perde.
+
 ## 5. HTTPS pelo Tailscale: senha criptografada, celular e segundo polo
 
 Hoje o endereço é `http://IP:8000`: a senha e as fichas viajam **sem criptografia** pela rede do escritório. O **Tailscale** é uma rede

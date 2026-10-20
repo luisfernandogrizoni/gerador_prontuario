@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% from "_voltar.html" import linha_voltar with context %}
+{% from "_cartao.html" import legenda %}
+{% from "_abas_saude.html" import abas as abas_da_saude with context %}
+{#
+  A anamnese da ficha de saúde, escrita direto no sistema (ficha_saude.py descreve as perguntas).
+  Variáveis: i (internação), secoes, v (valores de cada campo), erros, ficha (a já gravada, ou None) e abas.
+#}
+
+{% set titulo = 'Ficha de saúde' %}
+{% block titulo %}{{ titulo }} · {{ i.pessoa.nome }}{% endblock %}
+
+{% block estilo %}
+  .cabecalho-rel { display: flex; align-items: flex-end; gap: 8px 16px; flex-wrap: wrap; margin-bottom: 4px; }
+  .cabecalho-rel h1 { margin: 0 auto 0 0; }
+  .cabecalho-rel .estado { font-size: .85rem; color: var(--suave); }
+  .rotulo-campo { display: block; font-size: .9rem; margin-bottom: 4px; }
+  textarea { resize: vertical; line-height: 1.4; min-height: 4.4em; }
+  .escolhas { display: flex; flex-wrap: wrap; gap: 6px 8px; }
+  .escolhas label.opcao { display: inline-flex; flex-direction: row; align-items: center; gap: 7px; cursor: pointer; padding: 6px 13px; margin: 0; font-weight: 500;
+                          border: 1px solid var(--borda-forte); border-radius: 999px; font-size: .9rem; background: #fff; user-select: none; }
+  .escolhas label.opcao input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .escolhas label.opcao:hover { border-color: var(--tom); }
+  .escolhas label.opcao:has(input:checked) { background: var(--tom-suave); border-color: var(--tom); color: var(--tom); font-weight: 700; }
+  .escolhas label.opcao:has(input:focus-visible) { outline: 3px solid rgba(91,141,239,.45); outline-offset: 2px; }
+  .sim-nao { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 12px; align-items: center; }
+  .sim-nao .escolhas { flex-wrap: nowrap; }
+  @media (max-width: 640px) { .sim-nao { grid-template-columns: 1fr; } }
+  .ferramentas { margin: 10px 0 14px; }
+{% endblock %}
+
+{% macro controle(c) -%}
+  {% set nome = c.chave %}
+  {% if c.tipo == 'longo' %}
+    <label class="{{ c.colunas }}{{ ' com-erro' if erros.get(nome) }}"><span class="rotulo-campo">{{ c.rotulo }}</span>
+      <textarea name="{{ nome }}" rows="{{ c.linhas }}" maxlength="5000" data-cresce>{{ v.get(nome, '') }}</textarea>
+      {% if erros.get(nome) %}<small class="erro">{{ erros[nome] }}</small>{% endif %}</label>
+  {% elif c.tipo == 'escolha' %}
+    <div class="{{ c.colunas }}{{ ' com-erro' if erros.get(nome) }}" role="radiogroup" aria-label="{{ c.rotulo }}"><span class="rotulo-campo">{{ c.rotulo }}</span>
+      <div class="escolhas">
+        {% for o in c.opcoes %}<label class="opcao"><input type="radio" name="{{ nome }}" value="{{ o }}"{{ ' checked' if v.get(nome) == o }} data-desmarca>{{ o }}</label>{% endfor %}
+      </div>
+      {% if erros.get(nome) %}<small class="erro">{{ erros[nome] }}</small>{% endif %}</div>
+  {% elif c.tipo == 'sim_nao' %}
+    <div class="{{ c.colunas }}{{ ' com-erro' if erros.get(nome) }}"><span class="rotulo-campo">{{ c.rotulo }}</span>
+      <div class="sim-nao">
+        <div class="escolhas">
+          <label class="opcao"><input type="radio" name="{{ nome }}" value="sim"{{ ' checked' if v.get(nome) == 'sim' }} data-desmarca>Sim</label>
+          <label class="opcao"><input type="radio" name="{{ nome }}" value="nao"{{ ' checked' if v.get(nome) == 'nao' }} data-desmarca>Não</label>
+        </div>
+        <input type="text" name="{{ nome }}_detalhe" value="{{ v.get(nome ~ '_detalhe', '') }}" maxlength="200" placeholder="Se sim, {{ c.detalhe_rotulo }}" aria-label="Se sim, {{ c.detalhe_rotulo }}">
+      </div>
+      {% if erros.get(nome) %}<small class="erro">{{ erros[nome] }}</small>{% endif %}</div>
+  {% else %}
+    <label class="{{ c.colunas }}{{ ' com-erro' if erros.get(nome) }}">{{ c.rotulo }}
+      <input type="text" name="{{ nome }}" value="{{ v.get(nome, '') }}" maxlength="200"{{ ' inputmode="decimal"' | safe if c.tipo == 'numero' }}>
+      {% if erros.get(nome) %}<small class="erro">{{ erros[nome] }}</small>{% endif %}</label>
+  {% endif %}
+{%- endmacro %}
+
+{% block conteudo %}
+<main class="largo">
+  {{ linha_voltar(url_for('ficha', id=i.id)) }}
+  {% with msgs = get_flashed_messages() %}
+    {% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
+  {% endwith %}
+
+  <div class="cabecalho-rel">
+    <h1>{{ titulo }}</h1>
+    {% if ficha and ficha.finalizado %}
+      <span class="estado">finalizada em {{ ficha.finalizado_em.strftime('%d/%m/%Y às %H:%M') }}{{ ' por ' ~ ficha.assinatura.split(' — ')[0] if ficha.assinatura }}{% if alteracao %} · alterada em {{ alteracao.quando.strftime('%d/%m/%Y às %H:%M') }}{{ ' por ' ~ alteracao.por.split(' — ')[0] if alteracao.por }}{% endif %}</span>
+    {% elif ficha and ficha.dados %}
+      <span class="estado">rascunho salvo em {{ ficha.atualizado_em.strftime('%d/%m/%Y às %H:%M') }}{{ ' por ' ~ ficha.atualizado_por if ficha.atualizado_por }}</span>
+    {% else %}
+      <span class="estado">ainda não preenchida</span>
+    {% endif %}
+  </div>
+  <p class="ajuda">{{ i.pessoa.nome }} · {{ i.status_txt }}</p>
+  {{ abas_da_saude(i, abas) }}
+
+  <div class="form-grade">
+  <form method="post" id="form-saude" data-indice><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if erros %}<div class="caixa-erros"><strong>{{ erros['_'] if erros.get('_') else 'Confira os campos marcados em vermelho.' }}</strong></div>{% endif %}
+    {% for secao in secoes %}
+    {% set vis = visual.get(secao.titulo, ('documento', 'neutro')) %}
+    <fieldset class="tom-{{ vis[1] }}">
+      {{ legenda(secao.titulo, vis[0]) }}
+      <div class="grade">
+        {% for campo in secao.campos %}{{ controle(campo) }}{% endfor %}
+      </div>
+    </fieldset>
+    {% endfor %}
+
+    <div class="barra-salvar">
+      {% set ja_finalizada = ficha and ficha.finalizado %}
+      <button class="botao{{ '' if ja_finalizada else ' secundario' }}" type="submit" name="acao" value="salvar">{{ 'Salvar alterações' if ja_finalizada else 'Salvar rascunho' }}</button>
+      <button class="botao secundario" type="submit" name="acao" value="imprimir"><svg class="icone"><use href="#i-impressora"/></svg>Salvar e imprimir</button>
+      {% if pode_assinar_saude and not ja_finalizada %}<button class="botao" type="submit" name="acao" value="finalizar" id="finalizar" data-nome="{{ i.pessoa.nome }}">Finalizar e assinar</button>{% endif %}
+      <span class="estado-form" hidden>Alterações não salvas</span>
+    </div>
+  </form>
+  </div>
+</main>
+<script src="{{ url_for('static', filename='secoes.js') }}"></script>
+
+<script nonce="{{ csp_nonce() }}">
+  // o campo de texto cresce enquanto se escreve (sem barra de rolagem dentro dele)
+  function crescer(t) { t.style.height = "auto"; t.style.height = Math.max(t.scrollHeight + 2, 0) + "px"; }
+  document.querySelectorAll("textarea[data-cresce]").forEach(function (t) { crescer(t); t.addEventListener("input", function () { crescer(t); }); });
+
+  // clicar de novo numa opção já marcada a desmarca (uma resposta pode ficar em branco)
+  document.querySelectorAll(".escolhas").forEach(function (grupo) {
+    grupo.addEventListener("mousedown", function (e) {
+      var rotulo = e.target.closest("label.opcao");
+      if (rotulo) { var r = rotulo.querySelector("input"); r.dataset.estava = r.checked ? "1" : ""; }
+    });
+  });
+  document.querySelectorAll("input[data-desmarca]").forEach(function (r) {
+    r.addEventListener("click", function () {
+      if (r.dataset.estava) { r.checked = false; r.dataset.estava = ""; r.dispatchEvent(new Event("change", { bubbles: true })); }
+    });
+  });
+
+  // finalizar pede confirmação
+  var finalizar = document.getElementById("finalizar");
+  if (finalizar) finalizar.addEventListener("click", function (e) {
+    if (!confirm("Finalizar a ficha de saúde de " + finalizar.dataset.nome + "?")) e.preventDefault();
+  });
+
+  // avisa antes de sair da página com texto ainda não salvo
+  (function () {
+    var form = document.getElementById("form-saude"), alterado = false, enviando = false;
+    form.addEventListener("input", function () { alterado = true; });
+    form.addEventListener("change", function () { alterado = true; });
+    form.addEventListener("submit", function () { enviando = true; });
+    window.addEventListener("beforeunload", function (e) { if (alterado && !enviando) { e.preventDefault(); e.returnValue = ""; } });
+  })();
+</script>
+{% endblock %}

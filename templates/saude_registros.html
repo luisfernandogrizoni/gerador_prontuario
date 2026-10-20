@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% import "_campos.html" as f with context %}
+{% from "_voltar.html" import linha_voltar with context %}
+{% from "_cartao.html" import legenda %}
+{% from "_abas_saude.html" import abas as abas_da_saude with context %}
+{#
+  Os registros de enfermagem (sinais vitais, glicemia, perdas e evolução de enfermagem) e a evolução multiprofissional de um acolhido: o formulário
+  de quem escreve e a lista, a mais nova em cima. Só se acrescenta (ficha_saude.py).
+  Variáveis: i, aba, itens, pode_escrever, d (o digitado ou o horário de agora), erros, abas, categorias, categoria e
+  nomes_das_categorias.
+#}
+
+{% set titulo = 'Ficha de saúde' %}
+{% block titulo %}{{ 'Registros de enfermagem' if aba == 'enfermagem' else 'Evolução multiprofissional' }} · {{ i.pessoa.nome }}{% endblock %}
+
+{% block estilo %}
+  .cabecalho-rel { display: flex; align-items: flex-end; gap: 8px 16px; flex-wrap: wrap; margin-bottom: 4px; }
+  .cabecalho-rel h1 { margin: 0 auto 0 0; }
+  .ferramentas { margin: 10px 0 14px; }
+  textarea { resize: vertical; line-height: 1.4; min-height: 6em; width: 100%; }
+  .novo-registro { margin-bottom: 20px; }
+  .anotacoes { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .anotacoes li { background: #fff; border: 1px solid var(--borda); border-radius: var(--r-lg); padding: 12px 16px; }
+  .anotacoes .cabeca { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: .86rem; color: var(--suave); margin-bottom: 6px; }
+  .anotacoes .cabeca strong { color: var(--texto); }
+  .anotacoes p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  table.lista td.texto { white-space: pre-wrap; overflow-wrap: anywhere; }
+  @media (min-width: 1280px) { table.lista td.texto { min-width: 220px; } }
+  @media (max-width: 1279px) { table.lista td.texto { grid-column: 1 / -1; } }       /* no cartão do celular o texto ocupa a largura toda */
+  .vazio { color: var(--suave); padding: 18px 4px; }
+{% endblock %}
+
+{% block conteudo %}
+<main class="largo">
+  {{ linha_voltar(url_for('ficha', id=i.id)) }}
+  {% with msgs = get_flashed_messages() %}
+    {% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
+  {% endwith %}
+
+  <div class="cabecalho-rel"><h1>{{ titulo }}</h1></div>
+  <p class="ajuda">{{ i.pessoa.nome }} · {{ i.status_txt }}</p>
+  {{ abas_da_saude(i, abas) }}
+
+  {% if pode_escrever %}
+  <form method="post" class="novo-registro" autocomplete="off"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if erros %}<div class="caixa-erros"><strong>{{ erros['_'] if erros.get('_') else 'Confira os campos marcados em vermelho.' }}</strong></div>{% endif %}
+    {% if aba == 'enfermagem' %}
+    <fieldset class="tom-turquesa">
+      {{ legenda('Novo registro de enfermagem', 'coracao') }}
+      <div class="grade">
+        {{ f.entrada('quando', 'Horário', 'c2', 'datetime-local') }}
+        {{ f.entrada('pa', 'PA', 'c1', attrs={'placeholder': '120/80', 'maxlength': 10}) }}
+        {{ f.entrada('pulso', 'P', 'c1', attrs={'inputmode': 'numeric', 'maxlength': 3}) }}
+        {{ f.entrada('temperatura', 'Temp (°C)', 'c1', attrs={'inputmode': 'decimal', 'maxlength': 5}) }}
+        {{ f.entrada('fr', 'FR', 'c1', attrs={'inputmode': 'numeric', 'maxlength': 3}) }}
+        {{ f.entrada('bcf', 'BCF', 'c1', attrs={'inputmode': 'numeric', 'maxlength': 3}) }}
+        {{ f.entrada('glicemia', 'Glicemia', 'c1', attrs={'inputmode': 'numeric', 'maxlength': 3}) }}
+        {{ f.entrada('peso', 'Peso (kg)', 'c1', attrs={'inputmode': 'decimal', 'maxlength': 6}) }}
+        {{ f.entrada('volume_urinario', 'Volume urinário', 'c1', attrs={'maxlength': 60}) }}
+        {{ f.entrada('evacuacao', 'Evacuação', 'c2', attrs={'maxlength': 60}) }}
+        <label class="c6{{ ' com-erro' if erros.get('evolucao') }}">Evolução de enfermagem
+          <textarea name="evolucao" rows="4" maxlength="3000">{{ d.get('evolucao', '') }}</textarea>
+          {% if erros.get('evolucao') %}<small class="erro">{{ erros['evolucao'] }}</small>{% endif %}</label>
+      </div>
+    </fieldset>
+    <div class="barra-salvar"><button class="botao" type="submit">Registrar</button></div>
+    {% else %}
+    <fieldset class="tom-turquesa">
+      {{ legenda('Nova anotação', 'usuarios') }}
+      <div class="grade">
+        {% if categorias | length > 1 %}
+          {{ f.escolha('categoria', 'Categoria', categorias, 'c3', vazio=none) }}
+        {% else %}
+          <label class="c3">Categoria<input value="{{ categorias[0][1] }}" readonly><input type="hidden" name="categoria" value="{{ categorias[0][0] }}"></label>
+        {% endif %}
+        <label class="c6">Anotação
+          <textarea name="texto" rows="5" maxlength="3000" required>{{ d.get('texto', '') }}</textarea></label>
+      </div>
+    </fieldset>
+    <div class="barra-salvar"><button class="botao" type="submit">Registrar</button></div>
+    {% endif %}
+  </form>
+  {% endif %}
+
+  {% if aba == 'enfermagem' %}
+    {% if itens %}
+    <div class="moldura">
+      <table class="lista">
+        <thead><tr><th>Horário</th><th>PA</th><th>P</th><th>Temp</th><th>FR</th><th>BCF</th><th>Glicemia</th><th>Peso</th><th>Volume urinário</th><th>Evacuação</th><th>Evolução de enfermagem</th><th>Registrado por</th></tr></thead>
+        <tbody>
+          {% for r in itens %}
+          <tr>
+            <td data-rotulo="Horário">{{ r.quando.strftime('%d/%m/%Y %H:%M') }}</td>
+            <td data-rotulo="PA">{{ r.pa }}</td>
+            <td data-rotulo="P">{{ r.pulso if r.pulso is not none }}</td>
+            <td data-rotulo="Temp">{{ ('%.1f' | format(r.temperatura)) | replace('.', ',') if r.temperatura is not none }}</td>
+            <td data-rotulo="FR">{{ r.fr if r.fr is not none }}</td>
+            <td data-rotulo="BCF">{{ r.bcf if r.bcf is not none }}</td>
+            <td data-rotulo="Glicemia">{{ r.glicemia if r.glicemia is not none }}</td>
+            <td data-rotulo="Peso">{{ ('%.1f' | format(r.peso)) | replace('.', ',') if r.peso is not none }}</td>
+            <td data-rotulo="Volume urinário">{{ r.volume_urinario }}</td>
+            <td data-rotulo="Evacuação">{{ r.evacuacao }}</td>
+            <td class="texto" data-rotulo="Evolução de enfermagem">{{ r.evolucao }}</td>
+            <td data-rotulo="Registrado por">{{ r.criado_por }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="vazio">Nenhum registro de enfermagem ainda.</p>
+    {% endif %}
+  {% else %}
+    <div class="ferramentas">
+      <div class="segmentado" role="group" aria-label="Categoria">
+        <a href="{{ url_for('saude_evolucao', id=i.id) }}" class="{{ 'ativo' if not categoria }}">Todas</a>
+        {% for chave, nome in nomes_das_categorias.items() %}<a href="{{ url_for('saude_evolucao', id=i.id, categoria=chave) }}" class="{{ 'ativo' if categoria == chave }}">{{ nome }}</a>{% endfor %}
+      </div>
+    </div>
+    {% if itens %}
+    <ul class="anotacoes">
+      {% for e in itens %}
+      <li><div class="cabeca"><strong>{{ e.criado_em.strftime('%d/%m/%Y às %H:%M') }}</strong><span class="selo padrao">{{ nomes_das_categorias.get(e.categoria, e.categoria) }}</span><span>{{ e.criado_por }}</span></div>
+        <p>{{ e.texto }}</p></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="vazio">Nenhuma anotação ainda.</p>
+    {% endif %}
+  {% endif %}
+</main>
+<script src="{{ url_for('static', filename='secoes.js') }}"></script>
+{% endblock %}

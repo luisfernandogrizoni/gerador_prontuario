@@ -26,7 +26,7 @@ controlado em cadastros.pode_servico_social (é sigiloso).
 from dataclasses import dataclass, replace
 from datetime import date
 
-from documentos import N, Paragrafo, Pauta
+from documentos import N, Paragrafo, Pauta, Texto
 from prontuario import calcular_idade, fmt_data, ler_data, previsao_termino
 from validacao import fmt_cep, fmt_cpf, fmt_rg
 
@@ -60,6 +60,7 @@ class Campo:
     so_se: tuple = ()          # (campo, valor): só vale (e só aparece) quando aquele campo tem aquele valor
     reaproveitar: bool = False  # numa readmissão, a resposta do acolhimento anterior vem como ponto de partida
     antigo: str = ""           # chave com que esta resposta foi gravada antes (modelo anterior da ficha)
+    detalhe_rotulo: str = "especifique"    # sim_nao: o que o "se sim" pede ("especifique", "qual medicação", "obs"...)
 
 
 @dataclass(frozen=True)
@@ -369,44 +370,76 @@ def validar_finalizacao(dados, internacao):
 
 
 # ============================================================ o documento
+# O espaçamento é o do prontuário (prontuario.py): entrelinha de 1,5 nas linhas "rótulo: valor" e nas opções, de 1,25 nos textos corridos, e um respiro
+# generoso entre os títulos, as perguntas e as respostas, para a leitura não ficar amontoada.
+ENTRELINHA = 1.5
+ENTRELINHA_DO_TEXTO = 1.25
+
+
 def _linha(rotulo, valor, vazio=EM_BRANCO):
     """'Rótulo: valor' — o valor em negrito; sem valor, a linha para escrever à mão."""
     return [rotulo + (" " if rotulo.endswith("?") else ": "), N(valor) if valor else vazio]
 
 
 def _opcoes(campo, escolhido):
-    return "   ".join(f"( {'X' if opcao == escolhido else ' '} ) {opcao}" for opcao in campo.opcoes)
+    """As opções, '( X ) Sim   (   ) Não': a caixa fica sempre junta da sua opção (espaços que não quebram); a linha só quebra entre uma opção e outra."""
+    return "   ".join(f"(\u00a0{'X' if opcao == escolhido else ' '}\u00a0)\u00a0{opcao}" for opcao in campo.opcoes)
+
+
+def subtitulo(texto, **ajustes):
+    """Título de seção do documento: centralizado, em negrito, sublinhado e um pouco maior que o resto, para se destacar das perguntas e
+    das respostas."""
+    return Paragrafo([Texto(texto, negrito=True, sublinhado=True)], "centro", tamanho=13, **{"antes": 28, "depois": 10, "unido_ao_proximo": True, **ajustes})
+
+
+def item_numerado(texto, **ajustes):
+    """Subtítulo à esquerda ('1) Identificação individual:'): negrito e sublinhado."""
+    return Paragrafo([Texto(texto, negrito=True, sublinhado=True)], **{"antes": 20, "depois": 8, "unido_ao_proximo": True, **ajustes})
+
+
+def texto_corrido(texto, depois=10):
+    """O que foi digitado num campo de texto longo, justificado. Cada Enter vira um parágrafo: no Word, uma linha que termina em quebra
+    manual, dentro de um parágrafo justificado, seria esticada até a margem. A linha em branco continua em branco."""
+    linhas = texto.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    blocos = [Paragrafo([linha or " "], "justificado", antes=2 if i == 0 else 0, entrelinha=ENTRELINHA_DO_TEXTO) for i, linha in enumerate(linhas)]
+    blocos[-1].depois = depois
+    return blocos
 
 
 def blocos_do_campo(campo, v):
     """Blocos de um campo, no jeito do papel: pergunta e resposta (ou linhas em branco)."""
     valor = v.get(campo.chave, "")
     if campo.tipo == "longo":
-        resposta = ([Paragrafo([valor], "esquerda", antes=1, depois=2)] if valor else [Pauta(linhas=campo.linhas, altura=18, antes=2)])
-        return [Paragrafo([campo.rotulo + (":" if not campo.rotulo.endswith(("?", ".", ":")) else "")], antes=8, unido_ao_proximo=True), *resposta]
+        resposta = texto_corrido(valor) if valor else [Pauta(linhas=campo.linhas, altura=18, antes=4)]
+        return [Paragrafo([N(campo.rotulo + (":" if not campo.rotulo.endswith(("?", ".", ":")) else ""))], "justificado", antes=18, depois=4, unido_ao_proximo=True),
+                *resposta]
     if campo.tipo == "sim_nao":
         detalhe = v.get(campo.chave + "_detalhe", "")
         escolha = "( X ) sim   (   ) não" if valor == "sim" else "(   ) sim   ( X ) não" if valor == "nao" else "(   ) sim   (   ) não"
-        return [Paragrafo([campo.rotulo], antes=8, unido_ao_proximo=True),
-                Paragrafo([f"{escolha}.  Se sim, especifique: ", N(detalhe)] if detalhe else [f"{escolha}.  Se sim, especifique:"],
-                          unido_ao_proximo=not detalhe),
-                *([] if detalhe else [Pauta(linhas=1, altura=18, antes=2)])]
+        return [Paragrafo([N(campo.rotulo)], "justificado", antes=18, depois=4, unido_ao_proximo=True),
+                Paragrafo([f"{escolha}.  Se sim, {campo.detalhe_rotulo}: ", N(detalhe)] if detalhe else [f"{escolha}.  Se sim, {campo.detalhe_rotulo}:"],
+                          entrelinha=ENTRELINHA, unido_ao_proximo=not detalhe),
+                *([] if detalhe else [Pauta(linhas=1, altura=18, antes=4)])]
     if campo.tipo == "escolha":
-        return [Paragrafo([campo.rotulo + ": " + _opcoes(campo, valor)], antes=4)]
+        return [Paragrafo([campo.rotulo + ": " + _opcoes(campo, valor)], antes=2, entrelinha=ENTRELINHA)]
     return [Paragrafo(_linha(campo.rotulo, fmt_data(ler_data(valor)) if campo.tipo == "data" else valor,
-                             DATA_EM_BRANCO if campo.tipo == "data" else EM_BRANCO), antes=4)]
+                             DATA_EM_BRANCO if campo.tipo == "data" else EM_BRANCO), antes=2, entrelinha=ENTRELINHA)]
 
 
 def _campos_da_linha(campos, v):
-    """Campos curtos que o papel põe lado a lado (mesmo `linha`) viram um parágrafo só."""
-    partes = []
+    """Campos curtos que o papel põe lado a lado (mesmo `linha`) viram um parágrafo só; quando um deles é uma escolha (as opções já enchem a
+    linha), cada campo sai na sua linha. Devolve a lista de parágrafos."""
+    por_campo = []
     for campo in campos:
         if campo.tipo == "escolha":
-            partes += [campo.rotulo + ": " + _opcoes(campo, v.get(campo.chave, "")), "    "]
+            por_campo.append([campo.rotulo + ": " + _opcoes(campo, v.get(campo.chave, ""))])
         else:
             valor = fmt_data(ler_data(v.get(campo.chave, ""))) if campo.tipo == "data" else v.get(campo.chave, "")
-            partes += [*_linha(campo.rotulo, valor, DATA_EM_BRANCO if campo.tipo == "data" else EM_BRANCO), "    "]
-    return Paragrafo(partes[:-1], antes=4)
+            por_campo.append(_linha(campo.rotulo, valor, DATA_EM_BRANCO if campo.tipo == "data" else EM_BRANCO))
+    if any(campo.tipo == "escolha" for campo in campos):
+        return [Paragrafo(partes, antes=2, entrelinha=ENTRELINHA) for partes in por_campo]
+    juntas = [parte for partes in por_campo for parte in (*partes, "     ")][:-1]
+    return [Paragrafo(juntas, antes=2, entrelinha=ENTRELINHA)]
 
 
 def _assinante(relatorio):
@@ -423,40 +456,29 @@ def _fecho(relatorio):
     if relatorio is not None and relatorio.finalizado and relatorio.finalizado_em:
         em = relatorio.finalizado_em
         situacao = Paragrafo([f"Finalizado no sistema em {em:%d/%m/%Y} às {em:%H:%M} por ", N(relatorio.assinatura or relatorio.finalizado_por)],
-                             antes=26)
+                             antes=34)
         nome, resto = _assinante(relatorio)
         legenda = [Paragrafo([N(nome)], "centro", unido_ao_proximo=True), Paragrafo([resto or "Assistente Social"], "centro", unido_ao_proximo=True)]
     else:
-        situacao = Paragrafo(["Rascunho: ainda não finalizado no sistema."], antes=26)
+        situacao = Paragrafo(["Rascunho: ainda não finalizado no sistema."], antes=34)
         legenda = [Paragrafo(["Assistente Social"], "centro", unido_ao_proximo=True)]
-    return [situacao, Paragrafo(["_" * 38], "centro", antes=24, unido_ao_proximo=True), *legenda, Paragrafo(["Carimbo/Assinatura"], "centro")]
-
-
-def _adendos(relatorio):
-    """Os adendos, depois da assinatura: cada um com data, hora e autor."""
-    if relatorio is None or not relatorio.adendos:
-        return []
-    saida = [Paragrafo([N("ADENDOS")], "centro", antes=22, unido_ao_proximo=True)]
-    for adendo in relatorio.adendos:
-        saida += [Paragrafo([N(f"{adendo.criado_em:%d/%m/%Y} às {adendo.criado_em:%H:%M}"), f" — {adendo.criado_por}"], antes=8, unido_ao_proximo=True),
-                  Paragrafo([adendo.texto], "esquerda", antes=1, depois=2)]
-    return saida
+    return [situacao, Paragrafo(["_" * 38], "centro", antes=44, unido_ao_proximo=True), *legenda, Paragrafo(["Carimbo/Assinatura"], "centro")]
 
 
 def _cabecalho_da_secao(numero, secao, do_acolhido, do_responsavel):
     """O título da seção e, nas duas primeiras, os dados que o cadastro já tem (não são digitados de novo)."""
     if numero == 1:
-        return [Paragrafo([N(f"1) {secao.titulo}:")], antes=6, depois=2, unido_ao_proximo=True),
-                *(Paragrafo(_linha(r, do_acolhido[r]), antes=4) for r in ("Nome", "Nome da mãe", "Idade", "Profissão", "Escolaridade", "Telefone")),
-                Paragrafo(_linha("Previsão de saída", do_acolhido["Previsão de saída"], DATA_EM_BRANCO), antes=4)]
-    titulo = [Paragrafo([N(secao.titulo.upper())], "centro", antes=10, unido_ao_proximo=True, quebra_antes=secao.nova_pagina)]
+        return [item_numerado(f"1) {secao.titulo}:", antes=12),
+                *(Paragrafo(_linha(r, do_acolhido[r]), antes=2, entrelinha=ENTRELINHA) for r in ("Nome", "Nome da mãe", "Idade", "Profissão", "Escolaridade", "Telefone")),
+                Paragrafo(_linha("Previsão de saída", do_acolhido["Previsão de saída"], DATA_EM_BRANCO), antes=2, entrelinha=ENTRELINHA)]
+    titulo = [subtitulo(secao.titulo.upper(), quebra_antes=secao.nova_pagina)]
     if numero == 2:
         r = do_responsavel
-        return titulo + [Paragrafo([N(secao.subtitulo.upper())], "centro", antes=2, unido_ao_proximo=True),
-                         Paragrafo([N("2) Identificação social:")], antes=8, depois=2, unido_ao_proximo=True),
-                         Paragrafo(_linha("Nome", r["Nome"]), antes=4), Paragrafo(_linha("Grau de parentesco", r["Grau de parentesco"]), antes=4),
-                         Paragrafo([*_linha("CPF", r["CPF"]), "     ", *_linha("RG", r["RG"])], antes=4),
-                         Paragrafo(_linha("Telefone", r["Telefone"]), antes=4)]
+        return titulo + [Paragrafo([N(secao.subtitulo.upper())], "centro", antes=2, depois=8, unido_ao_proximo=True),
+                         item_numerado("2) Identificação social:"),
+                         Paragrafo(_linha("Nome", r["Nome"]), antes=2, entrelinha=ENTRELINHA), Paragrafo(_linha("Grau de parentesco", r["Grau de parentesco"]), antes=2, entrelinha=ENTRELINHA),
+                         Paragrafo([*_linha("CPF", r["CPF"]), "     ", *_linha("RG", r["RG"])], antes=2, entrelinha=ENTRELINHA),
+                         Paragrafo(_linha("Telefone", r["Telefone"]), antes=2, entrelinha=ENTRELINHA)]
     return titulo
 
 
@@ -465,7 +487,7 @@ def blocos(internacao, relatorio=None, hoje=None):
     v = valores(internacao, relatorio)
     acolhido, responsavel = identificacao(internacao, hoje)
     saida = [Paragrafo([N("FICHA DE ACOLHIMENTO E CLASSIFICAÇÃO DE RISCO E VULNERABILIDADE DO RESIDENTE – SERVIÇO SOCIAL")],
-                       "centro", tamanho=12, quebra_antes=True, depois=6),
+                       "centro", tamanho=13, quebra_antes=True, depois=18),
              *blocos_do_campo(CAMPOS[0], v)]                                  # a data do acolhimento abre a ficha, antes das seções
     for numero, secao in enumerate(SECOES, 1):
         saida += _cabecalho_da_secao(numero, secao, dict(acolhido), dict(responsavel))
@@ -476,15 +498,15 @@ def blocos(internacao, relatorio=None, hoje=None):
             if campo.so_se and v.get(campo.so_se[0]) not in ("", campo.so_se[1]):      # só vale em outra resposta: fica de fora
                 continue
             if pendentes and pendentes[-1].linha != campo.linha:
-                saida.append(_campos_da_linha(pendentes, v))
+                saida += _campos_da_linha(pendentes, v)
                 pendentes = []
             if campo.linha:
                 pendentes.append(campo)
             else:
                 saida += blocos_do_campo(campo, v)
         if pendentes:
-            saida.append(_campos_da_linha(pendentes, v))
-    return saida + _fecho(relatorio) + _adendos(relatorio)
+            saida += _campos_da_linha(pendentes, v)
+    return saida + _fecho(relatorio)
 
 
 def blocos_resumo(internacao, relatorio=None, hoje=None):
@@ -492,13 +514,13 @@ def blocos_resumo(internacao, relatorio=None, hoje=None):
     detalhadas nem o relatório. É o que sai no prontuário de quem não é do Serviço Social (começa em página nova)."""
     v = valores(internacao, relatorio)
     acolhido = dict(identificacao(internacao, hoje)[0])
-    saida = [Paragrafo([N("RESUMO DO ACOLHIMENTO SOCIAL")], "centro", tamanho=13, quebra_antes=True, depois=10),
-             *(Paragrafo(_linha(r, acolhido[r]), antes=4) for r in ("Nome", "Nome da mãe", "Idade")),
+    saida = [Paragrafo([N("RESUMO DO ACOLHIMENTO SOCIAL")], "centro", tamanho=13, quebra_antes=True, depois=18),
+             *(Paragrafo(_linha(r, acolhido[r]), antes=2, entrelinha=ENTRELINHA) for r in ("Nome", "Nome da mãe", "Idade")),
              *blocos_do_campo(CAMPOS[0], v),
-             Paragrafo([N("CLASSIFICAÇÃO DE RISCO E VULNERABILIDADE")], "centro", antes=16, unido_ao_proximo=True)]
+             subtitulo("CLASSIFICAÇÃO DE RISCO E VULNERABILIDADE")]
     for chave in [c for c, _ in DOMINIOS] + [RISCO_GERAL]:
         saida += blocos_do_campo(POR_CHAVE[chave], v)
-    saida.append(Paragrafo([N("CONCLUSÃO")], "centro", antes=16, unido_ao_proximo=True))
+    saida.append(subtitulo("CONCLUSÃO"))
     saida += blocos_do_campo(POR_CHAVE["parecer"], v)
     if v.get("parecer") == NAO_CONDIZENTE:
         saida += blocos_do_campo(POR_CHAVE["motivo_rejeicao"], v)

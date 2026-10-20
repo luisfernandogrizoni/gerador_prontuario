@@ -3,18 +3,20 @@ Relatórios do sistema, em Word e no navegador (veja documentos.py):
 
   * internos ativos por convênio (Caps AD, Prefeitura Tarumã e os convênios que forem cadastrados) — o nome sai só
     com as iniciais;
-  * quantos internos passaram pela casa no ano — número geral, com colunas opcionais por convênio.
+  * quantos internos passaram pela casa no ano — número geral, com colunas opcionais por convênio e, se a pessoa pedir, o detalhamento das internações
+    realizadas em cada mês escolhido (quem foi internado, em qual convênio, quando e como está), antes do mesmo resumo de sempre.
 
 Este módulo decide o que entra em cada relatório; a aparência (timbre, tabelas, assinatura) é do documentos.py.
 """
 
+import re
 import unicodedata
 from datetime import date, datetime, timedelta, timezone
 
 import catalogo
 from documentos import N, Coluna, Documento, Paragrafo, Tabela, Texto, Titulo, fecho
 from modelos import STATUS_INTERNACAO, Internacao, Pessoa, db
-from prontuario import fmt_data
+from prontuario import MESES, fmt_data
 from validacao import fmt_cpf
 
 # partes de nome que não viram inicial ("Maria da Silva" -> "M. S.")
@@ -161,8 +163,9 @@ def _colunas_da_tabela_anual(convenios):
             *[Coluna(c.nome_tela, numerica, "centro") for c in convenios]]
 
 
-def documento_anual(hoje, colunas=(), emissor=None):
-    """`colunas`: convênios (catalogo.ConvenioDef) que ganham uma coluna ao lado do total geral."""
+def documento_anual(hoje, colunas=(), emissor=None, meses=()):
+    """`colunas`: convênios (catalogo.ConvenioDef) que ganham uma coluna ao lado do total geral. `meses`: [(ano, mês)] cujas internações são detalhadas
+    antes do resumo (veja ler_meses); sem eles o documento é o resumo de sempre."""
     r = resumo_anual(hoje)
     ano, total = r["ano"], r["total"]
     verbo, substantivo = ("passaram", "internos") if total != 1 else ("passou", "interno")
@@ -171,8 +174,10 @@ def documento_anual(hoje, colunas=(), emissor=None):
                f"Saíram durante {ano}"]
     campos = ["total", "ingressaram", "ja_estavam", "permanecem", "sairam"]
     resumos = [r] + [resumo_anual(hoje, c.nome) for c in colunas]
+    detalhes = blocos_dos_meses(meses, hoje)
     blocos = [Titulo("RELATÓRIO DE INTERNOS", tamanho=15),
-              Paragrafo([N(f"Passaram pela casa em {ano}")], "centro", depois=14, tamanho=12),
+              *detalhes,
+              Paragrafo([N(f"Passaram pela casa em {ano}")], "centro", antes=24 if detalhes else 0, depois=14, tamanho=12),
               Paragrafo([f"Informamos que, de 01/01/{ano} a {hoje.strftime('%d/%m/%Y')}, {verbo} pela Comunidade Terapêutica Casa de "
                          f"Acolhida Restauração ", N(f"{total} {substantivo}"), "."], "justificado", depois=12),
               Tabela(colunas=_colunas_da_tabela_anual(colunas),
@@ -180,6 +185,94 @@ def documento_anual(hoje, colunas=(), emissor=None):
                      negrito_linhas=(0,))]
     blocos += fecho(hoje, emissor)
     return Documento(nome_arquivo=f"Relatório de internos {ano} - {hoje:%d-%m-%Y}", titulo=f"Relatório de internos – {ano}", blocos=blocos)
+
+
+# ------------------------------------------------------------ internações realizadas em cada mês (o detalhamento opcional)
+LIMITE_DE_MESES = 120
+SITUACAO_SEM_SAIDA = "Saída sem data registrada"
+
+
+def meses_disponiveis(hoje, marcados=()):
+    """Os anos e meses em que a casa internou alguém (até hoje), do ano mais novo para o mais antigo, para escolher o que detalhar:
+    [{"ano": 2026, "meses": [{"chave": "2026-08", "nome": "ago", "total": 11, "marcado": True}, ...]}]. O mês é o da data de internação
+    (só conta quem foi internado: a triagem e a desistência não entram). `marcados`: conjunto de (ano, mês) já escolhidos."""
+    datas = db.session.execute(db.select(Internacao.inicio).filter(Internacao.status.in_(STATUS_INTERNACAO), Internacao.inicio.is_not(None),
+                                                                   Internacao.inicio <= hoje)).scalars().all()
+    por_mes = {}
+    for d in datas:
+        por_mes[(d.year, d.month)] = por_mes.get((d.year, d.month), 0) + 1
+    if not por_mes:
+        return []
+    return [{"ano": ano, "meses": [{"chave": f"{ano}-{mes:02d}", "nome": MESES[mes - 1][:3], "total": por_mes.get((ano, mes), 0), "marcado": (ano, mes) in marcados}
+                                   for mes in range(1, (hoje.month if ano == hoje.year else 12) + 1)]}
+            for ano in range(hoje.year, min(a for a, _ in por_mes) - 1, -1)]
+
+
+def ler_meses(textos, hoje):
+    """Os meses pedidos em ?mes=2026-08&mes=2026-09: só os que existem e não são futuros, sem repetir, do mais antigo para o mais novo."""
+    pedidos = set()
+    for texto in textos[:2 * LIMITE_DE_MESES]:
+        m = re.fullmatch(r"(\d{4})-(0[1-9]|1[0-2])", (texto or "").strip())
+        if m and 2000 <= int(m[1]) and (int(m[1]), int(m[2])) <= (hoje.year, hoje.month):
+            pedidos.add((int(m[1]), int(m[2])))
+    return sorted(pedidos)[:LIMITE_DE_MESES]
+
+
+def _limites_do_mes(ano, mes):
+    return date(ano, mes, 1), date(ano + (mes == 12), mes % 12 + 1, 1)
+
+
+def _situacao(internacao):
+    if internacao.status == "ativo":
+        return "Em tratamento"
+    return f"Saiu em {fmt_data(internacao.termino)}" if internacao.termino else SITUACAO_SEM_SAIDA
+
+
+def internacoes_do_mes(ano, mes, hoje):
+    """As internações realizadas no mês (data de internação dentro dele), da mais antiga para a mais nova: iniciais, convênio, data e situação de agora."""
+    primeiro, proximo = _limites_do_mes(ano, mes)
+    registros = db.session.execute(db.select(Internacao).join(Pessoa).filter(
+        Internacao.status.in_(STATUS_INTERNACAO), Internacao.inicio >= primeiro, Internacao.inicio < proximo, Internacao.inicio <= hoje)).scalars().all()
+    registros.sort(key=lambda i: (i.inicio, _chave_de_ordem(i.pessoa.nome)))
+    cadastro = catalogo.atual()
+    return [{"iniciais": iniciais(i.pessoa.nome), "convenio": cadastro.nome_na_tela(i.convenio) or SEM_DADO, "internacao": fmt_data(i.inicio),
+             "situacao": _situacao(i)} for i in registros]
+
+
+def resumo_do_mes(ano, mes, internacoes):
+    """Os números do mês: quantas internações (as `internacoes` do mês), quantas por convênio (as mais numerosas primeiro) e quantas pessoas saíram no mês."""
+    primeiro, proximo = _limites_do_mes(ano, mes)
+    por_convenio = {}
+    for i in internacoes:
+        por_convenio[i["convenio"]] = por_convenio.get(i["convenio"], 0) + 1
+    saidas = db.session.execute(db.select(db.func.count()).select_from(Internacao).filter(
+        Internacao.status == "inativo", Internacao.termino >= primeiro, Internacao.termino < proximo)).scalar()
+    return {"total": len(internacoes), "por_convenio": sorted(por_convenio.items(), key=lambda par: (-par[1], par[0])), "saidas": saidas}
+
+
+def blocos_dos_meses(meses, hoje):
+    """O detalhamento no documento: para cada mês, o título com o total, os números do mês e a tabela das internações."""
+    if not meses:
+        return []
+    blocos = [Paragrafo([N("Internações realizadas por mês")], "centro", depois=6, tamanho=12)]
+    for ano, mes in meses:
+        itens = internacoes_do_mes(ano, mes, hoje)
+        r = resumo_do_mes(ano, mes, itens)
+        total = r["total"]
+        blocos.append(Paragrafo([N(f"{MESES[mes - 1].capitalize()} de {ano} – {total} {'internação' if total == 1 else 'internações'}")],
+                                antes=16, depois=3, tamanho=12, unido_ao_proximo=True))
+        numeros = []
+        if r["por_convenio"]:
+            numeros.append("Por convênio: " + " · ".join(f"{nome} {n}" for nome, n in r["por_convenio"]) + ".")
+        numeros.append(f"Saíram no mês: {r['saidas']}.")
+        blocos.append(Paragrafo([" ".join(numeros)], tamanho=11, depois=6, unido_ao_proximo=bool(itens)))
+        if itens:
+            blocos.append(Tabela(colunas=[Coluna("Nº", 480, "centro"), Coluna("Iniciais", 1500, "centro"), Coluna("Convênio", 2400), Coluna("Data de internação", 1900, "centro"),
+                                          Coluna("Situação", 3358)],
+                                 linhas=[[n, i["iniciais"], i["convenio"], i["internacao"], i["situacao"]] for n, i in enumerate(itens, 1)]))
+        else:
+            blocos.append(Paragrafo([Texto("Nenhuma internação realizada neste mês.", italico=True)], "centro", antes=4))
+    return blocos
 
 
 # ------------------------------------------------------------ o que a página de relatórios mostra
