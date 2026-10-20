@@ -1,5 +1,5 @@
 """
-Validação e formatação de documentos e campos (CPF, RG, CEP, telefone, hora).
+Validação e formatação de documentos e campos (CPF, RG, CEP, telefone, hora, COREN).
 
 Regra usada no sistema inteiro:
   - no banco, documentos ficam "limpos" (CPF e CEP só com dígitos, RG com dígitos e X);
@@ -83,6 +83,34 @@ def fmt_telefone(texto):
     if len(d) == 10:
         return f"({d[:2]}) {d[2:6]}-{d[6:]}"
     return (texto or "").strip()
+
+
+# ------------------------------------------------------------------- COREN
+UFS = ("AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO",
+       "RR", "SC", "SP", "SE", "TO")
+# a categoria vem no fim do número do COREN: ENF enfermeiro(a), TE/TEC técnico(a) de enfermagem, AE/AUX auxiliar, OBS obstetriz
+CATEGORIAS_COREN = {"ENF": "enfermeiro(a)", "TE": "técnico(a) de enfermagem", "TEC": "técnico(a) de enfermagem", "AE": "auxiliar de enfermagem",
+                    "AUX": "auxiliar de enfermagem", "OBS": "obstetriz"}
+_COREN = re.compile(r"^COREN\W*([A-Z]{2})\W*(?:N\.?\W*)?(\d[\d.\s]*)\W*([A-Z]{2,3})$")
+EXEMPLO_DE_COREN = "COREN-SP 123.456-ENF"
+
+
+def ler_coren(texto):
+    """'COREN-SP 123456-ENF' (e variações: 'coren/sp nº 123.456 enf'...) -> (forma padrão 'COREN-SP 123.456-ENF', categoria 'ENF'), ou
+    (None, None) se não for um COREN completo: precisa da UF (a do conselho regional), do número (3 a 7 dígitos) e da categoria.
+    Isto só confere como o número está escrito: o sistema não consulta o Conselho, que não tem consulta automática."""
+    bruto = (texto or "").strip().upper().replace("º", " ").replace("°", " ")
+    m = _COREN.match(bruto)
+    if not m:
+        return None, None
+    uf, numero, categoria = m.group(1), so_digitos(m.group(2)), m.group(3)
+    if uf not in UFS or categoria not in CATEGORIAS_COREN or not 3 <= len(numero) <= 7:
+        return None, None
+    grupos = []
+    while numero:                                    # de três em três, da direita para a esquerda (o número não muda: zero à esquerda fica)
+        grupos.insert(0, numero[-3:])
+        numero = numero[:-3]
+    return f"COREN-{uf} {'.'.join(grupos)}-{categoria}", categoria
 
 
 # ------------------------------------------------------------------- hora

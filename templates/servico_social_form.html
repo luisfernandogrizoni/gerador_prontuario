@@ -82,7 +82,9 @@
 
   <div class="cabecalho-rel">
     <h1>{{ titulo }}</h1>
-    {% if relatorio and relatorio.dados %}
+    {% if relatorio and relatorio.finalizado %}
+      <span class="estado">finalizado em {{ relatorio.finalizado_em.strftime('%d/%m/%Y às %H:%M') }}{{ ' por ' ~ relatorio.assinatura.split(' — ')[0] if relatorio.assinatura }}{% if alteracao %} · alterado em {{ alteracao.quando.strftime('%d/%m/%Y às %H:%M') }}{{ ' por ' ~ alteracao.por.split(' — ')[0] if alteracao.por }}{% endif %}</span>
+    {% elif relatorio and relatorio.dados %}
       <span class="estado">rascunho salvo em {{ relatorio.atualizado_em.strftime('%d/%m/%Y às %H:%M') }}{{ ' por ' ~ relatorio.atualizado_por if relatorio.atualizado_por }}</span>
     {% else %}
       <span class="estado">ainda não preenchido</span>
@@ -117,9 +119,10 @@
     {% endfor %}
 
     <div class="barra-salvar">
-      <button class="botao secundario" type="submit" name="acao" value="salvar">Salvar rascunho</button>
+      {% set ja_finalizado = relatorio and relatorio.finalizado %}
+      <button class="botao{{ '' if ja_finalizado else ' secundario' }}" type="submit" name="acao" value="salvar">{{ 'Salvar alterações' if ja_finalizado else 'Salvar rascunho' }}</button>
       <button class="botao secundario" type="submit" name="acao" value="imprimir"><svg class="icone"><use href="#i-impressora"/></svg>Salvar e imprimir</button>
-      <button class="botao" type="submit" name="acao" value="finalizar" id="finalizar">Finalizar e assinar</button>
+      {% if not ja_finalizado %}<button class="botao" type="submit" name="acao" value="finalizar" id="finalizar">Finalizar e assinar</button>{% endif %}
       <span class="estado-form" hidden>Alterações não salvas</span>
     </div>
   </form>
@@ -157,9 +160,10 @@
     document.querySelectorAll('input[name="' + alvo.dataset.soSe + '"]').forEach(function (r) { r.addEventListener("change", conferir); });
   });
 
-  // finalizar trava o acolhimento: pede confirmação
-  document.getElementById("finalizar").addEventListener("click", function (e) {
-    if (!confirm("Finalizar o acolhimento social de " + {{ i.pessoa.nome | tojson }} + "? Depois disso ele não se edita mais: correções entram como adendo.")) e.preventDefault();
+  // finalizar pede confirmação
+  var finalizar = document.getElementById("finalizar");
+  if (finalizar) finalizar.addEventListener("click", function (e) {
+    if (!confirm("Finalizar o acolhimento social de " + {{ i.pessoa.nome | tojson }} + "?")) e.preventDefault();
   });
 
   // avisa antes de sair da página com texto ainda não salvo

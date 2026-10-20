@@ -47,7 +47,7 @@
           <td class="livre" data-rotulo="Cargo">{{ p.cargo }}</td>
           <td class="fixo" data-rotulo="Usuário de login">{{ p.usuario }}</td>
           <td class="fixo" data-rotulo="Nível de acesso">{{ p.nivel.nome if p.nivel else '' }}</td>
-          <td class="fixo" data-rotulo="Situação"><span class="selo {{ 'ativo' if p.ativo else 'desativado' }}">{{ 'Ativo' if p.ativo else 'Desativado' }}</span>{% if p.padrao %}<span class="selo padrao" title="Assina quando ninguém escolhe outra pessoa">Assina por padrão</span>{% endif %}{% if p.servico_social %}<span class="selo padrao" title="Lê e escreve o acolhimento social">Serviço Social</span>{% endif %}</td>
+          <td class="fixo" data-rotulo="Situação"><span class="selo {{ 'ativo' if p.ativo else 'desativado' }}">{{ 'Ativo' if p.ativo else 'Desativado' }}</span>{% if p.padrao %}<span class="selo padrao" title="Assina quando ninguém escolhe outra pessoa">Assina por padrão</span>{% endif %}{% if p.servico_social %}<span class="selo padrao" title="Lê e escreve o acolhimento social">Serviço Social</span>{% elif p.profissao %}<span class="selo padrao" title="Função na equipe{{ ' · ' ~ p.registro_profissional if p.registro_profissional }}">{{ funcoes.get(p.profissao, ('', ''))[0] }}</span>{% endif %}{% if p.le_sigilosos %}<span class="selo padrao" title="Lê o acolhimento social e a ficha de saúde, sem editar">Lê os sigilosos</span>{% endif %}</td>
           <td class="fixo seguranca" data-rotulo="Segurança">
             {%- set login = logins.get(p.usuario) if p.usuario else none -%}
             {%- if login -%}

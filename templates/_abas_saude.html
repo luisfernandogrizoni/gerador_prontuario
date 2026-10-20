@@ -1,0 +1,12 @@
+{# Abas da ficha de saúde de um acolhido. `abas` = {atual: 'anamnese' | 'enfermagem' | 'evolucao', registros: n, evolucoes: n}; `i` = a internação. #}
+{% macro abas(i, abas) -%}
+<div class="ferramentas">
+  <div class="segmentado" role="group" aria-label="Ficha de saúde">
+    {% if pode_ler_saude %}
+    <a href="{{ url_for('ficha_saude', id=i.id) }}" class="{{ 'ativo' if abas.atual == 'anamnese' }}"><svg class="icone"><use href="#i-prancheta"/></svg>Anamnese</a>
+    <a href="{{ url_for('saude_enfermagem', id=i.id) }}" class="{{ 'ativo' if abas.atual == 'enfermagem' }}"><svg class="icone"><use href="#i-coracao"/></svg>Registros de enfermagem<span class="n">{{ abas.registros }}</span></a>
+    {% endif %}
+    <a href="{{ url_for('saude_evolucao', id=i.id) }}" class="{{ 'ativo' if abas.atual == 'evolucao' }}"><svg class="icone"><use href="#i-usuarios"/></svg>Evolução multiprofissional<span class="n">{{ abas.evolucoes }}</span></a>
+  </div>
+</div>
+{%- endmacro %}

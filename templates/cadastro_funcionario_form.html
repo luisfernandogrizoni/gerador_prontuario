@@ -58,15 +58,20 @@
     </fieldset>
 
     <fieldset class="tom-rosa">
-      {{ legenda('Serviço Social', 'coracao') }}
+      {{ legenda('Equipe e relatórios sigilosos', 'coracao') }}
       <div class="grade">
-        {{ f.entrada('registro_profissional', 'Registro profissional (CRESS)', 'c3', attrs={'maxlength': 30, 'placeholder': 'ex.: CRESS 12345 · 6ª Região'}) }}
+        {% if pode_acessos %}
+          {{ f.escolha('profissao', 'Função na equipe', profissoes, 'c3', vazio='Nenhuma') }}
+        {% else %}
+        <label class="c3">Função na equipe<input value="{{ funcao_atual }}" readonly></label>
+        {% endif %}
+        {{ f.entrada('registro_profissional', 'Registro profissional', 'c3', attrs={'maxlength': 30, 'placeholder': 'o do conselho da função (CRESS, COREN...)'}) }}
       </div>
       <div class="caixas">
         {% if pode_acessos %}
-        <label class="caixa"><input type="checkbox" name="servico_social" value="1"{{ ' checked' if d.get('servico_social') == '1' }}>Assina o Serviço Social: lê e escreve o acolhimento social (ficha, relatório e parecer)</label>
+        <label class="caixa"><input type="checkbox" name="le_sigilosos" value="1"{{ ' checked' if d.get('le_sigilosos') == '1' }}>Lê os relatórios sigilosos (acolhimento social e ficha de saúde), sem editar</label>
         {% else %}
-        <label class="caixa"><input type="checkbox" disabled{{ ' checked' if d.get('servico_social') == '1' }}>Assina o Serviço Social (só o administrador muda)</label>
+        <label class="caixa"><input type="checkbox" disabled{{ ' checked' if d.get('le_sigilosos') == '1' }}>Lê os relatórios sigilosos (só o administrador muda)</label>
         {% endif %}
       </div>
     </fieldset>
@@ -88,4 +93,15 @@
   </div>
 </main>
 <script src="{{ url_for('static', filename='secoes.js') }}"></script>
+<script nonce="{{ csp_nonce() }}">
+  // o exemplo do registro muda com a função escolhida (cada conselho escreve o número de um jeito)
+  (function () {
+    var funcao = document.getElementById("f-profissao"), registro = document.getElementById("f-registro_profissional");
+    if (!funcao || !registro) return;
+    var exemplos = {{ exemplos_de_registro | tojson }};
+    function atualizar() { registro.placeholder = exemplos[funcao.value] || "o do conselho da função (CRESS, COREN...)"; }
+    funcao.addEventListener("change", atualizar);
+    atualizar();
+  })();
+</script>
 {% endblock %}

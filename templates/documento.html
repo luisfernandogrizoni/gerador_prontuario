@@ -27,12 +27,26 @@
   .opcao-coluna.ativa { border-color: transparent; }   /* ativa: fundo e texto são os da cor do convênio (.tipo-<cor>, base.html) */
   .opcao-coluna .aviso-item { font-weight: 500; opacity: .75; }
   @media (max-width: 760px) { .opcoes-doc { margin-top: 0; } }
+  /* detalhar as internações (relatório anual): o botão e a caixa para escolher os anos e meses */
+  button.opcao-coluna { font-family: inherit; cursor: pointer; }
+  #detalhar-internacoes { width: min(520px, 94vw); }
+  #detalhar-internacoes fieldset { border: 0; padding: 0; margin: 0 0 14px; min-width: 0; }
+  #detalhar-internacoes legend { padding: 0; margin-bottom: 6px; }
+  #detalhar-internacoes label { flex-direction: row; align-items: center; gap: 8px; }
+  #detalhar-internacoes legend label { font-weight: 700; }
+  .anos-detalhe { max-height: 56vh; overflow-y: auto; margin-bottom: 14px; }
+  .meses-detalhe { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .meses-detalhe label { justify-content: space-between; gap: 4px; padding: 6px 8px; border: 1px solid var(--borda-forte); border-radius: 8px; font-size: .86rem; cursor: pointer; }
+  .meses-detalhe label:has(input:checked) { border-color: var(--vermelho); background: #fdf2f2; }
+  .meses-detalhe label:has(input:disabled) { opacity: .45; cursor: default; }
+  .meses-detalhe small { color: var(--suave); }
+  #detalhar-internacoes .botoes { flex-wrap: wrap; }
   .mesa { background: #e4e7ec; border-radius: var(--raio); padding: 24px clamp(8px, 3vw, 28px); overflow-x: auto; }
   .papel { width: 210mm; max-width: 100%; margin: 0 auto; background: #fff; box-shadow: 0 2px 12px rgba(16, 24, 40, .18); color: #000; }
   .papel.paisagem { width: 297mm; }
   .papel + .papel { margin-top: 18px; }
-  .folha { width: 100%; height: 297mm; border-collapse: collapse; table-layout: fixed; }
-  .papel.paisagem .folha { height: 210mm; }
+  .folha { width: 100%; height: 296mm; border-collapse: collapse; table-layout: fixed; }
+  .papel.paisagem .folha { height: 209mm; }
   .folha > thead > tr > td, .folha > tfoot > tr > td { padding: 10mm clamp(12px, 5vw, var(--margem)) 0; vertical-align: top; }
   .folha > tfoot > tr > td { padding: 0 clamp(12px, 5vw, var(--margem)) 9mm; vertical-align: bottom; }
   .folha > tbody > tr > td { padding: 3mm clamp(12px, 5vw, var(--margem)) 6mm; vertical-align: top; height: 100%; }
@@ -176,10 +190,10 @@
     <h1>{{ doc.titulo }}</h1>
     <div class="botoes-doc">
       <button type="button" class="botao" data-imprimir><svg class="icone"><use href="#i-impressora"/></svg>Imprimir</button>
-      <a class="botao secundario" href="{{ docx }}"><svg class="icone"><use href="#i-baixar"/></svg>Baixar .docx</a>
+      {% if docx %}<a class="botao secundario" href="{{ docx }}"><svg class="icone"><use href="#i-baixar"/></svg>Baixar .docx</a>{% endif %}
     </div>
   </div>
-  {% if barra and (barra.colunas or barra.emissores or barra.itens) %}
+  {% if barra and (barra.colunas or barra.emissores or barra.itens or barra.detalhar) %}
   <div class="opcoes-doc">
     {% for grupo in barra.itens or [] %}
     <div class="grupo" role="group" aria-label="{{ grupo.titulo }}">
@@ -201,9 +215,15 @@
       {% endfor %}
     </div>
     {% endif %}
+    {% if barra.detalhar %}
+    <div class="grupo">
+      <button type="button" class="opcao-coluna tipo-particular{{ ' ativa' if barra.detalhar.marcados }}" id="abrir-detalhe" aria-pressed="{{ 'true' if barra.detalhar.marcados else 'false' }}">
+        <span class="marca">{{ '✓' if barra.detalhar.marcados else '+' }}</span>Detalhar internações{% if barra.detalhar.marcados %} ({{ barra.detalhar.marcados }} {{ 'mês' if barra.detalhar.marcados == 1 else 'meses' }}){% endif %}</button>
+    </div>
+    {% endif %}
     {% if barra.emissores %}
     <form method="get" class="grupo">
-      {% for chave, valor in barra.manter.items() %}<input type="hidden" name="{{ chave }}" value="{{ valor }}">{% endfor %}
+      {% for chave, valor in barra.manter %}<input type="hidden" name="{{ chave }}" value="{{ valor }}">{% endfor %}
       <label><span class="rotulo">Responsável pela emissão</span>
         <select name="emissor" data-trocar-emissor>
           {% for id, rotulo, sem_registro in barra.emissores %}<option value="{{ id }}"{{ ' selected' if id == barra.emissor_id }}{{ ' disabled' if sem_registro and id != barra.emissor_id }}>{{ rotulo }}</option>{% endfor %}
@@ -214,6 +234,30 @@
   </div>
   {% endif %}
   {% for texto in avisos %}<div class="aviso erro">{{ texto }}</div>{% endfor %}
+  {% if barra and barra.detalhar %}
+  <dialog id="detalhar-internacoes">
+    <form method="get">
+      {% for chave, valor in barra.manter if chave == 'colunas' %}<input type="hidden" name="{{ chave }}" value="{{ valor }}">{% endfor %}
+      {% if barra.emissores %}<input type="hidden" name="emissor" value="{{ barra.emissor_id }}">{% endif %}
+      <h2>Detalhar internações</h2>
+      <div class="anos-detalhe">
+        {% for a in barra.detalhar.anos %}
+        <fieldset>
+          <legend><label><input type="checkbox" data-ano-todo>{{ a.ano }}</label></legend>
+          <div class="meses-detalhe">
+            {% for m in a.meses %}<label><span><input type="checkbox" name="mes" value="{{ m.chave }}"{{ ' checked' if m.marcado }}{{ ' disabled' if not m.total }}> {{ m.nome }}</span><small>{{ m.total }}</small></label>{% endfor %}
+          </div>
+        </fieldset>
+        {% endfor %}
+      </div>
+      <div class="botoes">
+        <button type="button" class="botao secundario" id="cancelar-detalhe">Cancelar</button>
+        {% if barra.detalhar.marcados %}<a class="botao secundario" href="{{ barra.detalhar.sem }}" data-substituir>Tirar o detalhamento</a>{% endif %}
+        <button class="botao">Incluir no relatório</button>
+      </div>
+    </form>
+  </dialog>
+  {% endif %}
 
   <div class="mesa">
     {% for folha in doc.paginas() %}
@@ -241,11 +285,36 @@
     {% endfor %}
   </div>
 </main>
+<script src="{{ url_for('static', filename='paginacao.js') }}"></script>
 <script nonce="{{ csp_nonce() }}">
   // trocar quem assina recarrega o documento no lugar (sem acrescentar uma página ao histórico: o "Voltar" continua indo para a tela de onde veio)
   function trocarEmissor(form) {
     location.replace(location.pathname + "?" + new URLSearchParams(new FormData(form)).toString());
   }
+  // detalhar internações: a caixa para escolher os anos e meses
+  (function () {
+    var caixa = document.getElementById("detalhar-internacoes");
+    if (!caixa) return;
+    document.getElementById("abrir-detalhe").addEventListener("click", function () { caixa.showModal(); });
+    document.getElementById("cancelar-detalhe").addEventListener("click", function () { caixa.close(); });
+    caixa.addEventListener("click", function (e) { if (e.target === caixa) caixa.close(); });
+    caixa.querySelectorAll("fieldset").forEach(function (ano) {
+      var todos = ano.querySelector("[data-ano-todo]"), meses = ano.querySelectorAll('input[name="mes"]:not(:disabled)');
+      function conferir() {
+        var marcados = ano.querySelectorAll('input[name="mes"]:checked').length;
+        todos.checked = meses.length > 0 && marcados === meses.length;
+        todos.indeterminate = marcados > 0 && marcados < meses.length;
+      }
+      todos.addEventListener("change", function () { meses.forEach(function (c) { c.checked = todos.checked; }); conferir(); });
+      meses.forEach(function (c) { c.addEventListener("change", conferir); });
+      conferir();
+    });
+    // incluir recarrega o relatório no lugar (sem acrescentar uma página ao histórico)
+    caixa.querySelector("form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      location.replace(location.pathname + "?" + new URLSearchParams(new FormData(e.target)).toString());
+    });
+  })();
   // "Imprimir" nas outras telas abre este documento já com a janela de impressão
   if (new URLSearchParams(location.search).get("imprimir")) {
     window.addEventListener("load", function () { setTimeout(function () { window.print(); }, 350); });

@@ -11,7 +11,10 @@ Tabelas dos acolhidos:
        │ N       Responsável, convênio e datas ficam aqui — mudam a cada internação.
     parcelas     contribuições pagas naquela internação (nº, data, valor)
     relatorios_sociais  o acolhimento social daquela internação: ficha, relatório e parecer (1 por internação)
-    adendos_sociais     correções acrescentadas a um acolhimento social já finalizado
+    fichas_saude        a ficha de saúde (anamnese) daquela internação, assinada pela enfermagem (1 por internação)
+    registros_enfermagem  sinais vitais, glicemia, perdas e evolução de enfermagem, um registro por vez (só se acrescenta)
+    evolucoes_saude     evolução multiprofissional e anotações da coordenação e de outros profissionais (só se acrescenta)
+    versoes_relatorios  o histórico de versões do acolhimento social e da ficha de saúde depois de finalizados (só o administrador vê)
 
 Os nomes das colunas são os mesmos dos campos dos formulários (name="..."):
     preencher(form)      formulário -> colunas (só os campos que vieram no form)
@@ -233,6 +236,14 @@ class Internacao(CamposDeFormulario, db.Model):
         back_populates="internacao", order_by="Parcela.numero", cascade="all, delete-orphan")
     relatorio_social: Mapped["RelatorioSocial | None"] = relationship(
         back_populates="internacao", uselist=False, cascade="all, delete-orphan")
+    ficha_saude: Mapped["FichaSaude | None"] = relationship(
+        back_populates="internacao", uselist=False, cascade="all, delete-orphan")
+    registros_enfermagem: Mapped[list["RegistroEnfermagem"]] = relationship(
+        back_populates="internacao", order_by="RegistroEnfermagem.quando, RegistroEnfermagem.id", cascade="all, delete-orphan")
+    evolucoes_saude: Mapped[list["EvolucaoSaude"]] = relationship(
+        back_populates="internacao", order_by="EvolucaoSaude.criado_em, EvolucaoSaude.id", cascade="all, delete-orphan")
+    versoes_relatorios: Mapped[list["VersaoRelatorio"]] = relationship(
+        back_populates="internacao", order_by="VersaoRelatorio.id", cascade="all, delete-orphan")
 
     def normalizar(self):
         self.resp_cpf = so_digitos(self.resp_cpf)
@@ -338,9 +349,9 @@ class RelatorioSocial(db.Model):
     o parecer. Só as respostas que foram digitadas, num JSON {campo: texto}. Uma linha por internação; mora aqui, não em
     colunas, porque o modelo do escritório pode mudar.
 
-    Nasce como rascunho, que a assistente social edita à vontade. Finalizar trava: fica a data, a hora e a assinatura
-    (nome, cargo e registro profissional de quem finalizou, como estavam naquele momento) e as correções passam a ser
-    adendos (AdendoSocial)."""
+    Nasce como rascunho, que a assistente social edita à vontade. Finalizar guarda a data, a hora e a assinatura (nome, cargo e
+    registro profissional de quem finalizou, como estavam naquele momento); depois a assistente social ainda pode alterar, e cada
+    alteração vira uma versão no histórico (VersaoRelatorio)."""
     __tablename__ = "relatorios_sociais"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -354,8 +365,6 @@ class RelatorioSocial(db.Model):
     assinatura: Mapped[str] = mapped_column(String(200), default="")         # "Nome — cargo — registro", como estava ao finalizar
 
     internacao: Mapped[Internacao] = relationship(back_populates="relatorio_social")
-    adendos: Mapped[list["AdendoSocial"]] = relationship(
-        back_populates="relatorio", order_by="AdendoSocial.id", cascade="all, delete-orphan")
 
     @property
     def finalizado(self):
@@ -363,18 +372,86 @@ class RelatorioSocial(db.Model):
 
 
 # =========================================================================
-class AdendoSocial(db.Model):
-    """Correção ou informação nova acrescentada a um acolhimento social já finalizado. Nunca se edita nem se apaga:
-    o documento finalizado fica como foi assinado e os adendos vêm depois dele, cada um com data, hora e autor."""
-    __tablename__ = "adendos_sociais"
+class FichaSaude(db.Model):
+    """A ficha de saúde (anamnese) de uma internação (ficha_saude.py): história fisiológica e patológica, investigação sobre os
+    sistemas e sobre a dependência química. Mesmo desenho do acolhimento social: só as respostas digitadas, num JSON {campo: texto},
+    uma linha por internação; nasce como rascunho e, ao ser finalizada pela enfermagem (com o COREN), guarda data, hora e
+    assinatura. Depois a enfermeira ainda pode alterar, e cada alteração vira uma versão no histórico (VersaoRelatorio)."""
+    __tablename__ = "fichas_saude"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    relatorio_id: Mapped[int] = mapped_column(ForeignKey("relatorios_sociais.id"), index=True)
+    internacao_id: Mapped[int] = mapped_column(ForeignKey("internacoes.id"), unique=True)
+    dados: Mapped[dict] = mapped_column(JSON, default=dict)
+    atualizado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
+    atualizado_por: Mapped[str] = mapped_column(String(50), default="")
+    situacao: Mapped[str] = mapped_column(String(12), default="rascunho")    # rascunho | finalizado
+    finalizado_em: Mapped[datetime | None] = mapped_column(DateTime)
+    finalizado_por: Mapped[str] = mapped_column(String(50), default="")
+    assinatura: Mapped[str] = mapped_column(String(200), default="")         # "Nome — cargo — COREN", como estava ao finalizar
+
+    internacao: Mapped[Internacao] = relationship(back_populates="ficha_saude")
+
+    @property
+    def finalizado(self):
+        return self.situacao == "finalizado"
+
+
+class RegistroEnfermagem(db.Model):
+    """Um registro da Sistematização da Assistência de Enfermagem: sinais vitais, glicemia capilar, perdas e a evolução de enfermagem
+    daquele momento. Só se acrescenta (ficha_saude.py); o que estava errado se corrige com um registro novo."""
+    __tablename__ = "registros_enfermagem"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    internacao_id: Mapped[int] = mapped_column(ForeignKey("internacoes.id"), index=True)
+    quando: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)  # o horário em que foi medido
+    pa: Mapped[str] = mapped_column(String(10), default="")                   # "120/80"
+    pulso: Mapped[int | None] = mapped_column()
+    temperatura: Mapped[float | None] = mapped_column(Float)
+    fr: Mapped[int | None] = mapped_column()
+    bcf: Mapped[int | None] = mapped_column()
+    glicemia: Mapped[int | None] = mapped_column()
+    peso: Mapped[float | None] = mapped_column(Float)
+    volume_urinario: Mapped[str] = mapped_column(String(60), default="")
+    evacuacao: Mapped[str] = mapped_column(String(60), default="")
+    evolucao: Mapped[str] = mapped_column(String(3000), default="")
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    criado_por: Mapped[str] = mapped_column(String(200), default="")         # "Nome — cargo — COREN" de quem registrou
+
+    internacao: Mapped[Internacao] = relationship(back_populates="registros_enfermagem")
+
+
+class EvolucaoSaude(db.Model):
+    """Uma anotação da evolução multiprofissional: de cada profissional da equipe (médica, enfermagem, nutrição, psicologia, assistência
+    social), do coordenador operacional ou de outros profissionais. Só se acrescenta."""
+    __tablename__ = "evolucoes_saude"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    internacao_id: Mapped[int] = mapped_column(ForeignKey("internacoes.id"), index=True)
+    categoria: Mapped[str] = mapped_column(String(20))                       # chave de ficha_saude.CATEGORIAS_DE_EVOLUCAO
     texto: Mapped[str] = mapped_column(String(3000))
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     criado_por: Mapped[str] = mapped_column(String(200), default="")         # "Nome — cargo — registro" de quem escreveu
 
-    relatorio: Mapped[RelatorioSocial] = relationship(back_populates="adendos")
+    internacao: Mapped[Internacao] = relationship(back_populates="evolucoes_saude")
+
+
+class VersaoRelatorio(db.Model):
+    """Uma entrada do histórico de versões do acolhimento social ou da ficha de saúde (versoes.py), depois de finalizados: `finalizado` é o relatório
+    como foi finalizado, `alterado` é cada alteração feita depois (o relatório inteiro daquele momento, e quais respostas mudaram) e `adendo` é um
+    adendo de antes de o histórico existir (só o texto). Só se acrescenta; só o administrador vê."""
+    __tablename__ = "versoes_relatorios"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    internacao_id: Mapped[int] = mapped_column(ForeignKey("internacoes.id"), index=True)
+    tipo: Mapped[str] = mapped_column(String(8))                             # social | saude
+    evento: Mapped[str] = mapped_column(String(12))                          # finalizado | alterado | adendo
+    dados: Mapped[dict] = mapped_column(JSON, default=dict)                  # as respostas daquela versão (vazio no adendo)
+    campos: Mapped[list] = mapped_column(JSON, default=list)                 # chaves das respostas que mudaram em relação à versão anterior
+    texto: Mapped[str] = mapped_column(String(3000), default="")             # só o adendo antigo
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    criado_por: Mapped[str] = mapped_column(String(200), default="")         # "Nome — cargo — registro" de quem finalizou, alterou ou escreveu
+
+    internacao: Mapped[Internacao] = relationship(back_populates="versoes_relatorios")
 
 
 # =========================================================================
@@ -481,6 +558,12 @@ class Funcionario(db.Model):
     # registro profissional (CRESS). O administrador também tem acesso, sem precisar desta marca.
     servico_social: Mapped[bool] = mapped_column(default=False)
     registro_profissional: Mapped[str] = mapped_column(String(30), default="")
+    # Função na equipe de saúde (só o administrador muda): uma chave de cadastros.PROFISSOES, ou "" para nenhuma. `servico_social` acompanha
+    # ("assistente_social") e continua sendo o que o resto do sistema consulta; o registro de cada função é o do conselho dela (CRESS, COREN...).
+    profissao: Mapped[str] = mapped_column(String(20), default="")
+    # Lê, sem editar, os relatórios sigilosos (o acolhimento social e a ficha de saúde). Permissão à parte, dada pessoa a pessoa pelo
+    # administrador: não depende do nível de acesso.
+    le_sigilosos: Mapped[bool] = mapped_column(default=False)
     # e-mail institucional (só o administrador altera): serve para o "esqueci minha senha" e para os avisos de segurança, e só vale
     # depois de confirmado com um código enviado a ele (contas.py)
     email: Mapped[str] = mapped_column(String(120), default="")

@@ -80,8 +80,20 @@ def migrar(db):
         db.session.execute(text("ALTER TABLE usuarios ADD COLUMN exigir_email BOOLEAN NOT NULL DEFAULT FALSE"))
         db.session.commit()
 
+    # 6c) a ficha de saúde (enfermagem): função de cada funcionário na equipe e a permissão de ler os relatórios sigilosos. Quem já tinha a
+    #     marca do Serviço Social passa a ter a função "assistente_social" (a marca continua valendo igual).
+    if "profissao" not in _colunas(db, "funcionarios"):
+        db.session.execute(text("ALTER TABLE funcionarios ADD COLUMN profissao VARCHAR(20) NOT NULL DEFAULT ''"))
+        db.session.execute(text("ALTER TABLE funcionarios ADD COLUMN le_sigilosos BOOLEAN NOT NULL DEFAULT FALSE"))
+        db.session.execute(text("UPDATE funcionarios SET profissao = 'assistente_social' WHERE servico_social"))
+        db.session.commit()
+
     # 6) o relatório de rejeição virou o parecer do acolhimento social: o que já foi escrito passa para lá
     _rejeicoes_para_o_acolhimento(db)
+
+    # 6d) os adendos dos relatórios sigilosos deixaram de existir (o relatório se altera direto, com histórico de versões): os que já foram escritos
+    #     passam para o histórico, onde só o administrador os vê
+    _adendos_para_o_historico(db)
 
     # 7) cadastros: na primeira subida trazem os convênios e o funcionário com que o sistema sempre trabalhou
     semear(db)
@@ -123,6 +135,28 @@ def _rejeicoes_para_o_acolhimento(db):
         else:
             relatorio.dados = {**novos, **(relatorio.dados or {})}      # o que já estava no acolhimento tem a palavra final
     db.session.execute(text("DELETE FROM rejeicoes_triagem"))
+    db.session.commit()
+
+
+def _adendos_para_o_historico(db):
+    """As tabelas adendos_sociais e adendos_saude deixaram de existir no modelo. Cada adendo vira uma entrada do tipo "adendo" no histórico de versões
+    (versoes_relatorios), com o texto, a data e o autor de sempre, e depois as linhas antigas são apagadas, então rodar de novo não repete nada.
+    Nada se perde: o texto fica guardado no histórico, que só o administrador vê."""
+    from datetime import datetime
+
+    from modelos import VersaoRelatorio
+
+    existentes = inspect(db.engine).get_table_names()
+    for tabela, tipo, chave, pai in (("adendos_sociais", "social", "relatorio_id", "relatorios_sociais"), ("adendos_saude", "saude", "ficha_id", "fichas_saude")):
+        if tabela not in existentes or pai not in existentes:
+            continue
+        linhas = db.session.execute(text(f"SELECT p.internacao_id, a.texto, a.criado_em, a.criado_por FROM {tabela} a JOIN {pai} p ON p.id = a.{chave} ORDER BY a.id")).all()
+        for internacao_id, texto, em, por in linhas:
+            if isinstance(em, str):
+                em = datetime.fromisoformat(em)
+            db.session.add(VersaoRelatorio(internacao_id=internacao_id, tipo=tipo, evento="adendo", dados={}, campos=[], texto=texto or "",
+                                           criado_em=em or datetime.now(), criado_por=por or ""))
+        db.session.execute(text(f"DELETE FROM {tabela}"))
     db.session.commit()
 
 

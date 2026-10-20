@@ -80,12 +80,6 @@
   }
   .acoes-doc.espaco { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 6px; }
   .acoes-doc.espaco .botao { padding: 6px 11px; font-size: .84rem; }
-  .adendos { list-style: none; margin: 14px 0 0; padding: 0; border-top: 1px solid #f0f2f5; }
-  .adendos li { padding: 10px 0; border-bottom: 1px solid #f0f2f5; font-size: .9rem; color: var(--suave); }
-  .adendos li:last-child { border-bottom: 0; padding-bottom: 0; }
-  .adendos li strong { color: var(--texto); }
-  .adendos p { margin: 4px 0 0; color: var(--texto); white-space: pre-wrap; overflow-wrap: anywhere; }
-  #adendo textarea { width: 100%; min-height: 9em; margin-bottom: 14px; }
   /* situação + ação de um cartão (acolhimento social, prontuário em papel) */
   .envelope { display: grid; gap: 12px; }
   .envelope .situacao { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
@@ -257,36 +251,57 @@
           <div class="situacao">
             {% if acolhimento.estado == 'finalizado' %}
               <span class="selo ativo">Finalizado</span>
-              <span>{{ acolhimento.em.strftime('%d/%m/%Y às %H:%M') }}{{ ' · ' ~ acolhimento.por if pode_servico_social and acolhimento.por }}</span>
-              {% if pode_servico_social %}
+              <span>{{ acolhimento.em.strftime('%d/%m/%Y às %H:%M') }}{{ ' · ' ~ acolhimento.por if pode_ler_social and acolhimento.por }}</span>
+              {% if pode_ler_social %}
                 {% if acolhimento.risco %}<span class="selo {{ {'Baixo': 'ativo', 'Médio': 'lista_espera', 'Alto': 'desistiu'}[acolhimento.risco] }}">Risco {{ acolhimento.risco | lower }}</span>{% endif %}
                 {% if acolhimento.parecer %}<span class="selo {{ 'rejeitado' if acolhimento.parecer.startswith('Não') else 'lista_espera' if 'ressalvas' in acolhimento.parecer else 'ativo' }}">{{ acolhimento.parecer }}</span>{% endif %}
               {% endif %}
             {% elif acolhimento.estado == 'rascunho' %}
               <span class="selo lista_espera">Em andamento</span>
-              <span>salvo em {{ acolhimento.em.strftime('%d/%m/%Y às %H:%M') }}{{ ' · ' ~ acolhimento.por if pode_servico_social and acolhimento.por }}</span>
+              <span>salvo em {{ acolhimento.em.strftime('%d/%m/%Y às %H:%M') }}{{ ' · ' ~ acolhimento.por if pode_ler_social and acolhimento.por }}</span>
             {% else %}
               <span class="selo{{ ' desistiu' if i.status == 'rejeitado' }}">Não iniciado</span>
             {% endif %}
           </div>
-          {% if pode_servico_social and acolhimento.estado != 'finalizado' %}
-            <a class="botao suave" href="{{ url_for('relatorio_social', id=i.id) }}">{{ 'Continuar' if acolhimento.estado == 'rascunho' else 'Preencher a ficha' }}</a>
-          {% elif pode_servico_social %}
-            <button type="button" class="botao secundario" id="abrir-adendo">Adendo</button>
+          {% if pode_servico_social %}
+            <a class="botao {{ 'secundario' if acolhimento.estado == 'finalizado' else 'suave' }}" href="{{ url_for('relatorio_social', id=i.id) }}">{{ 'Alterar' if acolhimento.estado == 'finalizado' else 'Continuar' if acolhimento.estado == 'rascunho' else 'Preencher a ficha' }}</a>
           {% endif %}
+          {% if acolhimento.historico %}<a class="botao secundario" href="{{ url_for('historico_do_relatorio', id=i.id, tipo='social') }}">Histórico de versões</a>{% endif %}
         </div>
         {% if acolhimento.estado == 'finalizado' and pode('documentos') %}
-          {% set item = 'relatorio-social' if pode_servico_social else 'resumo-social' %}
+          {% set item = 'relatorio-social' if pode_ler_social else 'resumo-social' %}
           {{ acoes_documento(url_for('ver_impressos', id=i.id, itens=item), url_for('baixar_impressos', id=i.id, itens=item), 'espaco') }}
         {% endif %}
-        {% if pode_servico_social and acolhimento.get('adendos') %}
-          <ul class="adendos">
-            {% for a in acolhimento.adendos %}
-            <li><strong>{{ a.criado_em.strftime('%d/%m/%Y às %H:%M') }}</strong> · {{ a.criado_por }}<p>{{ a.texto }}</p></li>
-            {% endfor %}
-          </ul>
+      {% endcall %}
+
+      {% if saude is not none %}
+      {% call cartao('Ficha de saúde', 'prancheta', 'turquesa', id='saude') %}
+        <div class="envelope">
+          <div class="situacao">
+            {% if saude.estado == 'finalizado' %}
+              <span class="selo ativo">Finalizada</span>
+              <span>{{ saude.em.strftime('%d/%m/%Y às %H:%M') }}{{ ' · ' ~ saude.por if pode_ler_saude and saude.por }}</span>
+            {% elif saude.estado == 'rascunho' %}
+              <span class="selo lista_espera">Em andamento</span>
+              <span>salva em {{ saude.em.strftime('%d/%m/%Y às %H:%M') }}{{ ' · ' ~ saude.por if pode_ler_saude and saude.por }}</span>
+            {% else %}
+              <span class="selo">Não iniciada</span>
+            {% endif %}
+          </div>
+          {% if pode_escrever_saude and saude.estado != 'finalizado' %}
+            <a class="botao suave" href="{{ url_for('ficha_saude', id=i.id) }}">{{ 'Continuar a anamnese' if saude.estado == 'rascunho' else 'Preencher a anamnese' }}</a>
+          {% elif saude.estado == 'finalizado' and pode_assinar_saude %}
+            <a class="botao secundario" href="{{ url_for('ficha_saude', id=i.id) }}">Alterar a anamnese</a>
+          {% endif %}
+          {% if saude.historico %}<a class="botao secundario" href="{{ url_for('historico_do_relatorio', id=i.id, tipo='saude') }}">Histórico de versões</a>{% endif %}
+          {% if pode_ler_saude %}<a class="botao secundario" href="{{ url_for('saude_enfermagem', id=i.id) }}">Registros de enfermagem · {{ saude.registros }}</a>{% endif %}
+          {% if pode_ler_saude or pode_evoluir %}<a class="botao secundario" href="{{ url_for('saude_evolucao', id=i.id) }}">Evolução multiprofissional · {{ saude.evolucoes }}</a>{% endif %}
+        </div>
+        {% if saude.estado == 'finalizado' and pode_ler_saude and pode('documentos') %}
+          {{ acoes_documento(url_for('ver_impressos', id=i.id, itens='multiprofissional'), url_for('baixar_impressos', id=i.id, itens='multiprofissional'), 'espaco') }}
         {% endif %}
       {% endcall %}
+      {% endif %}
 
       {% call cartao('Triagem' if i.e_triagem else 'Internação', 'calendario', 'azul') %}
         {% set etapas = [('1º contato', [i.primeiro_contato | data, i.hora_primeiro_contato | hora] | select | join(' ')),
@@ -364,19 +379,6 @@
 </dialog>
 {% endif %}
 
-{% if pode_servico_social and acolhimento.estado == 'finalizado' %}
-<dialog id="adendo">
-  <form method="post" action="{{ url_for('adendo_social', id=i.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <h2>Adendo ao acolhimento social</h2>
-    <textarea name="texto" maxlength="3000" required aria-label="Adendo"></textarea>
-    <div class="botoes">
-      <button type="button" class="botao secundario" id="cancelar-adendo">Cancelar</button>
-      <button class="botao">Registrar adendo</button>
-    </div>
-  </form>
-</dialog>
-{% endif %}
-
 {% if pode('excluir') %}
 <dialog id="excluir">
   <form method="post" action="{{ url_for('excluir_registro', id=i.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -410,11 +412,6 @@
       document.getElementById("fechar-documentos").addEventListener("click", function () { gaveta.close(); });
       gaveta.addEventListener("click", function (e) { if (e.target === gaveta) gaveta.close(); });
       if (location.hash === "#documentos") gaveta.showModal();
-    }
-    var adendo = document.getElementById("adendo");
-    if (adendo) {
-      document.getElementById("abrir-adendo").addEventListener("click", function () { adendo.showModal(); });
-      document.getElementById("cancelar-adendo").addEventListener("click", function () { adendo.close(); });
     }
     var dialogo = document.getElementById("excluir"), mais = document.querySelector("details.mais");
     if (dialogo) {

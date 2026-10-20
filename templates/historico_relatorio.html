@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% from "_voltar.html" import linha_voltar with context %}
+{#
+  O histórico de versões do acolhimento social ou da ficha de saúde (versoes.py), só para o administrador.
+  Variáveis: i (internação), tipo (social | saude), titulo (o nome do relatório) e itens (do mais novo para o mais antigo).
+#}
+
+{% block titulo %}Histórico de versões{% endblock %}
+
+{% block estilo %}
+  .relatorio { background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio); box-shadow: var(--sombra); overflow: hidden; }
+  .rel-tabela { width: 100%; border-collapse: collapse; font-size: .88rem; }
+  .rel-tabela th { padding: 10px 20px; text-align: left; background: #f9fafb; color: var(--suave); font-size: .7rem; font-weight: 700;
+                   text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--borda); white-space: nowrap; }
+  .rel-tabela td { padding: 12px 20px; border-bottom: 1px solid #f0f2f5; vertical-align: top; }
+  .rel-tabela tbody tr:last-child td { border-bottom: 0; }
+  .rel-tabela td.fixo { white-space: nowrap; }
+  .rel-tabela td.mudou { color: var(--suave); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .rel-tabela td.acao { text-align: right; }
+  .rel-vazio { padding: 26px 20px; color: var(--suave); }
+  @media screen and (max-width: 760px) {
+    .rel-tabela thead { display: none; }
+    .rel-tabela, .rel-tabela tbody { display: block; }
+    .rel-tabela tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; padding: 12px 14px; border-bottom: 1px solid #f0f2f5; }
+    .rel-tabela tbody tr:last-child { border-bottom: 0; }
+    .rel-tabela td { display: block; padding: 0; border: 0; white-space: normal; }
+    .rel-tabela td[data-rotulo]::before { content: attr(data-rotulo); display: block; margin-bottom: 2px; color: var(--suave); font-size: .66rem;
+                                           font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+    .rel-tabela td.mudou, .rel-tabela td.acao { grid-column: 1 / -1; text-align: left; }
+  }
+{% endblock %}
+
+{% block conteudo %}
+<main class="largo">
+  {{ linha_voltar(url_for('ficha', id=i.id)) }}
+  <div class="pagina-topo">
+    <div class="titulo">
+      <h1>Histórico de versões</h1>
+      <p class="ajuda">{{ titulo }} · {{ i.pessoa.nome }}</p>
+    </div>
+  </div>
+
+  <section class="relatorio" aria-label="Histórico de versões">
+    {% if itens %}
+    <table class="rel-tabela">
+      <thead><tr><th>Versão</th><th>Quando</th><th>Quem</th><th>O que mudou</th><th></th></tr></thead>
+      <tbody>
+        {% for h in itens %}
+        <tr>
+          <td class="fixo" data-rotulo="Versão">{{ (h.numero ~ ' · ') if h.numero }}{{ h.nome_do_evento }}</td>
+          <td class="fixo" data-rotulo="Quando">{{ h.quando.strftime('%d/%m/%Y às %H:%M') }}</td>
+          <td data-rotulo="Quem">{{ h.por or '—' }}</td>
+          <td class="mudou" data-rotulo="{{ 'Adendo' if h.texto else 'O que mudou' }}">{{ h.texto if h.texto else (h.campos | join('; ') if h.campos else '—') }}</td>
+          <td class="acao">{% if h.numero %}<a class="botao pequeno secundario" href="{{ url_for('ver_versao_do_relatorio', id=i.id, tipo=tipo, numero=h.numero) }}">Abrir</a>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <div class="rel-vazio">Nenhuma versão guardada.</div>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}
