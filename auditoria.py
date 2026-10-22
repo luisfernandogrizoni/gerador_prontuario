@@ -148,6 +148,12 @@ def _internacao(id_):
         return db.session.get(Internacao, id_) if id_ else None
 
 
+def _com_nomes():
+    """Abrir ou baixar um relatório com a anonimização desligada (nome completo) ou com informações escolhidas fica dito na trilha."""
+    campos = [c for c in request.args.getlist("campos") if c.isalpha()][:14]
+    return (" · com nomes completos" if request.args.get("nomes") == "completos" else "") + (f" · informações: {', '.join(campos)}" if campos else "")
+
+
 def _da_internacao(acao, detalhe=""):
     """A leitura é de uma ficha: acha o acolhido dela (mesmo se o registro estiver na lixeira)."""
     id_ = (request.view_args or {}).get("id")
@@ -179,11 +185,11 @@ LEITURAS = {
     "baixar_prontuario": lambda: _da_internacao("doc.baixar", "prontuário"),
     "baixar_declaracao": lambda: _da_internacao("doc.baixar", "declaração"),
     "baixar_impressos": lambda: _da_internacao("doc.baixar", _itens()),
-    "pagina_relatorios": lambda: ("relatorio.ver", "", None, None, "painel de relatórios"),
-    "ver_relatorio": lambda: ("relatorio.ver", "", None, None, f"internos ativos: {(request.view_args or {}).get('slug', '')}"),
-    "baixar_relatorio": lambda: ("relatorio.baixar", "", None, None, f"internos ativos: {(request.view_args or {}).get('slug', '')}"),
-    "ver_relatorio_anual": lambda: ("relatorio.ver", "", None, None, "quem passou pela casa no ano"),
-    "baixar_relatorio_anual": lambda: ("relatorio.baixar", "", None, None, "quem passou pela casa no ano"),
+    "pagina_relatorios": lambda: ("relatorio.ver", "", None, None, "painel de relatórios" + _com_nomes()),
+    "ver_relatorio": lambda: ("relatorio.ver", "", None, None, f"internos ativos: {(request.view_args or {}).get('slug', '')}" + _com_nomes()),
+    "baixar_relatorio": lambda: ("relatorio.baixar", "", None, None, f"internos ativos: {(request.view_args or {}).get('slug', '')}" + _com_nomes()),
+    "ver_relatorio_anual": lambda: ("relatorio.ver", "", None, None, "quem passou pela casa no ano" + _com_nomes()),
+    "baixar_relatorio_anual": lambda: ("relatorio.baixar", "", None, None, "quem passou pela casa no ano" + _com_nomes()),
     "api_triagens": lambda: ("ver.lista", "", None, None, "triagens"),
     "api_internos": lambda: ("ver.lista", "", None, None, "internos"),
     "api_pessoas": lambda: ("busca.pessoa", "", None, None, ""),

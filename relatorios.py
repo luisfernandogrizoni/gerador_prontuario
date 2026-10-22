@@ -2,22 +2,27 @@
 Relatórios do sistema, em Word e no navegador (veja documentos.py):
 
   * internos ativos por convênio (Caps AD, Prefeitura Tarumã e os convênios que forem cadastrados) — o nome sai só
-    com as iniciais;
+    com as iniciais (o padrão); quem pede pode desligar a anonimização e ver o nome completo (`anonimo=False`);
   * quantos internos passaram pela casa no ano — número geral, com colunas opcionais por convênio e, se a pessoa pedir, o detalhamento das internações
     realizadas em cada mês escolhido (quem foi internado, em qual convênio, quando e como está), antes do mesmo resumo de sempre.
+
+As tabelas de gente (internos ativos e internações do mês) mostram as informações que a pessoa escolher (INFORMACOES: CPF, endereço completo, só a
+cidade, bairro, telefone...); sem escolha vale o padrão de cada relatório.
 
 Este módulo decide o que entra em cada relatório; a aparência (timbre, tabelas, assinatura) é do documentos.py.
 """
 
 import re
 import unicodedata
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+from typing import Callable
 
 import catalogo
-from documentos import N, Coluna, Documento, Paragrafo, Tabela, Texto, Titulo, fecho
+from documentos import ALTURA_PAGINA, MARGEM_LATERAL_PADRAO, N, Coluna, Documento, Pagina, Paragrafo, Tabela, Texto, Titulo, fecho
 from modelos import STATUS_INTERNACAO, Internacao, Pessoa, db
-from prontuario import MESES, fmt_data
-from validacao import fmt_cpf
+from prontuario import MESES, calcular_idade, fmt_data, previsao_termino
+from validacao import fmt_cep, fmt_cpf
 
 # partes de nome que não viram inicial ("Maria da Silva" -> "M. S.")
 LIGACOES = {"da", "de", "do", "das", "dos", "e", "di", "du", "del", "von", "van"}
@@ -62,32 +67,128 @@ def convenio_do_relatorio(slug):
     return convenio if convenio and convenio.gratuito else None
 
 
-def internos_ativos(slug):
-    """Internos ativos do convênio, em ordem alfabética do nome: lista de dicionários para a tela e o Word."""
+@dataclass(frozen=True)
+class Informacao:
+    """Uma informação que a pessoa pode pôr ou tirar das tabelas de gente dos relatórios: o título da coluna, a que grupo pertence na caixa de escolha, quanto de
+    largura pede (em twips: o que sobra da folha depois dos mínimos é dividido na proporção dela), a largura mínima (a que cabe a palavra mais comprida
+    sem quebrar no meio, com letra de 8 pontos), o alinhamento e de onde vem o valor (`valor(internação, hoje)`)."""
+    chave: str
+    titulo: str
+    grupo: str
+    largura: int
+    minima: int
+    alinhamento: str
+    valor: Callable
+
+
+def _cidade(pessoa):
+    return "/".join(p for p in (pessoa.cidade, (pessoa.estado or "").upper()) if p) if pessoa.cidade else SEM_DADO
+
+
+def _previsao_de_saida(internacao):
+    return fmt_data(previsao_termino(internacao.inicio, internacao.tratamento_ate)) or SEM_DADO
+
+
+INFORMACOES = (
+    Informacao("cpf", "CPF", "Identificação", 1650, 1450, "centro", lambda i, hoje: fmt_cpf(i.pessoa.cpf) if i.pessoa.cpf else SEM_DADO),
+    Informacao("nascimento", "Nascimento", "Identificação", 1400, 1250, "centro", lambda i, hoje: fmt_data(i.pessoa.nascimento) or SEM_DADO),
+    Informacao("idade", "Idade", "Identificação", 800, 760, "centro",
+               lambda i, hoje: f"{calcular_idade(i.pessoa.nascimento, hoje)} anos" if i.pessoa.nascimento else SEM_DADO),
+    Informacao("telefone", "Telefone", "Identificação", 1700, 1150, "centro", lambda i, hoje: i.pessoa.contato1 or SEM_DADO),
+    Informacao("endereco", "Endereço", "Endereço", 3300, 1800, "esquerda", lambda i, hoje: endereco_completo(i.pessoa)),
+    Informacao("bairro", "Bairro", "Endereço", 1600, 1200, "esquerda", lambda i, hoje: i.pessoa.bairro or SEM_DADO),
+    Informacao("cidade", "Cidade", "Endereço", 1700, 1400, "esquerda", lambda i, hoje: _cidade(i.pessoa)),
+    Informacao("cep", "CEP", "Endereço", 1100, 1050, "centro", lambda i, hoje: fmt_cep(i.pessoa.cep) if i.pessoa.cep else SEM_DADO),
+    Informacao("convenio", "Convênio", "Internação", 1900, 1100, "esquerda", lambda i, hoje: catalogo.atual().nome_na_tela(i.convenio) or SEM_DADO),
+    Informacao("internacao", "Data de internação", "Internação", 1700, 1250, "centro", lambda i, hoje: fmt_data(i.inicio) or SEM_DADO),
+    Informacao("previsao", "Previsão de saída", "Internação", 1700, 1250, "centro", lambda i, hoje: _previsao_de_saida(i)),
+    Informacao("situacao", "Situação", "Internação", 2400, 1300, "esquerda", lambda i, hoje: _situacao(i)),
+)
+PADRAO_DOS_ATIVOS = ("cpf", "endereco", "internacao")          # o relatório de internos ativos de sempre
+PADRAO_DO_MES = ("convenio", "internacao", "situacao")         # as internações do mês de sempre
+NENHUMA_INFORMACAO = "nenhum"                                  # ?campos=nenhum: só o número e o nome
+ROTULO_NA_CAIXA = {"endereco": "Endereço completo"}             # como a informação aparece na caixa de escolha, quando difere do título da coluna
+
+
+def informacoes(chaves):
+    """As informações de `chaves`, na ordem do catálogo (não importa a ordem dos cliques); chave que não existe é ignorada."""
+    chaves = set(chaves)
+    return [x for x in INFORMACOES if x.chave in chaves]
+
+
+def ler_informacoes(textos):
+    """As informações pedidas em ?campos=cpf&campos=cidade: None se nada foi pedido (vale o padrão do relatório) e a lista de chaves, na ordem do
+    catálogo, se foi (vazia com ?campos=nenhum)."""
+    pedidos = {t.strip() for t in textos if t and t.strip()}
+    return [x.chave for x in informacoes(pedidos)] if pedidos else None
+
+
+def grupos_de_informacoes(marcadas):
+    """Para a caixa de escolha: [{"titulo": "Endereço", "itens": [{"chave", "titulo", "marcada"}]}], na ordem do catálogo."""
+    grupos = {}
+    for x in INFORMACOES:
+        grupos.setdefault(x.grupo, []).append({"chave": x.chave, "titulo": ROTULO_NA_CAIXA.get(x.chave, x.titulo), "marcada": x.chave in marcadas})
+    return [{"titulo": titulo, "itens": itens} for titulo, itens in grupos.items()]
+
+
+LARGURA_PAISAGEM = ALTURA_PAGINA - 2 * MARGEM_LATERAL_PADRAO      # largura útil da folha em paisagem, em twips
+INFORMACOES_NA_FOLHA_EM_PE = 5  # com mais informações que isso, o relatório vira paisagem (a folha deitada para as palavras não quebrarem no meio)
+
+
+def _em_paisagem(infos):
+    return len(infos) > INFORMACOES_NA_FOLHA_EM_PE
+
+
+def _tabela_de_pessoas(itens, infos, anonimo, largura_total=None):
+    """A tabela de gente: o número, o nome (iniciais ou completo) e as informações escolhidas. Cada coluna ganha o seu mínimo (que cresce com a letra) e o
+    que sobra da folha é repartido na proporção do que cada uma pede; a letra fica menor quando são muitas colunas."""
+    largura_total = largura_total or LARGURA_DA_TABELA
+    quantas = len(infos)
+    tamanho = (10 if quantas <= 4 else 9 if quantas <= 5 else 8) if largura_total == LARGURA_DA_TABELA else (10 if quantas <= 7 else 9 if quantas <= 9 else 8)
+    nome = ("Iniciais", 1150, 900, "centro") if anonimo else ("Nome", 2500, 1500, "esquerda")
+    colunas = [("Nº", 480, 480, "centro"), nome, *[(x.titulo, x.largura, x.minima, x.alinhamento) for x in infos]]
+    restante = largura_total - colunas[0][1]
+    pesos, minimas = [c[1] for c in colunas[1:]], [c[2] * tamanho / 8 for c in colunas[1:]]
+    if sum(minimas) >= restante:                 # nem o mínimo de cada uma cabe: todas encolhem na mesma proporção
+        larguras = [int(m * restante / sum(minimas)) for m in minimas]
+    else:
+        sobra = restante - sum(minimas)
+        larguras = [int(m + p * sobra / sum(pesos)) for m, p in zip(minimas, pesos)]
+    larguras = [colunas[0][1]] + larguras
+    larguras[-1] += largura_total - sum(larguras)
+    return Tabela(colunas=[Coluna(t, w, a) for (t, _, _, a), w in zip(colunas, larguras)],
+                  linhas=[[n, i["quem"], *[i[x.chave] for x in infos]] for n, i in enumerate(itens, 1)], tamanho=tamanho)
+
+
+def nome_no_relatorio(pessoa, anonimo=True):
+    """Como a pessoa aparece nos relatórios: só as iniciais (o padrão) ou, com a anonimização desligada, o nome completo. A escolha é feita aqui, no
+    servidor: com a anonimização ligada o nome completo nem chega à página."""
+    return iniciais(pessoa.nome) if anonimo else ((pessoa.nome or "").strip() or SEM_DADO)
+
+
+def internos_ativos(slug, anonimo=True, chaves=PADRAO_DOS_ATIVOS, hoje=None):
+    """Internos ativos do convênio, em ordem alfabética do nome: lista de dicionários para a tela e o Word, com `quem` e as informações de `chaves`."""
+    hoje = hoje or hoje_no_brasil()
+    infos = informacoes(chaves)
     internacoes = db.session.execute(
         db.select(Internacao).join(Pessoa).filter(Internacao.status == "ativo", Internacao.convenio == convenio_do_relatorio(slug).nome)
     ).scalars().all()
     internacoes.sort(key=lambda i: _chave_de_ordem(i.pessoa.nome))
-    return [{
-        "iniciais": iniciais(i.pessoa.nome),
-        "cpf": fmt_cpf(i.pessoa.cpf) if i.pessoa.cpf else SEM_DADO,
-        "endereco": endereco_completo(i.pessoa),
-        "internacao": fmt_data(i.inicio) or SEM_DADO,
-    } for i in internacoes]
+    return [{"quem": nome_no_relatorio(i.pessoa, anonimo), **{x.chave: x.valor(i, hoje) for x in infos}} for i in internacoes]
 
 
-def documento_convenio(slug, hoje, emissor=None):
+def documento_convenio(slug, hoje, emissor=None, anonimo=True, informacoes_pedidas=None):
+    """`informacoes_pedidas`: as chaves das informações a mostrar (veja ler_informacoes); None vale o padrão do relatório (PADRAO_DOS_ATIVOS)."""
     convenio = convenio_do_relatorio(slug).nome
-    itens = internos_ativos(slug)
-    blocos = [Titulo("RELATÓRIO DE INTERNOS ATIVOS", tamanho=15),
+    infos = informacoes(PADRAO_DOS_ATIVOS if informacoes_pedidas is None else informacoes_pedidas)
+    itens = internos_ativos(slug, anonimo, [x.chave for x in infos], hoje)
+    paisagem = _em_paisagem(infos)
+    blocos = [*([Pagina(paisagem=True)] if paisagem else []), Titulo("RELATÓRIO DE INTERNOS ATIVOS", tamanho=15),
               Paragrafo([N(f"Convênio: {convenio}")], "centro", depois=14, tamanho=12),
               Paragrafo([f"Relação dos acolhidos que se encontram em tratamento nesta Comunidade Terapêutica, participantes "
                          f"do convênio com {convenio}, em {hoje.strftime('%d/%m/%Y')}."], "justificado", depois=10)]
     if itens:
-        blocos.append(Tabela(
-            colunas=[Coluna("Nº", 480, "centro"), Coluna("Iniciais", 1150, "centro"), Coluna("CPF", 1700, "centro"),
-                     Coluna("Endereço", 4258), Coluna("Data de internação", 2050, "centro")],
-            linhas=[[n, i["iniciais"], i["cpf"], i["endereco"], i["internacao"]] for n, i in enumerate(itens, 1)]))
+        blocos.append(_tabela_de_pessoas(itens, infos, anonimo, LARGURA_PAISAGEM if paisagem else None))
         blocos.append(Paragrafo([N(f"Total de internos ativos: {len(itens)}")], antes=10))
     else:
         blocos.append(Paragrafo([Texto("Não há internos ativos neste convênio na data do relatório.", italico=True)], "centro", antes=10))
@@ -153,19 +254,20 @@ def colunas_disponiveis(hoje):
 LARGURA_DA_TABELA = 9638        # largura útil da folha, em twips (7338 + 2300 na tabela de uma coluna só)
 
 
-def _colunas_da_tabela_anual(convenios):
+def _colunas_da_tabela_anual(convenios, largura=LARGURA_DA_TABELA):
     """Descrição + geral (+ uma coluna para cada convênio). Sem convênios, a tabela é a de sempre."""
     if not convenios:
-        return [Coluna("Descrição", 7338), Coluna("Internos", 2300, "centro")]
+        return [Coluna("Descrição", largura - 2300), Coluna("Internos", 2300, "centro")]
     k = 1 + len(convenios)
     numerica = 1450 if k <= 3 else 1250 if k <= 5 else 1050
-    return [Coluna("Descrição", LARGURA_DA_TABELA - k * numerica), Coluna("Internos (geral)", numerica, "centro"),
+    return [Coluna("Descrição", largura - k * numerica), Coluna("Internos (geral)", numerica, "centro"),
             *[Coluna(c.nome_tela, numerica, "centro") for c in convenios]]
 
 
-def documento_anual(hoje, colunas=(), emissor=None, meses=()):
+def documento_anual(hoje, colunas=(), emissor=None, meses=(), anonimo=True, informacoes_pedidas=None):
     """`colunas`: convênios (catalogo.ConvenioDef) que ganham uma coluna ao lado do total geral. `meses`: [(ano, mês)] cujas internações são detalhadas
-    antes do resumo (veja ler_meses); sem eles o documento é o resumo de sempre."""
+    antes do resumo (veja ler_meses); sem eles o documento é o resumo de sempre. `anonimo`: nos meses detalhados, só as iniciais (o padrão) ou o nome completo. `informacoes_pedidas`: as informações de cada
+    internação (PADRAO_DO_MES se None)."""
     r = resumo_anual(hoje)
     ano, total = r["ano"], r["total"]
     verbo, substantivo = ("passaram", "internos") if total != 1 else ("passou", "interno")
@@ -174,13 +276,14 @@ def documento_anual(hoje, colunas=(), emissor=None, meses=()):
                f"Saíram durante {ano}"]
     campos = ["total", "ingressaram", "ja_estavam", "permanecem", "sairam"]
     resumos = [r] + [resumo_anual(hoje, c.nome) for c in colunas]
-    detalhes = blocos_dos_meses(meses, hoje)
-    blocos = [Titulo("RELATÓRIO DE INTERNOS", tamanho=15),
+    detalhes = blocos_dos_meses(meses, hoje, anonimo, informacoes_pedidas)
+    paisagem = bool(meses) and _em_paisagem(_informacoes_do_mes(informacoes_pedidas))
+    blocos = [*([Pagina(paisagem=True)] if paisagem else []), Titulo("RELATÓRIO DE INTERNOS", tamanho=15),
               *detalhes,
               Paragrafo([N(f"Passaram pela casa em {ano}")], "centro", antes=24 if detalhes else 0, depois=14, tamanho=12),
               Paragrafo([f"Informamos que, de 01/01/{ano} a {hoje.strftime('%d/%m/%Y')}, {verbo} pela Comunidade Terapêutica Casa de "
                          f"Acolhida Restauração ", N(f"{total} {substantivo}"), "."], "justificado", depois=12),
-              Tabela(colunas=_colunas_da_tabela_anual(colunas),
+              Tabela(colunas=_colunas_da_tabela_anual(colunas, LARGURA_PAISAGEM if paisagem else LARGURA_DA_TABELA),
                      linhas=[[rotulo, *[x[campo] for x in resumos]] for rotulo, campo in zip(rotulos, campos)],
                      negrito_linhas=(0,))]
     blocos += fecho(hoje, emissor)
@@ -228,15 +331,17 @@ def _situacao(internacao):
     return f"Saiu em {fmt_data(internacao.termino)}" if internacao.termino else SITUACAO_SEM_SAIDA
 
 
-def internacoes_do_mes(ano, mes, hoje):
-    """As internações realizadas no mês (data de internação dentro dele), da mais antiga para a mais nova: iniciais, convênio, data e situação de agora."""
+def internacoes_do_mes(ano, mes, hoje, anonimo=True, chaves=PADRAO_DO_MES):
+    """As internações realizadas no mês (data de internação dentro dele), da mais antiga para a mais nova: `quem` (iniciais ou nome), `convenio` (sempre: a conta
+    por convênio precisa dele) e as informações de `chaves`."""
+    infos = informacoes(chaves)
     primeiro, proximo = _limites_do_mes(ano, mes)
     registros = db.session.execute(db.select(Internacao).join(Pessoa).filter(
         Internacao.status.in_(STATUS_INTERNACAO), Internacao.inicio >= primeiro, Internacao.inicio < proximo, Internacao.inicio <= hoje)).scalars().all()
     registros.sort(key=lambda i: (i.inicio, _chave_de_ordem(i.pessoa.nome)))
     cadastro = catalogo.atual()
-    return [{"iniciais": iniciais(i.pessoa.nome), "convenio": cadastro.nome_na_tela(i.convenio) or SEM_DADO, "internacao": fmt_data(i.inicio),
-             "situacao": _situacao(i)} for i in registros]
+    return [{"quem": nome_no_relatorio(i.pessoa, anonimo), "convenio": cadastro.nome_na_tela(i.convenio) or SEM_DADO, **{x.chave: x.valor(i, hoje) for x in infos}}
+            for i in registros]
 
 
 def resumo_do_mes(ano, mes, internacoes):
@@ -250,13 +355,18 @@ def resumo_do_mes(ano, mes, internacoes):
     return {"total": len(internacoes), "por_convenio": sorted(por_convenio.items(), key=lambda par: (-par[1], par[0])), "saidas": saidas}
 
 
-def blocos_dos_meses(meses, hoje):
+def _informacoes_do_mes(informacoes_pedidas):
+    return informacoes(PADRAO_DO_MES if informacoes_pedidas is None else informacoes_pedidas)
+
+
+def blocos_dos_meses(meses, hoje, anonimo=True, informacoes_pedidas=None):
     """O detalhamento no documento: para cada mês, o título com o total, os números do mês e a tabela das internações."""
     if not meses:
         return []
     blocos = [Paragrafo([N("Internações realizadas por mês")], "centro", depois=6, tamanho=12)]
+    infos = _informacoes_do_mes(informacoes_pedidas)
     for ano, mes in meses:
-        itens = internacoes_do_mes(ano, mes, hoje)
+        itens = internacoes_do_mes(ano, mes, hoje, anonimo, [x.chave for x in infos])
         r = resumo_do_mes(ano, mes, itens)
         total = r["total"]
         blocos.append(Paragrafo([N(f"{MESES[mes - 1].capitalize()} de {ano} – {total} {'internação' if total == 1 else 'internações'}")],
@@ -267,20 +377,18 @@ def blocos_dos_meses(meses, hoje):
         numeros.append(f"Saíram no mês: {r['saidas']}.")
         blocos.append(Paragrafo([" ".join(numeros)], tamanho=11, depois=6, unido_ao_proximo=bool(itens)))
         if itens:
-            blocos.append(Tabela(colunas=[Coluna("Nº", 480, "centro"), Coluna("Iniciais", 1500, "centro"), Coluna("Convênio", 2400), Coluna("Data de internação", 1900, "centro"),
-                                          Coluna("Situação", 3358)],
-                                 linhas=[[n, i["iniciais"], i["convenio"], i["internacao"], i["situacao"]] for n, i in enumerate(itens, 1)]))
+            blocos.append(_tabela_de_pessoas(itens, infos, anonimo, LARGURA_PAISAGEM if _em_paisagem(infos) else None))
         else:
             blocos.append(Paragrafo([Texto("Nenhuma internação realizada neste mês.", italico=True)], "centro", antes=4))
     return blocos
 
 
 # ------------------------------------------------------------ o que a página de relatórios mostra
-def painel():
+def painel(anonimo=True):
     """Um bloco por convênio, com a lista de quem entra no relatório."""
     blocos = []
     for c in catalogo.atual().com_relatorio:
-        itens = internos_ativos(c.slug)
+        itens = internos_ativos(c.slug, anonimo)
         if c.ativo or itens:                      # convênio desativado só aparece enquanto ainda tem gente internada
             blocos.append({"slug": c.slug, "nome": c.nome_tela, "tipo": c.cor, "itens": itens})
     return blocos
