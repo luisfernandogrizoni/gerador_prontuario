@@ -40,6 +40,15 @@
   .meses-detalhe label:has(input:checked) { border-color: var(--vermelho); background: #fdf2f2; }
   .meses-detalhe label:has(input:disabled) { opacity: .45; cursor: default; }
   .meses-detalhe small { color: var(--suave); }
+  #escolher-informacoes { width: min(520px, 94vw); }
+  #escolher-informacoes fieldset { border: 0; padding: 0; margin: 0 0 14px; min-width: 0; }
+  #escolher-informacoes legend { padding: 0; margin-bottom: 6px; font-weight: 700; }
+  #escolher-informacoes label { flex-direction: row; align-items: center; gap: 8px; }
+  #escolher-informacoes .botoes { flex-wrap: wrap; }
+  .informacoes-detalhe { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .informacoes-detalhe label { padding: 7px 10px; border: 1px solid var(--borda-forte); border-radius: 8px; font-size: .88rem; cursor: pointer; }
+  .informacoes-detalhe label:has(input:checked) { border-color: var(--vermelho); background: #fdf2f2; }
+  .informacoes-detalhe input { width: auto; flex: none; margin: 0; }
   #detalhar-internacoes .botoes { flex-wrap: wrap; }
   .mesa { background: #e4e7ec; border-radius: var(--raio); padding: 24px clamp(8px, 3vw, 28px); overflow-x: auto; }
   .papel { width: 210mm; max-width: 100%; margin: 0 auto; background: #fff; box-shadow: 0 2px 12px rgba(16, 24, 40, .18); color: #000; }
@@ -193,7 +202,7 @@
       {% if docx %}<a class="botao secundario" href="{{ docx }}"><svg class="icone"><use href="#i-baixar"/></svg>Baixar .docx</a>{% endif %}
     </div>
   </div>
-  {% if barra and (barra.colunas or barra.emissores or barra.itens or barra.detalhar) %}
+  {% if barra and (barra.colunas or barra.emissores or barra.itens or barra.detalhar or barra.nomes or barra.informacoes) %}
   <div class="opcoes-doc">
     {% for grupo in barra.itens or [] %}
     <div class="grupo" role="group" aria-label="{{ grupo.titulo }}">
@@ -215,6 +224,17 @@
       {% endfor %}
     </div>
     {% endif %}
+    {% if barra.nomes %}
+    <div class="grupo">
+      <a class="interruptor{{ ' ligado' if barra.nomes.anonimo }}" href="{{ barra.nomes.url }}" data-substituir role="switch" aria-checked="{{ 'true' if barra.nomes.anonimo else 'false' }}"><i class="trilho"></i><span>Anonimizar (só iniciais)</span></a>
+    </div>
+    {% endif %}
+    {% if barra.informacoes %}
+    <div class="grupo">
+      <button type="button" class="opcao-coluna tipo-particular{{ ' ativa' if not barra.informacoes.padrao }}" id="abrir-informacoes" aria-pressed="{{ 'false' if barra.informacoes.padrao else 'true' }}">
+        <span class="marca">{{ '+' if barra.informacoes.padrao else '✓' }}</span>Informações a mostrar{% if not barra.informacoes.padrao %} ({{ barra.informacoes.quantas }}){% endif %}</button>
+    </div>
+    {% endif %}
     {% if barra.detalhar %}
     <div class="grupo">
       <button type="button" class="opcao-coluna tipo-particular{{ ' ativa' if barra.detalhar.marcados }}" id="abrir-detalhe" aria-pressed="{{ 'true' if barra.detalhar.marcados else 'false' }}">
@@ -234,10 +254,34 @@
   </div>
   {% endif %}
   {% for texto in avisos %}<div class="aviso erro">{{ texto }}</div>{% endfor %}
+  {% if barra and barra.informacoes %}
+  <dialog id="escolher-informacoes">
+    <form method="get">
+      {% for chave, valor in barra.manter if chave != 'campos' %}<input type="hidden" name="{{ chave }}" value="{{ valor }}">{% endfor %}
+      {% if barra.emissores %}<input type="hidden" name="emissor" value="{{ barra.emissor_id }}">{% endif %}
+      <h2>Informações a mostrar</h2>
+      <div class="anos-detalhe">
+        {% for grupo in barra.informacoes.grupos %}
+        <fieldset>
+          <legend>{{ grupo.titulo }}</legend>
+          <div class="informacoes-detalhe">
+            {% for x in grupo['itens'] %}<label><input type="checkbox" name="campos" value="{{ x.chave }}"{{ ' checked' if x.marcada }}> {{ x.titulo }}</label>{% endfor %}
+          </div>
+        </fieldset>
+        {% endfor %}
+      </div>
+      <div class="botoes">
+        <button type="button" class="botao secundario" id="cancelar-informacoes">Cancelar</button>
+        {% if not barra.informacoes.padrao %}<a class="botao secundario" href="{{ barra.informacoes.sem }}" data-substituir>Voltar ao padrão</a>{% endif %}
+        <button class="botao">Aplicar</button>
+      </div>
+    </form>
+  </dialog>
+  {% endif %}
   {% if barra and barra.detalhar %}
   <dialog id="detalhar-internacoes">
     <form method="get">
-      {% for chave, valor in barra.manter if chave == 'colunas' %}<input type="hidden" name="{{ chave }}" value="{{ valor }}">{% endfor %}
+      {% for chave, valor in barra.manter if chave in ('colunas', 'nomes', 'campos') %}<input type="hidden" name="{{ chave }}" value="{{ valor }}">{% endfor %}
       {% if barra.emissores %}<input type="hidden" name="emissor" value="{{ barra.emissor_id }}">{% endif %}
       <h2>Detalhar internações</h2>
       <div class="anos-detalhe">
@@ -313,6 +357,21 @@
     caixa.querySelector("form").addEventListener("submit", function (e) {
       e.preventDefault();
       location.replace(location.pathname + "?" + new URLSearchParams(new FormData(e.target)).toString());
+    });
+  })();
+  // informações a mostrar: a caixa para escolher o que sai nas tabelas de gente
+  (function () {
+    var caixa = document.getElementById("escolher-informacoes");
+    if (!caixa) return;
+    document.getElementById("abrir-informacoes").addEventListener("click", function () { caixa.showModal(); });
+    document.getElementById("cancelar-informacoes").addEventListener("click", function () { caixa.close(); });
+    caixa.addEventListener("click", function (e) { if (e.target === caixa) caixa.close(); });
+    // aplicar recarrega o relatório no lugar; sem nenhuma marcada, pede "nenhum" (senão valeria o padrão)
+    caixa.querySelector("form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var dados = new URLSearchParams(new FormData(e.target));
+      if (!dados.has("campos")) dados.set("campos", "nenhum");
+      location.replace(location.pathname + "?" + dados.toString());
     });
   })();
   // "Imprimir" nas outras telas abre este documento já com a janela de impressão

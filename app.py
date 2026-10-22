@@ -730,15 +730,64 @@ def _escolha_de_emissor():
     return request.args.get("emissor", type=int)
 
 
-def _barra(emissor_id, colunas=(), detalhar=None):
+def _anonimo():
+    """Os relatórios mostram só as iniciais (o padrão); a chave "Anonimizar" desligada pede o nome completo (?nomes=completos)."""
+    return request.args.get("nomes") != "completos"
+
+
+def _nomes_pedidos():
+    """O valor de ?nomes= que os endereços do relatório repetem: 'completos' com a anonimização desligada, nada com ela ligada."""
+    return None if _anonimo() else "completos"
+
+
+def _esta_tela(sem=(), com=None):
+    """O endereço desta mesma tela, sem o que for dito em `sem` e com o que vier em `com`, mantendo tudo o mais que foi escolhido (sem o ?imprimir=1)."""
+    escolhas = request.args.to_dict(flat=False)
+    for chave in ("imprimir", *sem):
+        escolhas.pop(chave, None)
+    escolhas.update(com or {})
+    return url_for(request.endpoint, **(request.view_args or {}), **escolhas)
+
+
+def _alternar_nomes():
+    """O endereço desta mesma tela com a anonimização trocada (ligada <-> desligada), mantendo tudo o mais que foi escolhido."""
+    return _esta_tela(sem=("nomes",), com={"nomes": ["completos"]} if _anonimo() else None)
+
+
+def _informacoes_pedidas():
+    """As informações que a pessoa escolheu mostrar (?campos=...): None se não escolheu (vale o padrão do relatório) e a lista de chaves se escolheu."""
+    return relatorios.ler_informacoes(request.args.getlist("campos"))
+
+
+def _escolhas():
+    """O que os endereços do relatório repetem do que a pessoa escolheu: a anonimização desligada (?nomes=completos) e as informações (?campos=...)."""
+    pedidas = _informacoes_pedidas()
+    return {"nomes": _nomes_pedidos(), "campos": None if pedidas is None else (pedidas or [relatorios.NENHUMA_INFORMACAO])}
+
+
+def _informacoes_a_mostrar(padrao):
+    """A caixa de escolha das informações da barra do documento: {"grupos", "padrao" (nada escolhido ainda), "quantas", "sem" (o endereço sem a escolha)}."""
+    pedidas = _informacoes_pedidas()
+    marcadas = list(padrao) if pedidas is None else pedidas
+    return {"grupos": relatorios.grupos_de_informacoes(set(marcadas)), "padrao": pedidas is None, "quantas": len(marcadas), "sem": _esta_tela(sem=("campos",))}
+
+
+def _chave_dos_nomes():
+    """A chave liga/desliga "Anonimizar" da barra do documento: {"anonimo": ligada?, "url": o endereço que a troca}."""
+    return {"anonimo": _anonimo(), "url": _alternar_nomes()}
+
+
+def _barra(emissor_id, colunas=(), detalhar=None, nomes=None, informacoes=None):
     """Opções que aparecem acima do documento (só na tela): quem assina, se houver mais de um funcionário ativo,
     e os botões de colunas do relatório anual. `colunas` = [(convênio, ativa, endereço de quem clicar), ...]. `detalhar`: a escolha dos meses
-    cujas internações o relatório anual detalha ({"anos": relatorios.meses_disponiveis, "marcados": quantos, "sem": endereço sem o detalhamento})."""
+    cujas internações o relatório anual detalha ({"anos": relatorios.meses_disponiveis, "marcados": quantos, "sem": endereço sem o detalhamento}). `nomes`: a
+    chave liga/desliga da anonimização (_chave_dos_nomes). `informacoes`: a caixa de escolha das informações a mostrar (_informacoes_a_mostrar)."""
     ativos = [f for f in cadastros_.funcionarios() if f.ativo]
     return {"emissor_id": emissor_id,
             "emissores": [(f.id, cadastros_.rotulo_do_emissor(f), cadastros_.sem_registro(f)) for f in ativos] if len(ativos) > 1 else [],
             "colunas": [{"nome": c.nome_tela, "tipo": c.cor, "ativa": ativa, "url": url} for c, ativa, url in colunas],
-            "manter": [(k, v) for k, v in request.args.items(multi=True) if k in ("colunas", "mes")], "detalhar": detalhar}
+            "manter": [(k, v) for k, v in request.args.items(multi=True) if k in ("colunas", "mes", "nomes", "campos")], "detalhar": detalhar, "nomes": nomes,
+            "informacoes": informacoes}
 
 
 def _mostrar(doc, docx, voltar, avisos=(), barra=None):
@@ -1138,21 +1187,22 @@ def apagar_registro(id):
 def pagina_relatorios():
     hoje = relatorios.hoje_no_brasil()
     anual = relatorios.resumo_anual(hoje)
-    return render_template("relatorios.html", blocos=relatorios.painel(), hoje=hoje, anual=anual,
-                           aviso_anual=relatorios.aviso_do_resumo(anual))
+    return render_template("relatorios.html", blocos=relatorios.painel(_anonimo()), hoje=hoje, anual=anual, aviso_anual=relatorios.aviso_do_resumo(anual),
+                           anonimo=_anonimo(), nomes=_nomes_pedidos(), alternar=_alternar_nomes())
 
 
 def _relatorio_do_convenio(slug, emissor):
     if relatorios.convenio_do_relatorio(slug) is None:
         abort(404)
-    return relatorios.documento_convenio(slug, relatorios.hoje_no_brasil(), emissor)
+    return relatorios.documento_convenio(slug, relatorios.hoje_no_brasil(), emissor, _anonimo(), _informacoes_pedidas())
 
 
 @app.get("/relatorios/internos-ativos/<slug>")
 def ver_relatorio(slug):
     emissor, emissor_id = _emissor()
-    return _mostrar(_relatorio_do_convenio(slug, emissor), url_for("baixar_relatorio", slug=slug, emissor=_escolha_de_emissor()),
-                    url_for("pagina_relatorios"), barra=_barra(emissor_id))
+    return _mostrar(_relatorio_do_convenio(slug, emissor), url_for("baixar_relatorio", slug=slug, emissor=_escolha_de_emissor(), **_escolhas()),
+                    url_for("pagina_relatorios", nomes=_nomes_pedidos()),
+                    barra=_barra(emissor_id, nomes=_chave_dos_nomes(), informacoes=_informacoes_a_mostrar(relatorios.PADRAO_DOS_ATIVOS)))
 
 
 @app.get("/relatorios/internos-ativos/<slug>.docx")
@@ -1179,22 +1229,23 @@ def ver_relatorio_anual():
     def endereco(slugs, endpoint="ver_relatorio_anual", com_meses=True):
         # a ordem das colunas é sempre a do cadastro, qualquer que seja a ordem dos cliques
         ordenados = [c.slug for c in disponiveis if c.slug in slugs]
-        return url_for(endpoint, colunas=",".join(ordenados) or None, emissor=_escolha_de_emissor(),
+        return url_for(endpoint, colunas=",".join(ordenados) or None, emissor=_escolha_de_emissor(), **_escolhas(),
                        mes=[f"{a}-{m:02d}" for a, m in meses] if com_meses and meses else None)
 
     botoes = [(c, c.slug in ativas, endereco(ativas - {c.slug} if c.slug in ativas else ativas | {c.slug}))
               for c in disponiveis]
     anos = relatorios.meses_disponiveis(hoje, set(meses))
     detalhar = {"anos": anos, "marcados": len(meses), "sem": endereco(ativas, com_meses=False)} if anos else None
-    return _mostrar(relatorios.documento_anual(hoje, escolhidas, emissor, meses), endereco(ativas, "baixar_relatorio_anual"),
-                    url_for("pagina_relatorios"), barra=_barra(emissor_id, botoes, detalhar),
+    informacoes = _informacoes_a_mostrar(relatorios.PADRAO_DO_MES) if meses else None        # só vale para os meses detalhados
+    return _mostrar(relatorios.documento_anual(hoje, escolhidas, emissor, meses, _anonimo(), _informacoes_pedidas()), endereco(ativas, "baixar_relatorio_anual"),
+                    url_for("pagina_relatorios", nomes=_nomes_pedidos()), barra=_barra(emissor_id, botoes, detalhar, _chave_dos_nomes(), informacoes),
                     avisos=[t for t in (relatorios.aviso_do_resumo(relatorios.resumo_anual(hoje)),) if t])
 
 
 @app.get("/relatorios/passaram-pela-casa.docx")
 def baixar_relatorio_anual():
     hoje = relatorios.hoje_no_brasil()
-    return _baixar(relatorios.documento_anual(hoje, _colunas_do_relatorio_anual(hoje)[0], _emissor()[0], relatorios.ler_meses(request.args.getlist("mes"), hoje)))
+    return _baixar(relatorios.documento_anual(hoje, _colunas_do_relatorio_anual(hoje)[0], _emissor()[0], relatorios.ler_meses(request.args.getlist("mes"), hoje), _anonimo(), _informacoes_pedidas()))
 
 
 # ================================================================= cadastros

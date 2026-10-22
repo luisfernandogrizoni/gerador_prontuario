@@ -156,6 +156,13 @@ trilha de auditoria registra `acolhimento.alterar` ou `saude.alterar` com o núm
 administrador** (na ficha do acolhido, "Histórico de versões", que também abre o documento de cada versão; abrir fica na trilha como `ver.historico`). Os
 adendos que já existiam foram trazidos para o histórico, onde o administrador os vê: nada foi apagado.
 
+**Relatórios de internos: iniciais por padrão, nome completo opcional (2026-10-22).** Os relatórios de internos ativos por convênio, o de internos
+(anual, com o detalhamento dos meses) e o painel de relatórios mostram só as **iniciais**. Quem pode ver relatórios liga e desliga a chave "Anonimizar (só
+iniciais)" para ver o **nome completo**, e escolhe numa caixa de múltipla escolha **quais informações aparecem** (CPF, endereço completo, só a cidade,
+telefone, idade...). A escolha vale na tela, na impressão e no Word. A anonimização é decidida **no servidor**: com a chave ligada o nome completo nem chega
+à página. Nada disso fica gravado no sistema (volta ao padrão na próxima abertura) e a trilha de auditoria registra "com nomes completos" e "informações:
+..." em cada leitura desses relatórios.
+
 ### Fase 2 — Trilha de auditoria (entregue em 2026-10-15)
 
 **Para quê.** Responder, depois do fato, "quem abriu, alterou, baixou ou apagou isto, e quando?". É o que a ANPD espera para
