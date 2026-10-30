@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_voltar.html" import linha_voltar with context %}
 {% from "_cartao.html" import legenda %}
+{% from "_rascunho.html" import campo_rascunho, aviso_rascunho with context %}
 {#
   O acolhimento social, escrito direto no sistema: ficha, relatório, classificação de risco e parecer
   (servico_social.py descreve as perguntas).
@@ -91,6 +92,7 @@
     {% endif %}
   </div>
   <p class="ajuda">{{ i.pessoa.nome }} · {{ i.status_txt }}</p>
+  {{ aviso_rascunho(rascunho) }}
   {% if anterior %}
     <div class="aviso">Trouxe do acolhimento anterior, de {{ anterior.finalizado_em.strftime('%d/%m/%Y') if anterior.finalizado_em else anterior.atualizado_em.strftime('%d/%m/%Y') }}, o que não costuma mudar (identificação e histórico familiar, e crenças). Confira e atualize.</div>
   {% endif %}
@@ -107,6 +109,7 @@
 
   <div class="form-grade">
   <form method="post" id="form-relatorio" data-indice><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {{ campo_rascunho(rascunho) }}
     {% if erros %}<div class="caixa-erros"><strong>{{ erros['_'] if erros.get('_') else 'Confira os campos marcados em vermelho.' }}</strong></div>{% endif %}
     {% for secao in secoes %}
     {% set vis = visual.get(secao.titulo, ('documento', 'neutro')) %}
@@ -165,14 +168,6 @@
   if (finalizar) finalizar.addEventListener("click", function (e) {
     if (!confirm("Finalizar o acolhimento social de " + {{ i.pessoa.nome | tojson }} + "?")) e.preventDefault();
   });
-
-  // avisa antes de sair da página com texto ainda não salvo
-  (function () {
-    var form = document.getElementById("form-relatorio"), alterado = false, enviando = false;
-    form.addEventListener("input", function () { alterado = true; });
-    form.addEventListener("change", function () { alterado = true; });
-    form.addEventListener("submit", function () { enviando = true; });
-    window.addEventListener("beforeunload", function (e) { if (alterado && !enviando) { e.preventDefault(); e.returnValue = ""; } });
-  })();
 </script>
+<script src="{{ url_for('static', filename='rascunho.js') }}"></script>
 {% endblock %}

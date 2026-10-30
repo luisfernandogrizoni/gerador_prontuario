@@ -102,6 +102,7 @@ ACOES = {
     "saude.enfermagem": ("alteracao", "Fez um registro de enfermagem"),
     "saude.evolucao": ("alteracao", "Escreveu uma anotação na evolução multiprofissional"),
     "aviso.ciente": ("alteracao", "Tirou um aviso do quadro (ciente)"),
+    "rascunho.descartar": ("alteracao", "Descartou um rascunho (a cópia automática do que estava sendo digitado e não foi gravado)"),
     # ---- administração
     "funcionario.criar": ("administracao", "Cadastrou um funcionário"),
     "funcionario.editar": ("administracao", "Editou o cadastro de um funcionário"),
@@ -208,7 +209,7 @@ EXPLICITAS = {
     "gerar", "lancar_parcela", "excluir_parcela", "excluir_registro", "restaurar_registro", "apagar_registro",
     "novo_convenio", "editar_convenio", "novo_funcionario", "novo_nivel", "editar_nivel", "mover_nivel", "salvar_permissoes",
     "pagina_auditoria", "exportar_auditoria", "login_codigo", "esqueci_senha", "redefinir_senha", "enviar_codigo_email", "confirmar_email",
-    "ativar_autenticador", "desativar_autenticador", "marcar_revisao",
+    "ativar_autenticador", "desativar_autenticador", "marcar_revisao", "descartar_rascunho",
 }
 
 # o que não se registra, e por quê
@@ -222,6 +223,8 @@ NAO_REGISTRA = {
     "lista_convenios": "convênios não são dado pessoal",
     "relatorio_de_rejeicao": "redireciona para o acolhimento social, que é registrado",
     "seguranca": "a página da própria pessoa (as ações dela são registradas quando acontecem)",
+    "salvar_rascunho": "a cópia automática do que a pessoa digita (a cada pausa): só dela, e vira registro quando ela grava, que aí é registrado; só o descarte entra na trilha",
+    "lista_rascunhos": "a lista dos rascunhos da própria pessoa (o que ela mesma digitou)",
 }
 
 

@@ -194,7 +194,9 @@ def _quem_imprime():
 # explicando por que não abriu — veja _pode_servico_social, _pode_ler_saude e _pode_assinar_saude em app.py.)
 REGRAS = {
     "sair": LIVRE, "alterar_senha": LIVRE, "seguranca": LIVRE, "enviar_codigo_email": LIVRE, "confirmar_email": LIVRE,
-    "ativar_autenticador": LIVRE, "desativar_autenticador": LIVRE,       # (a página de entrada, o código e o "esqueci minha senha" são autenticacao.ROTAS_LIVRES)
+    "ativar_autenticador": LIVRE, "desativar_autenticador": LIVRE,
+    "salvar_rascunho": LIVRE, "lista_rascunhos": LIVRE, "descartar_rascunho": LIVRE,    # rascunhos: só os da própria pessoa, e a tela de cada um confere a permissão (rascunhos.py)
+    # (a página de entrada, o código e o "esqueci minha senha" são autenticacao.ROTAS_LIVRES)
 
     "home": "ver", "api_pessoas": "ver", "lista_triagens": "ver", "api_triagens": "ver", "lista_internos": "ver",
     "api_internos": "ver", "ficha": "ver", "relatorio_social": "ver", "relatorio_de_rejeicao": "ver",

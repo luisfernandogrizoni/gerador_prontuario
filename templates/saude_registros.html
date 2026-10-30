@@ -3,6 +3,7 @@
 {% from "_voltar.html" import linha_voltar with context %}
 {% from "_cartao.html" import legenda %}
 {% from "_abas_saude.html" import abas as abas_da_saude with context %}
+{% from "_rascunho.html" import campo_rascunho, aviso_rascunho with context %}
 {#
   Os registros de enfermagem (sinais vitais, glicemia, perdas e evolução de enfermagem) e a evolução multiprofissional de um acolhido: o formulário
   de quem escreve e a lista, a mais nova em cima. Só se acrescenta (ficha_saude.py).
@@ -42,7 +43,9 @@
   {{ abas_da_saude(i, abas) }}
 
   {% if pode_escrever %}
+  {{ aviso_rascunho(rascunho) }}
   <form method="post" class="novo-registro" autocomplete="off"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {{ campo_rascunho(rascunho) }}
     {% if erros %}<div class="caixa-erros"><strong>{{ erros['_'] if erros.get('_') else 'Confira os campos marcados em vermelho.' }}</strong></div>{% endif %}
     {% if aba == 'enfermagem' %}
     <fieldset class="tom-turquesa">
@@ -130,4 +133,5 @@
   {% endif %}
 </main>
 <script src="{{ url_for('static', filename='secoes.js') }}"></script>
+<script src="{{ url_for('static', filename='rascunho.js') }}"></script>
 {% endblock %}

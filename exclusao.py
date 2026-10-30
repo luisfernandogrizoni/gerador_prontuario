@@ -19,7 +19,7 @@ from flask import g, has_app_context
 from sqlalchemy import event
 from sqlalchemy.orm import Session, with_loader_criteria
 
-from modelos import AvisoDispensado, Internacao, Pessoa, db
+from modelos import AvisoDispensado, Internacao, Pessoa, Rascunho, db
 
 # avisos que citam o registro (avisos.py): ao apagar de vez, as dispensas deles também vão (o SQLite reaproveita ids)
 AVISOS_DA_INTERNACAO = ("respcpf", "seminicio", "semtermino", "desistinicio", "agendavencida", "envelope", "rejeicao", "acolhimento")
@@ -73,6 +73,7 @@ def apagar(internacao):
     dela. Não tem volta. Chamar dentro de `vendo_tudo()`."""
     pessoa, id_internacao, id_pessoa = internacao.pessoa, internacao.id, internacao.pessoa_id
     db.session.delete(internacao)
+    db.session.execute(db.delete(Rascunho).filter_by(internacao_id=id_internacao))        # o que alguém digitava sobre este registro
     db.session.flush()
     _limpar_dispensas(AVISOS_DA_INTERNACAO, id_internacao)
     if not db.session.execute(db.select(db.func.count(Internacao.id)).filter_by(pessoa_id=id_pessoa)).scalar():

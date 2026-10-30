@@ -24,7 +24,7 @@ Os nomes das colunas são os mesmos dos campos dos formulários (name="..."):
 from datetime import date, datetime, time
 
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import JSON, Date, DateTime, Float, ForeignKey, String, Time
+from sqlalchemy import JSON, Date, DateTime, Float, ForeignKey, String, Time, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from prontuario import (calcular_idade, categoria_efetiva, classificar, fmt_data, fmt_reais, ler_data,
@@ -469,6 +469,28 @@ class CodigoSeguranca(db.Model):
     expira_em: Mapped[datetime] = mapped_column(DateTime)
     usado_em: Mapped[datetime | None] = mapped_column(DateTime)
     tentativas: Mapped[int] = mapped_column(default=0)
+
+
+# =========================================================================
+class Rascunho(db.Model):
+    """O que alguém estava digitando num formulário e ainda não gravou (rascunhos.py): a página manda uma cópia a cada pausa na digitação, para
+    uma queda de energia, uma aba fechada sem querer ou um navegador travado não custarem o trabalho. É só de quem digitou: ninguém mais o vê.
+    `token` nasce na página e identifica o rascunho entre um envio e outro. Quando o formulário é gravado de verdade, a linha vira uma lápide
+    (`concluido_em`, sem dados): se um envio atrasado chegar depois, não ressuscita o rascunho. Sem chave para as outras tabelas, como `Evento`:
+    apagar um registro de vez não esbarra em rascunho, e rascunhos.py limpa os dele."""
+    __tablename__ = "rascunhos"
+    __table_args__ = (UniqueConstraint("usuario_id", "token"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token: Mapped[str] = mapped_column(String(32))
+    usuario_id: Mapped[int] = mapped_column(index=True)
+    tipo: Mapped[str] = mapped_column(String(12))                                     # rascunhos.TIPOS: triagem, prontuario, acolhimento, saude...
+    internacao_id: Mapped[int | None] = mapped_column(index=True)                     # a internação da tela (editar, acolhimento...); vazio = registro novo
+    titulo: Mapped[str] = mapped_column(String(200), default="")                      # o nome do acolhido, para a lista de rascunhos
+    dados: Mapped[dict] = mapped_column(JSON, default=dict)                           # o formulário: {campo: texto, ou lista de textos}
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    atualizado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, index=True)
+    concluido_em: Mapped[datetime | None] = mapped_column(DateTime)                   # gravado de verdade: lápide, sem dados
 
 
 # =========================================================================

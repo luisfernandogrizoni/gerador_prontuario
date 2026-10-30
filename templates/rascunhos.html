@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% from "_voltar.html" import linha_voltar with context %}
+{#
+  Os rascunhos de quem está logado (rascunhos.py): o que foi digitado nos formulários e ainda não foi gravado. Só a própria pessoa os vê.
+  Variáveis: itens (rascunhos.listar), dias (quanto tempo um rascunho dura sem mexer).
+#}
+
+{% block titulo %}Rascunhos{% endblock %}
+
+{% block estilo %}
+  .lista .quando { color: var(--suave); }
+  .lista .sem-acesso { display: block; color: var(--suave); font-size: .84rem; margin-top: 2px; }
+  .lista .acoes-linha { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+  .lista .acoes-linha form { margin: 0; }
+  @media (max-width: 1279px) { .lista .acoes-linha { justify-content: stretch; } .lista .acoes-linha form, .lista .acoes-linha a { flex: 1 1 0; } .lista .acoes-linha .botao { width: 100%; } }
+{% endblock %}
+
+{% block conteudo %}
+<main class="largo">
+  {{ linha_voltar(url_for('home')) }}
+  <div class="pagina-topo">
+    <div class="titulo">
+      <h1>Rascunhos</h1>
+      <p class="ajuda">O que você digitou nos formulários e ainda não gravou. O sistema guarda uma cópia a cada pausa na digitação; só você a vê, e ela some sozinha depois de {{ dias }} dias sem mexer.</p>
+    </div>
+  </div>
+
+  {% with msgs = get_flashed_messages() %}
+    {% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
+  {% endwith %}
+
+  {% if itens %}
+  <div class="moldura">
+    <table class="lista">
+      <thead>
+        <tr>
+          <th>Formulário</th>
+          <th>Acolhido</th>
+          <th>Última cópia</th>
+          <th class="sem-ordem"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in itens %}
+        <tr>
+          <td data-rotulo="Formulário"><strong>{{ r.rotulo }}</strong><small class="sub">{{ 'continuação de um registro' if r.de_registro else 'registro novo' }}</small></td>
+          <td data-rotulo="Acolhido">{{ r.titulo }}{% if r.motivo %}<span class="sem-acesso">{{ r.motivo }}</span>{% endif %}</td>
+          <td class="fixo quando" data-rotulo="Última cópia">{{ r.quando }}</td>
+          <td class="fixo acao">
+            <div class="acoes-linha">
+              {% if r.url %}<a class="botao pequeno" href="{{ r.url }}">Continuar</a>{% endif %}
+              <form method="post" action="{{ url_for('descartar_rascunho', token=r.token) }}"
+                    data-confirmar="Descartar este rascunho? O que foi digitado e não gravado se perde."><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="botao pequeno secundario">Descartar</button></form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="vazio"><span class="icone-vazio"><svg class="icone"><use href="#i-documento"/></svg></span><span>Nenhum rascunho. Quando você começar a preencher um formulário, a cópia aparece aqui.</span></div>
+  {% endif %}
+</main>
+{% endblock %}
