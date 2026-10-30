@@ -206,6 +206,166 @@ class ControleSegmentado {
   addEventListener(tipo, funcao) { if (tipo === "change") this.ouvintes.push(funcao); }
 }
 
+// ------------------------------------------------------------------ lista com busca, filtros, ordem e páginas no servidor
+// Como a TabelaDinamica, mas o navegador NÃO baixa a lista inteira: pede ao servidor só a página que mostra (lista de internos: busca_de_internos.py), e é o
+// servidor que busca, filtra e ordena. A resposta é { itens, total, pagina, paginas, por, de, ate, contagens }. O que a pessoa escolhe (busca, filtros,
+// ordem, página, tamanho) fica na URL, como na TabelaDinamica.
+//   precisa de: <nav id="paginador">, <select id="por-pagina">, <button id="limpar-filtros"> e, em `campos`, os controles de filtro. O de nome `aba`
+//   (padrão "situacao") é o segmentado "Ativos | Inativos | Todos": o primeiro botão é o padrão e o valor vazio é "todos".
+class TabelaPaginada extends TabelaDinamica {
+  constructor({ aba = "situacao", ...opcoes }) {
+    super({ ...opcoes, filtro: () => true });
+    this.aba = aba;
+    this.sequencia = 0;
+    this.dados = null;
+    this.paginador = document.getElementById("paginador");
+    this.porPagina = document.getElementById("por-pagina");
+    this.limpar = document.getElementById("limpar-filtros");
+    this.moldura = this.corpo.closest(".moldura");
+    this.porPagina.addEventListener("change", () => this.aoMudar());
+    this.limpar.addEventListener("click", () => this.limparFiltros());
+  }
+
+  // ---------------------------------------------------------------- estado na URL
+  restaurarEstado() {
+    super.restaurarEstado();
+    const p = new URLSearchParams(location.search);
+    this.pagina = Math.max(1, parseInt(p.get("pagina"), 10) || 1);
+    const por = document.getElementById("por-pagina");
+    if (p.has("por") && [...por.options].some(o => o.value === p.get("por"))) por.value = p.get("por");
+  }
+
+  salvarEstado() {
+    super.salvarEstado();
+    const p = new URLSearchParams(location.search);
+    for (const [nome, controle] of Object.entries(this.campos)) if (!controle.value && nome !== this.aba) p.delete(nome);   // só o que está escolhido
+    this.pagina > 1 ? p.set("pagina", this.pagina) : p.delete("pagina");
+    const padrao = [...this.porPagina.options].find(o => o.defaultSelected)?.value;
+    this.porPagina.value !== padrao ? p.set("por", this.porPagina.value) : p.delete("por");
+    this.trocarEndereco(p);
+  }
+
+  // mudou a busca, um filtro, a ordem ou o tamanho: volta para a primeira página e pergunta de novo ao servidor (sem pedir a cada tecla)
+  aoMudar() {
+    this.pagina = 1;
+    clearTimeout(this.esperaBusca);
+    this.esperaBusca = setTimeout(() => this.carregar(), 250);
+    clearTimeout(this.esperaEstado);
+    this.esperaEstado = setTimeout(() => this.salvarEstado(), 250);
+  }
+
+  irPara(pagina) {
+    this.pagina = pagina;
+    this.carregar();
+    this.salvarEstado();
+    this.moldura.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
+
+  filtrosAtivos() {
+    return this.busca.value.trim() !== "" || Object.entries(this.campos).some(([nome, c]) => nome !== this.aba && c.value);
+  }
+
+  // volta ao começo: sem busca, sem filtros, na aba padrão
+  limparFiltros({ recarregar = true } = {}) {
+    this.busca.value = "";
+    for (const [nome, controle] of Object.entries(this.campos)) controle.value = nome === this.aba ? controle.options[0].value : "";
+    this.pagina = 1;
+    if (recarregar) this.aoMudar();
+  }
+
+  // ---------------------------------------------------------------- dados
+  // `foco`: o número de um registro que precisa aparecer; o servidor devolve a página em que ele está
+  async carregar({ foco = null } = {}) {
+    if (this.jaCarregou && document.hidden) return;          // aba escondida: a atualização automática espera
+    const sequencia = ++this.sequencia;
+    this.pedido?.abort();
+    this.pedido = new AbortController();
+    const p = new URLSearchParams();
+    if (this.busca.value.trim()) p.set("q", this.busca.value.trim());
+    for (const [nome, controle] of Object.entries(this.campos)) if (controle.value) p.set(nome, controle.value);
+    if (this.ordem.chave) { p.set("ordem", this.ordem.chave); p.set("dir", this.ordem.crescente ? "asc" : "desc"); }
+    p.set("por", this.porPagina.value);
+    p.set("pagina", this.pagina);
+    if (foco) p.set("foco", foco);
+    clearTimeout(this.demora);
+    this.demora = setTimeout(() => this.moldura.setAttribute("aria-busy", "true"), 300);       // só escurece se a resposta demorar
+    let resposta;
+    try {
+      resposta = await fetch(this.url + "?" + p, { signal: this.pedido.signal });
+      if (resposta.status === 401) { location.reload(); return; }       // login expirou: o servidor leva à tela de entrar
+      const dados = await resposta.json();
+      if (sequencia !== this.sequencia) return;                         // já saiu uma pergunta mais nova: esta resposta ficou velha
+      this.dados = dados;
+      this.itens = dados.itens;
+      this.pagina = dados.pagina;
+    } catch (erro) {
+      if (erro.name === "AbortError") return;
+      document.getElementById("atualizado").textContent = "Sem conexão com o servidor: tentando de novo…";
+      return;
+    } finally {
+      if (sequencia === this.sequencia) { clearTimeout(this.demora); this.moldura.removeAttribute("aria-busy"); }
+    }
+    this.aoCarregar(this.dados);
+    this.desenhar();
+    this.desenharPaginador();
+    if (!this.jaCarregou) { this.jaCarregou = true; this.restaurarRolagem(); }
+    document.getElementById("atualizado").textContent =
+      "Atualizado às " + new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  // o servidor já filtrou e ordenou
+  visiveis() { return this.itens; }
+  ordenar(lista) { return lista; }
+
+  desenhar() {
+    super.desenhar();                                   // as linhas
+    const d = this.dados;
+    if (!d) return;
+    const n = x => x.toLocaleString("pt-BR");
+    document.getElementById("mostrando").textContent =
+      d.total ? `Mostrando ${n(d.de)}–${n(d.ate)} de ${n(d.total)} registro${d.total === 1 ? "" : "s"}` : "Nenhum registro";
+    this.vazio.hidden = d.total > 0;
+    if (!d.total) {
+      const buscando = this.filtrosAtivos();
+      const mensagem = buscando ? "Nada encontrado para essa busca/filtro." : d.contagens.todos ? "Nenhum registro nesta situação." : "Nenhum registro ainda.";
+      const sem = document.createElement("span");
+      sem.className = "icone-vazio"; sem.appendChild(icone(buscando ? "busca" : "prancheta"));
+      this.vazio.replaceChildren(sem, texto("span", mensagem));
+    }
+    this.limpar.hidden = !this.filtrosAtivos();
+  }
+
+  // « Anterior  1 … 4 5 [6] 7 8 … 25  Próxima »
+  desenharPaginador() {
+    const { pagina, paginas } = this.dados;
+    this.paginador.replaceChildren();
+    this.paginador.hidden = paginas <= 1;
+    if (paginas <= 1) return;
+    const botaoDaPagina = (rotulo, destino, { atual = false, desligado = false, nome = "" } = {}) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = rotulo;
+      if (nome) b.setAttribute("aria-label", nome);
+      if (atual) b.setAttribute("aria-current", "page");
+      b.disabled = desligado;
+      b.addEventListener("click", () => { if (!atual) this.irPara(destino); });
+      return b;
+    };
+    const mostrar = new Set([1, paginas]);
+    for (let n = pagina - 2; n <= pagina + 2; n++) if (n >= 1 && n <= paginas) mostrar.add(n);
+    const numeros = [...mostrar].sort((a, b) => a - b);
+    this.paginador.append(botaoDaPagina("‹ Anterior", pagina - 1, { desligado: pagina === 1 }));
+    let anterior = 0;
+    for (const n of numeros) {
+      if (n - anterior === 2) this.paginador.append(botaoDaPagina(String(n - 1), n - 1, { nome: `Página ${n - 1}` }));    // uma página só faltando: mostra o número
+      else if (n - anterior > 2) this.paginador.append(texto("span", "…", "reticencias"));
+      this.paginador.append(botaoDaPagina(String(n), n, { atual: n === pagina, nome: `Página ${n}` }));
+      anterior = n;
+    }
+    this.paginador.append(botaoDaPagina("Próxima ›", pagina + 1, { desligado: pagina === paginas }));
+  }
+}
+
 // ------------------------------------------------------------------ pequenos construtores de células
 function link(texto, href, classe) {
   const a = document.createElement("a");

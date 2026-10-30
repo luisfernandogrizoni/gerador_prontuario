@@ -29,7 +29,7 @@ import email_envio
 from catalogo import CATEGORIAS_RESERVADAS, CORES
 from documentos import Emissor
 from modelos import Convenio, Funcionario, NivelAcesso, Usuario, db
-from validacao import EXEMPLO_DE_COREN, ler_coren, normalizar_nome
+from validacao import EXEMPLO_DE_COREN, escrever_bem, ler_coren, normalizar_nome
 
 NOMES_DE_CONVENIO_RESERVADOS = ["A definir", "Particular"]    # valores que o sistema já usa para outra coisa
 
@@ -299,7 +299,7 @@ def salvar_funcionario(form, funcionario=None, por=None):
     if funcionario is None:
         funcionario = Funcionario()
         db.session.add(funcionario)
-    funcionario.nome, funcionario.cargo = form["nome"].strip(), form["cargo"].strip()
+    funcionario.nome, funcionario.cargo = escrever_bem("nome", form["nome"]), escrever_bem("local", form["cargo"])
     funcionario.ativo = form.get("ativo") == "1"
     profissao = profissao_do_formulario(form, funcionario, pode)
     registro = (form.get("registro_profissional") or "").strip()

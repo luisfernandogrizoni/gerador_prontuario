@@ -212,6 +212,22 @@
     .busca { position: relative; flex: 1 1 300px; max-width: 440px; }
     .busca .icone { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--mais-suave); pointer-events: none; }
     .busca #busca { width: 100%; padding: 10px 14px 10px 40px; border-radius: 11px; background: #fff; box-shadow: var(--sombra); }
+    /* filtros da lista de internos (categoria, ano), tamanho da página e paginador (static/tabela.js, TabelaPaginada) */
+    .filtro-lista { width: auto; min-width: 11rem; padding: 10px 14px; border-radius: 11px; background: #fff; box-shadow: var(--sombra); }
+    .moldura[aria-busy="true"] { opacity: .55; transition: opacity .15s; }
+    .rodape-lista { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 18px; margin-top: 10px; }
+    .rodape-lista .rodape { margin: 0; }
+    .por-pagina { flex-direction: row; align-items: center; gap: 8px; font-size: .8rem; font-weight: 400; color: var(--suave); }
+    .por-pagina select { width: auto; padding: 5px 10px; font-size: .85rem; }
+    .paginador { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin: 0 auto; }
+    .paginador[hidden] { display: none; }
+    .paginador button { min-width: 36px; padding: 6px 11px; font: inherit; font-size: .85rem; font-weight: 600; color: var(--texto); background: #fff;
+                        border: 1px solid var(--borda); border-radius: 9px; cursor: pointer; }
+    .paginador button:hover:not(:disabled):not([aria-current]) { border-color: var(--borda-forte); background: #fafbfc; }
+    .paginador button[aria-current="page"] { background: var(--vermelho-claro); color: var(--vermelho); border-color: var(--vermelho); cursor: default; }
+    .paginador button:disabled { opacity: .45; cursor: default; }
+    .paginador button:focus-visible { outline: 3px solid rgba(179,38,30,.3); outline-offset: 2px; }
+    .paginador .reticencias { padding: 0 4px; color: var(--suave); }
 
     /* ---- tabela ---- */
     .lista td { padding: 12px 12px; }
@@ -386,6 +402,9 @@
       .topo .usuario .nome { display: none; }
       .ferramentas { gap: 10px; }
       .busca { flex: 1 1 100%; max-width: none; }
+      .filtro-lista { flex: 1 1 calc(50% - 5px); min-width: 0; }
+      .rodape-lista { justify-content: center; }
+      .paginador button { min-width: 32px; padding: 6px 9px; }
       fieldset { padding-bottom: 16px; }
       fieldset > :not(legend) { margin-left: 14px; margin-right: 14px; max-width: calc(100% - 28px); }
       legend { padding: 12px 14px; }
@@ -429,7 +448,7 @@
       body { color: #000; font-size: 10pt; }
       * { box-shadow: none !important; animation: none !important; transition: none !important;
           -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .topo, .voltar-linha, .botao, dialog, .mensagens, .aviso, .aviso-rascunho, .busca, .busca-paciente, .botoes-form, .barra-salvar, .indice, .acoes, .acoes-aviso, .faixa-alerta,
+      .topo, .voltar-linha, .botao, dialog, .mensagens, .aviso, .aviso-rascunho, .busca, .filtro-lista, .paginador, .por-pagina, .busca-paciente, .botoes-form, .barra-salvar, .indice, .acoes, .acoes-aviso, .faixa-alerta,
       .atalhos-bloco, .agenda-rodape, .seta, .grupo-avisos summary .icone { display: none !important; }
       .cabecalho-impressao { display: flex; justify-content: space-between; gap: 12px; margin: 0 0 12px; padding-bottom: 5px;
                              border-bottom: 1px solid #888; font-size: 8.5pt; color: #444; }

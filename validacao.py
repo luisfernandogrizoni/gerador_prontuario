@@ -130,16 +130,82 @@ def fmt_hora(h):
 
 
 # ------------------------------------------------------------------ busca
+_ACENTOS_SOLTOS = re.compile("[̀-ͯ]")       # os acentos depois de separados da letra (NFD): agudo, til, cedilha...
+
+
 def normalizar_nome(t):
-    """'  José  da SILVA' -> 'jose da silva' (para comparar e buscar sem acento)."""
-    t = unicodedata.normalize("NFD", t or "")
-    return " ".join("".join(c for c in t if unicodedata.category(c) != "Mn").lower().split())
+    """'  José  da SILVA' -> 'jose da silva' (para comparar e buscar sem acento). É chamada milhares de vezes por busca na lista de internos:
+    por isso é uma expressão regular, e não um teste letra por letra."""
+    return " ".join(_ACENTOS_SOLTOS.sub("", unicodedata.normalize("NFD", t or "")).lower().split())
+
+
+# ------------------------------------------------- como nomes e endereços são escritos
+# "FULANO FICTICIO DE TAL" ou "fulano ficticio de tal" -> "Fulano Ficticio de Tal". É só uma regra de maiúsculas e minúsculas: acento o
+# sistema não adivinha (JOSE pode ser José ou Jose, e o nome tem de ficar como está no documento).
+# O mesmo algoritmo existe em static/base.js (formata o campo ao sair dele, para a pessoa ver o resultado); quem decide de verdade é o servidor.
+PARTICULAS = ("de", "da", "do", "das", "dos", "e")
+_NUMERAL_ROMANO = re.compile(r"X{0,3}(?:IX|IV|V?I{0,3})")        # João Paulo II, Pedro IV...
+_SEPARADORES = re.compile(r"([-'’/.])")                           # Maria-Clara, D'Ávila, S/N, Av., J.R.
+
+
+def _com_inicial_maiuscula(pedaco):
+    pedaco = pedaco.lower()
+    for i, c in enumerate(pedaco):
+        if c.isalpha():
+            return pedaco[:i] + c.upper() + pedaco[i + 1:]
+    return pedaco
+
+
+def _uma_linha(texto):
+    """Espaços do começo, do fim e repetidos saem; acento solto (o Mac manda a letra e o acento separados) vira o caractere inteiro."""
+    return " ".join(unicodedata.normalize("NFC", texto or "").split())
+
+
+def nome_proprio(texto, siglas=False):
+    """'FULANO FICTICIO DE TAL' -> 'Fulano Ficticio de Tal'. De, da, do, das, dos e e ficam em minúsculas (menos no começo); numeral romano
+    (II, IV...) fica como veio; Maria-Clara, D'Ávila e S/N levam maiúscula depois do hífen, do apóstrofo e da barra.
+    Só mexe no que está TODO em maiúsculas ou TODO em minúsculas: a palavra com letras dos dois jeitos (McDonald, DeSouza) é escolha de quem
+    escreveu. `siglas=True` (endereço, cidade, cargo...): palavra em maiúsculas num texto misturado pode ser sigla (CAPS, UBS, "Jardim ABC") e
+    fica; só se o texto inteiro estiver em maiúsculas é que as palavras mudam."""
+    texto = _uma_linha(texto)
+    tudo = texto.isupper() or texto.islower()
+    palavras = []
+    for i, palavra in enumerate(texto.split()):
+        maiuscula, minuscula = palavra.isupper(), palavra.islower()
+        solta = palavra.strip(",;:")
+        if not ((tudo or minuscula) if siglas else (maiuscula or minuscula)) or re.search(r"\d", palavra):
+            palavras.append(palavra)                                  # misturada, sigla ou com número (4B, 1º): fica
+        elif i and solta.lower() in PARTICULAS:
+            palavras.append(palavra.lower())
+        elif maiuscula and len(solta) >= 2 and _NUMERAL_ROMANO.fullmatch(solta):
+            palavras.append(palavra)
+        else:
+            palavras.append("".join(p if j % 2 else _com_inicial_maiuscula(p) for j, p in enumerate(_SEPARADORES.split(palavra))))
+    return " ".join(palavras)
+
+
+def frase(texto):
+    """'AUXILIAR DE SERVIÇOS GERAIS' -> 'Auxiliar de serviços gerais': só a primeira letra em maiúscula. Texto que já mistura os dois fica."""
+    texto = _uma_linha(texto)
+    return _com_inicial_maiuscula(texto) if texto.isupper() or texto.islower() else texto
+
+
+# como cada campo é escrito: o que vai em `FORMAS` dos modelos e em `Campo.forma` do acolhimento social
+FORMAS = {
+    "nome": nome_proprio,                                             # nome de pessoa
+    "local": lambda texto: nome_proprio(texto, siglas=True),          # rua, bairro, cidade, cargo
+    "frase": frase,                                                   # profissão, religião, parentesco...
+    "uf": lambda texto: _uma_linha(texto).upper()[:2],
+    "email": lambda texto: _uma_linha(texto).lower(),
+}
+
+
+def escrever_bem(forma, texto):
+    """O texto do campo na `forma` pedida ('nome', 'local', 'frase', 'uf', 'email'); sem forma, só tira os espaços das pontas."""
+    return FORMAS[forma](texto) if forma else (texto or "").strip()
 
 
 # ------------------------------------------------------------------ avatar
-PARTICULAS = ("de", "da", "do", "das", "dos", "e")
-
-
 def avatar_da_pessoa(nome):
     """(iniciais, cor de 0 a 7) da bolinha da pessoa: o mesmo cálculo de static/tabela.js (avatar), para a ficha e as listas
     mostrarem a mesma bolinha: primeira e última letras do nome (sem de, da, do...) e uma cor sempre igual para o mesmo nome."""

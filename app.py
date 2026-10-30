@@ -7,7 +7,8 @@ Telas:
     /triagens                       lista de triagens (muda a situação pelo navegador)
     /triagens/nova                  formulário de triagem (?pessoa=<id> = paciente já cadastrado)
     /internos                       lista de internos (ativos / inativos); "Dar baixa" muda para inativo
-                                    e pergunta se o prontuário em papel já voltou ao escritório (avisos.py cobra)
+                                    e pergunta se o prontuário em papel já voltou ao escritório (avisos.py cobra);
+                                    a busca, os filtros, a ordem e as páginas são feitos no servidor (busca_de_internos.py)
     /prontuario/novo                formulário do prontuário (?pessoa=<id> = paciente já cadastrado)
     /internacoes/<id>               ficha: dados, parcelas, outras internações, ações
     /internacoes/<id>/editar        abre o formulário certo (triagem ou prontuário) já preenchido
@@ -102,6 +103,7 @@ import exclusao
 import ficha_saude
 import manutencao
 import impressos
+import busca_de_internos
 import painel
 import permissoes
 import rascunhos
@@ -581,7 +583,14 @@ def mudar_status(id):
 def lista_internos():
     # novo = registro recém-gravado (a linha é destacada); baixar = 1 baixa o .docx dele
     return render_template("internos.html", novo=request.args.get("novo", type=int),
-                           baixar=request.args.get("baixar", type=int), motivos=servicos.MOTIVOS)
+                           baixar=request.args.get("baixar", type=int), motivos=servicos.MOTIVOS, tamanhos=busca_de_internos.TAMANHOS,
+                           tamanho_padrao=busca_de_internos.TAMANHO_PADRAO, **busca_de_internos.opcoes_dos_filtros())
+
+
+@app.get("/api/internos/busca")
+def api_internos_busca():
+    """A página da lista de internos: busca, filtros, ordem e a página pedida (busca_de_internos.py), em vez de todos os internos de uma vez."""
+    return jsonify(busca_de_internos.consultar(request.args))
 
 
 @app.get("/api/internos")

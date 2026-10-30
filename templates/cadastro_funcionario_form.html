@@ -21,8 +21,8 @@
     <fieldset class="tom-azul">
       {{ legenda('Funcionário', 'usuario') }}
       <div class="grade">
-        {{ f.entrada('nome', 'Nome', 'c4', obrig=true, attrs={'maxlength': 200, 'autofocus': true}) }}
-        {{ f.entrada('cargo', 'Cargo', 'c2', obrig=true, attrs={'maxlength': 100}) }}
+        {{ f.entrada('nome', 'Nome', 'c4', obrig=true, attrs={'maxlength': 200, 'autofocus': true, 'data-forma': 'nome'}) }}
+        {{ f.entrada('cargo', 'Cargo', 'c2', obrig=true, attrs={'maxlength': 100, 'data-forma': 'local'}) }}
       </div>
     </fieldset>
 

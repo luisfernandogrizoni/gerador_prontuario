@@ -325,6 +325,9 @@ mesmo endereço `https://...ts.net`. O sistema é um só, com um banco só: os d
 - **Rascunhos** (salvamento automático): enquanto alguém preenche um formulário longo, o sistema guarda uma cópia a cada pausa na digitação. Se a energia cair ou a
   aba fechar, o que foi digitado está em **Rascunhos** (no menu) e a tela de cada registro já abre com ele. O rascunho é só de quem digitou, não aparece em lista nem
   relatório nenhum, entra no backup e some sozinho depois de 30 dias sem mexer; só o botão *Salvar* grava no prontuário. Detalhes em `docs\plano-de-seguranca.md`.
+- **Nomes e endereços** são gravados com a regra de maiúsculas e minúsculas do sistema (FULANO DE TAL -> Fulano de Tal; sem inventar acento). O que foi gravado antes
+  continua como estava, até alguém editar o cadastro. Para arrumar de uma vez, depois de atualizar: `python normalizar_cadastros.py` mostra o que mudaria (não grava nada) e
+  `python normalizar_cadastros.py --aplicar` faz um backup e grava. Não mexe em relatórios e fichas já escritos nem em "alterado em".
 - O aviso por e-mail da troca do pen-drive (e de cópia externa atrasada) sai pela mesma tarefa do backup, uma vez por dia, para
   `financeiro@restauracao.org.br`.
 - Acesso de fora do escritório só pelo Tailscale (parte 5); nunca por porta aberta no roteador.

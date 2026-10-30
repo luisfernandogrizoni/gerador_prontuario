@@ -52,4 +52,50 @@
     var s = e.target;
     if (s && s.hasAttribute && s.hasAttribute("data-trocar-emissor") && typeof window.trocarEmissor === "function") window.trocarEmissor(s.form);
   });
+
+  // ---- 3) como nomes e endereços são escritos: data-forma="nome|local|frase|uf|email" no <input>. Ao sair do campo, FULANO FICTICIO DE TAL vira
+  // Fulano Ficticio de Tal, para a pessoa ver como vai ficar. É o mesmo algoritmo de validacao.py (nome_proprio, frase): o servidor refaz ao
+  // gravar e é quem decide. Acento o sistema não adivinha: JOSE pode ser José ou Jose, e o nome tem de ficar como está no documento.
+  var PARTICULAS = ["de", "da", "do", "das", "dos", "e"];
+  var ROMANO = /^X{0,3}(?:IX|IV|V?I{0,3})$/;
+  var maiuscula = function (t) { return t === t.toUpperCase() && t !== t.toLowerCase(); };
+  var minuscula = function (t) { return t === t.toLowerCase() && t !== t.toUpperCase(); };
+  var umaLinha = function (t) { return String(t || "").normalize("NFC").split(/\s+/).filter(Boolean).join(" "); };
+  var comInicialMaiuscula = function (pedaco) {
+    var t = pedaco.toLowerCase(), i = t.search(/\p{L}/u);
+    return i < 0 ? t : t.slice(0, i) + t[i].toUpperCase() + t.slice(i + 1);
+  };
+  var nomeProprio = function (texto, siglas) {
+    texto = umaLinha(texto);
+    var tudo = maiuscula(texto) || minuscula(texto);
+    return texto.split(" ").filter(Boolean).map(function (palavra, i) {
+      var alta = maiuscula(palavra), baixa = minuscula(palavra), solta = palavra.replace(/^[,;:]+|[,;:]+$/g, "");
+      if (!(siglas ? (tudo || baixa) : (alta || baixa)) || /\p{Nd}/u.test(palavra)) return palavra;
+      if (i && PARTICULAS.indexOf(solta.toLowerCase()) >= 0) return palavra.toLowerCase();
+      if (alta && solta.length >= 2 && ROMANO.test(solta)) return palavra;
+      return palavra.split(/([-'’\/.])/).map(function (p, j) { return j % 2 ? p : comInicialMaiuscula(p); }).join("");
+    }).join(" ");
+  };
+  var frase = function (texto) {
+    texto = umaLinha(texto);
+    return maiuscula(texto) || minuscula(texto) ? comInicialMaiuscula(texto) : texto;
+  };
+  window.escreverBem = function (forma, texto) {
+    switch (forma) {
+      case "nome": return nomeProprio(texto, false);
+      case "local": return nomeProprio(texto, true);
+      case "frase": return frase(texto);
+      case "uf": return umaLinha(texto).toUpperCase().slice(0, 2);
+      case "email": return umaLinha(texto).toLowerCase();
+      default: return String(texto || "").trim();
+    }
+  };
+  document.addEventListener("focusout", function (e) {
+    var c = e.target;
+    if (!c || !c.getAttribute || !c.getAttribute("data-forma") || c.readOnly || typeof c.value !== "string") return;
+    var novo = window.escreverBem(c.getAttribute("data-forma"), c.value);
+    if (novo === c.value) return;
+    c.value = novo;
+    c.dispatchEvent(new Event("input", { bubbles: true }));         // o salvamento automático (rascunho.js) e as máscaras enxergam a mudança
+  });
 })();
