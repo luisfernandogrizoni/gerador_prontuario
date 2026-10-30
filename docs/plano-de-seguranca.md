@@ -239,6 +239,17 @@ ninguém trocou, computador esquecido logado, tentativa em massa de um mesmo com
   desde a entrada (usando ou não): quem entra de manhã volta a entrar no dia seguinte, e o encerramento fica na auditoria
   (`sessao.expirada`). O custo é que um computador deixado logado continua aberto até esse teto: valem o bloqueio de tela do Windows
   (Win+L ao sair da sala, roteiro da fase 6) e a conferência dos acessos da fase 9.
+- **Manter conectado neste computador (2026-10-30, a pedido do usuário: "o navegador lembre do usuário e ele não precise logar todos os dias").**
+  A tela de entrada ganhou a caixa **"Manter conectado neste computador por 30 dias"**, **marcada por padrão**. Marcada, a sessão vale **30 dias**
+  desde a entrada (não há renovação: depois de 30 dias a pessoa entra de novo, com o código do autenticador se o tiver); desmarcada (ou num envio
+  sem o campo), vale as **10 horas** de antes. O prazo é conferido no servidor (`autenticacao.usuario_da_sessao`) e o cookie só dura no navegador
+  o mesmo tempo (`InterfaceDaSessao`); um cookie de antes da mudança, sem a marca, continua valendo 10 horas. O segundo fator é pedido na entrada,
+  não a cada dia: no computador lembrado, quem tem o aplicativo autenticador só o digita de novo daqui a 30 dias. **Continuam derrubando a sessão
+  lembrada**: trocar a senha (cai a das outras máquinas; a de agora continua), desativar o acesso do funcionário, **Sair** e o prazo. A auditoria
+  registra a entrada com "manter conectado (30 dias)" e o fim da sessão com o prazo certo (`sessao.expirada`). **Risco aceito**: um computador ou
+  celular perdido, ou deixado destravado, fica aberto até 30 dias; por isso valem o bloqueio de tela, o **Sair** em máquina que não é da casa, e, se
+  um aparelho for perdido, **trocar a senha** da pessoa (derruba todas as sessões dela). O prazo é a constante `DURACAO_LEMBRADA` em
+  `autenticacao.py`, e a caixa começa desmarcada se a casa preferir (`lembrar=True` na entrada, em `app.py`).
 - **Limite por endereço**: mais de 15 senhas ou códigos errados em 10 minutos vindos do mesmo computador bloqueiam as tentativas **dele**
   (até com a senha certa), além dos 5 erros por usuário que já existiam (quem errava trocava de usuário a cada 5).
 - **E-mail do funcionário, confirmado**: só o administrador cadastra (Cadastros > Funcionários) e só vale depois de a própria pessoa
