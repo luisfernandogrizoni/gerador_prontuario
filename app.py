@@ -130,11 +130,12 @@ app.config.update(
     # só trafega por HTTPS, exceto em desenvolvimento e na rede interna do escritório enquanto ela usa http
     # (servidor.py liga SESSAO_SEM_HTTPS=1 nos modos "http" e "misto"; no modo "https" e em hospedagem com HTTPS a variável não existe)
     SESSION_COOKIE_SECURE=not app.debug and os.environ.get("SESSAO_SEM_HTTPS") != "1",
-    SESSION_REFRESH_EACH_REQUEST=False,    # o login não se renova sozinho: vale 10 h e acabou
-    PERMANENT_SESSION_LIFETIME=autenticacao.DURACAO_LOGIN,
+    SESSION_REFRESH_EACH_REQUEST=False,    # o login não se renova sozinho: vale 10 h (ou 30 dias, se a pessoa marcou "manter conectado") e acabou
+    PERMANENT_SESSION_LIFETIME=autenticacao.DURACAO_LEMBRADA,      # o maior prazo que um cookie assinado aceita; o prazo de cada sessão é conferido em autenticacao.usuario_da_sessao
     CSRF_ATIVO=True,                    # csrf.py: todo envio que muda coisas precisa do token da página (os testes antigos desligam)
     CSP_SOMENTE_RELATORIO=os.environ.get("CSP_SOMENTE_RELATORIO") == "1",    # emergência: a política só avisa, não bloqueia (csrf.py)
 )
+app.session_interface = autenticacao.InterfaceDaSessao()     # o cookie dura 10 h ou 30 dias, conforme a pessoa marcou "manter conectado"
 db.init_app(app)
 
 with app.app_context():
@@ -148,7 +149,7 @@ app.after_request(auditoria.depois_da_requisicao)       # leituras (auditoria.LE
 app.before_request(permissoes.exigir_permissao)     # depois do login: a rota pede uma permissão e a pessoa tem? (permissoes.REGRAS)
 app.after_request(autenticacao.cabecalhos_de_seguranca)
 app.after_request(csrf.cabecalhos)                  # política de conteúdo (CSP) e cabeçalhos que fecham o que o navegador não precisa
-app.jinja_env.globals.update(csrf_token=csrf.token, csp_nonce=csrf.nonce)      # {{ csrf_token() }} nos formulários; {{ csp_nonce() }} nas tags de dentro da página
+app.jinja_env.globals.update(csrf_token=csrf.token, csp_nonce=csrf.nonce, dias_conectado=autenticacao.DURACAO_LEMBRADA.days)      # {{ csrf_token() }} nos formulários; {{ csp_nonce() }} nas tags de dentro da página
 autenticacao.registrar_comandos(app)
 contas.registrar_comandos(app)
 def _e_administrador():
@@ -267,6 +268,11 @@ def _dados_para_novo(pessoa_id):
 
 
 # ==================================================================== login
+def _detalhe_da_entrada(como="", lembrar=False):
+    """O que a auditoria guarda de uma entrada: como a pessoa entrou e, se marcou, que pediu para continuar conectada."""
+    return ", ".join(p for p in (como, f"manter conectado ({autenticacao.texto_da_duracao(autenticacao.DURACAO_LEMBRADA)})" if lembrar else "") if p)
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if g.usuario:
@@ -274,19 +280,20 @@ def login():
     proximo = request.values.get("next", "")
     aviso = "Senha alterada. Entre com a senha nova." if request.args.get("redefinida") else None
     if request.method == "POST":
+        lembrar = request.form.get("lembrar") == "1"              # a caixa "manter conectado": sem ela (ou sem o campo) vale o prazo comum de 10 horas
         usuario, erro = autenticacao.entrar(request.form.get("usuario"), request.form.get("senha"))
         if usuario and cadastros_.acesso_desativado(usuario):     # a senha confere, mas o funcionário foi desativado
             auditoria.registrar("login.desativado", usuario=usuario.nome)
             usuario, erro = None, "Este acesso foi desativado. Procure o administrador."
         if usuario and usuario.totp_ativo:                        # senha certa; falta o código do aplicativo autenticador
-            autenticacao.iniciar_segundo_fator(usuario, proximo)
+            autenticacao.iniciar_segundo_fator(usuario, proximo, lembrar)
             return redirect(url_for("login_codigo"))
         if usuario:
-            autenticacao.abrir_sessao(usuario)
-            contas.registrar_entrada(usuario)
+            autenticacao.abrir_sessao(usuario, lembrar)
+            contas.registrar_entrada(usuario, _detalhe_da_entrada(lembrar=lembrar))
             return redirect(autenticacao.destino_seguro(proximo, url_for("home")))
-        return render_template("login.html", erro=erro, proximo=proximo, aviso=None), 401
-    return render_template("login.html", erro=None, proximo=proximo, aviso=aviso)
+        return render_template("login.html", erro=erro, proximo=proximo, aviso=None, lembrar=lembrar), 401
+    return render_template("login.html", erro=None, proximo=proximo, aviso=aviso, lembrar=True)
 
 
 @app.route("/login/codigo", methods=["GET", "POST"])
@@ -301,15 +308,15 @@ def login_codigo():
     if request.method == "POST":
         como = contas.verificar_segundo_fator(usuario, request.form.get("codigo"))
         if como:
-            proximo = session["mfa"].get("proximo", "")
-            autenticacao.abrir_sessao(usuario)
-            contas.registrar_entrada(usuario, "com o código do aplicativo" if como == "app" else "com um código de recuperação")
+            proximo, lembrar = session["mfa"].get("proximo", ""), bool(session["mfa"].get("lembrar"))
+            autenticacao.abrir_sessao(usuario, lembrar)
+            contas.registrar_entrada(usuario, _detalhe_da_entrada("com o código do aplicativo" if como == "app" else "com um código de recuperação", lembrar))
             return redirect(autenticacao.destino_seguro(proximo, url_for("home")))
         bloqueou = autenticacao.registrar_falha(usuario, "login.codigo_errado")
         if bloqueou or autenticacao.errou_o_codigo() >= autenticacao.MAX_FALHAS:
             session.pop("mfa", None)
             return render_template("login.html", erro="Muitos códigos errados. Espere 10 minutos e entre de novo." if bloqueou else "Muitos códigos errados. Entre de novo com a senha.",
-                                   proximo="", aviso=None), 401
+                                   proximo="", aviso=None, lembrar=True), 401
         erro = "Esse código não confere. Digite o que o aplicativo mostra agora (ele muda a cada 30 segundos) ou um código de recuperação."
     return render_template("login_codigo.html", erro=erro)
 

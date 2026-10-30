@@ -12,6 +12,8 @@
       <input name="usuario" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus></label>
     <label>Senha
       <input name="senha" type="password" autocomplete="current-password" required></label>
+    <label class="caixa lembrar"><input type="checkbox" name="lembrar" value="1"{% if lembrar %} checked{% endif %}>
+      Manter conectado neste computador por {{ dias_conectado }} dias</label>
     <button class="botao">Entrar</button>
   </form>
   <p class="links"><a href="{{ url_for('esqueci_senha') }}">Esqueci minha senha</a></p>

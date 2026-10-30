@@ -11,7 +11,8 @@ O que este módulo garante:
   - 5 senhas erradas seguidas bloqueiam o usuário por 10 minutos, e 15 erradas vindas do mesmo computador em 10 minutos
     bloqueiam aquele computador (o atacante que troca de usuário a cada 5 erros também para);
   - quem ativou o segundo fator (aplicativo autenticador, contas.py e totp.py) digita também o código depois da senha;
-  - o login vale no máximo 10 horas e **sai sozinho depois de 30 minutos sem uso** (a página avisa antes, com um pop-up);
+  - o login vale 10 horas; quem marca "Manter conectado neste computador" na entrada fica conectado por 30 dias (não há tempo de inatividade: o
+    prazo conta da entrada, usando ou não). Sai antes quem teve a senha trocada ou o acesso desativado, e quem clica em Sair;
   - trocar a senha derruba as outras sessões abertas desse usuário;
   - as páginas não ficam guardadas no cache do navegador (botão "voltar" após sair).
 
@@ -36,11 +37,12 @@ import os
 import secrets
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import click
 from flask import current_app, g, has_request_context, jsonify, redirect, request, session, url_for
+from flask.sessions import SecureCookieSessionInterface
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -54,7 +56,8 @@ log = logging.getLogger(__name__)
 SENHA_MINIMA = 10
 MAX_FALHAS = 5
 BLOQUEIO = timedelta(minutes=10)
-DURACAO_LOGIN = timedelta(hours=10)            # a sessão acaba 10 horas depois da entrada, usando ou não (não há tempo de inatividade)
+DURACAO_LOGIN = timedelta(hours=10)            # entrada comum: a sessão acaba 10 horas depois da entrada, usando ou não (não há tempo de inatividade)
+DURACAO_LEMBRADA = timedelta(days=30)          # "Manter conectado neste computador": a sessão acaba 30 dias depois da entrada
 ENDERECOS_LOCAIS = {"127.0.0.1", "::1"}       # o próprio servidor (ou um proxy sem repassar quem acessa): não há endereço de rede para limitar
 LIMITE_POR_ENDERECO = 15                       # senhas ou códigos errados vindos do mesmo computador...
 JANELA_POR_ENDERECO = timedelta(minutes=10)    # ...nesta janela de tempo bloqueiam aquele computador
@@ -231,23 +234,52 @@ def _versao(usuario):
     return hashlib.sha256(usuario.senha_hash.encode()).hexdigest()[:16]
 
 
-def abrir_sessao(usuario):
+class InterfaceDaSessao(SecureCookieSessionInterface):
+    """O cookie de quem pediu "Manter conectado neste computador" fica guardado no navegador por DURACAO_LEMBRADA; o dos outros, por DURACAO_LOGIN. (O prazo
+    de cada sessão é conferido no servidor de qualquer jeito, em usuario_da_sessao: o cookie só deixa de existir no navegador na hora certa.)"""
+
+    def get_expiration_time(self, app, session):
+        if session.permanent:
+            return datetime.now(timezone.utc) + (DURACAO_LEMBRADA if session.get("lembrar") else DURACAO_LOGIN)
+        return None
+
+
+def duracao_da_sessao():
+    """Quanto a sessão de agora vale desde a entrada: DURACAO_LEMBRADA (marcou "manter conectado") ou DURACAO_LOGIN."""
+    return DURACAO_LEMBRADA if session.get("lembrar") else DURACAO_LOGIN
+
+
+def texto_da_duracao(duracao):
+    """"10 horas", "30 dias": para a tela e para a auditoria."""
+    if duracao.days:
+        return f"{duracao.days} dia{'s' if duracao.days != 1 else ''}"
+    horas = int(duracao.total_seconds() // 3600)
+    return f"{horas} hora{'s' if horas != 1 else ''}"
+
+
+def abrir_sessao(usuario, lembrar=None):
+    """Abre a sessão. `lembrar`: True quando a pessoa marcou "Manter conectado neste computador" (a sessão dura DURACAO_LEMBRADA em vez de DURACAO_LOGIN);
+    None mantém a escolha da sessão de agora (trocar a própria senha reabre a sessão sem perguntar de novo)."""
+    if lembrar is None:
+        lembrar = bool(session.get("lembrar"))
     session.clear()    # nunca reaproveita uma sessão que veio de antes do login
     session["usuario_id"] = usuario.id
     session["versao"] = _versao(usuario)
     session["inicio"] = time.time()
+    session["lembrar"] = bool(lembrar)
     session.permanent = True
 
 
 def usuario_da_sessao():
     """O usuário da sessão, ou None. Não há tempo de inatividade: a pessoa fica conectada enquanto usa (ou deixa aberto) o sistema, e a sessão
-    acaba no máximo em DURACAO_LOGIN depois da entrada. Quando acaba por isso, `g.sessao_encerrada` avisa (exigir_login registra e pede a entrada)."""
+    acaba no máximo em `duracao_da_sessao()` depois da entrada. Quando acaba por isso, `g.sessao_encerrada` avisa (exigir_login registra e pede a entrada)."""
     usuario_id = session.get("usuario_id")
     if not usuario_id:
         return None
     agora = time.time()
-    if agora - session.get("inicio", agora) > DURACAO_LOGIN.total_seconds():
-        g.sessao_encerrada, g.sessao_de = "duracao", usuario_id
+    limite = duracao_da_sessao()
+    if agora - session.get("inicio", agora) > limite.total_seconds():
+        g.sessao_encerrada, g.sessao_de, g.sessao_limite = "duracao", usuario_id, limite
         session.clear()
         return None
     usuario = db.session.get(Usuario, usuario_id)
@@ -259,9 +291,10 @@ def usuario_da_sessao():
 
 
 # ---- entrar em duas etapas: a senha certa leva à página do código; só o código certo abre a sessão
-def iniciar_segundo_fator(usuario, proximo=""):
+def iniciar_segundo_fator(usuario, proximo="", lembrar=False):
     session.clear()
-    session["mfa"] = {"uid": usuario.id, "ate": time.time() + VALIDADE_DO_CODIGO, "tentativas": 0, "proximo": proximo, "versao": _versao(usuario)}
+    session["mfa"] = {"uid": usuario.id, "ate": time.time() + VALIDADE_DO_CODIGO, "tentativas": 0, "proximo": proximo, "versao": _versao(usuario),
+                      "lembrar": bool(lembrar)}
 
 
 def usuario_aguardando_codigo():
@@ -325,7 +358,7 @@ def exigir_login():
     g.usuario = usuario_da_sessao()
     if g.get("sessao_encerrada"):
         antigo = db.session.get(Usuario, g.sessao_de)
-        auditoria.registrar("sessao.expirada", usuario=antigo.nome if antigo else "", detalhe="passou de 10 horas")
+        auditoria.registrar("sessao.expirada", usuario=antigo.nome if antigo else "", detalhe=f"passou de {texto_da_duracao(g.sessao_limite)}")
     g.restricao_da_conta = restricao_da_conta(g.usuario)
     if g.restricao_da_conta == "senha" and request.endpoint not in ROTAS_COM_SENHA_PROVISORIA:
         if request.path.startswith("/api/") or request.is_json:
