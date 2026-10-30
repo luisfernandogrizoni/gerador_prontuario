@@ -1,0 +1,29 @@
+{#
+  Rascunho automático dos formulários (rascunhos.py, static/rascunho.js). Importar com:
+      {% from "_rascunho.html" import campo_rascunho, aviso_rascunho with context %}
+  campo_rascunho(r): dentro do <form>, o campo escondido que identifica o rascunho (o token), a tela e o registro dela.
+  aviso_rascunho(r): no alto da tela, quando ela abriu com um rascunho no lugar do que está gravado (com o botão de descartar) ou quando a
+                     pessoa tem rascunhos de registro novo guardados. `r` é o rascunhos.Tela que a rota manda para a tela.
+#}
+{% macro campo_rascunho(r) -%}
+<input type="hidden" name="rascunho" value="{{ r.token }}" data-rascunho-tipo="{{ r.tipo }}" data-rascunho-alvo="{{ r.alvo or '' }}">
+{%- endmacro %}
+
+{% macro aviso_rascunho(r) -%}
+{% if r.carregado %}
+<div class="aviso-rascunho" role="status">
+  <div class="texto"><strong>Rascunho de {{ r.quando }}.</strong> A tela mostra o que você digitou e <strong>ainda não foi gravado</strong>.
+    {% if r.registro_mudou %}<span class="atencao">Este registro foi alterado depois de você começar. Ao gravar, o que mudou nele será substituído pelo que está na tela.</span>{% endif %}</div>
+  <form method="post" action="{{ url_for('descartar_rascunho', token=r.token) }}"
+        data-confirmar="Descartar este rascunho? O que você digitou e não gravou se perde, e a tela volta ao que está gravado.">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="de" value="tela">
+    <button class="botao pequeno secundario">Descartar rascunho</button>
+  </form>
+</div>
+{% elif r.outros %}
+<div class="aviso-rascunho">
+  <div class="texto">Você tem {{ r.outros }} rascunho{{ 's' if r.outros > 1 }} de {{ r.rotulo | lower }} {{ 'não gravados' if r.outros > 1 else 'não gravado' }}.</div>
+  <a class="botao pequeno secundario" href="{{ url_for('lista_rascunhos') }}">Ver rascunhos</a>
+</div>
+{% endif %}
+{%- endmacro %}

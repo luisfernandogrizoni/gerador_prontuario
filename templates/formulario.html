@@ -2,6 +2,7 @@
 {% import "_campos.html" as f with context %}
 {% from "_voltar.html" import linha_voltar with context %}
 {% from "_cartao.html" import legenda %}
+{% from "_rascunho.html" import campo_rascunho, aviso_rascunho with context %}
 
 {% block titulo %}{{ 'Editar prontuário' if editando else 'Novo prontuário' }}{% endblock %}
 
@@ -9,9 +10,11 @@
 <main class="largo">
   {{ linha_voltar(url_for('ficha', id=editando.id) if editando else url_for('lista_internos')) }}
   <h1>{{ 'Editar prontuário' if editando else 'Novo prontuário' }}</h1>
+  {{ aviso_rascunho(rascunho) }}
 
   <div class="form-grade">
   <form method="post" action="{{ url_for('gerar') }}" data-indice><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {{ campo_rascunho(rascunho) }}
     {{ f.topo(url_for('formulario')) }}
     {{ f.identificacao() }}
     {{ f.endereco() }}
@@ -57,4 +60,5 @@
 </main>
 <script src="{{ url_for('static', filename='formularios.js') }}"></script>
 <script src="{{ url_for('static', filename='secoes.js') }}"></script>
+<script src="{{ url_for('static', filename='rascunho.js') }}"></script>
 {% endblock %}

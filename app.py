@@ -104,6 +104,7 @@ import manutencao
 import impressos
 import painel
 import permissoes
+import rascunhos
 import relatorios
 import servico_social
 import servicos
@@ -207,8 +208,15 @@ def _pode_evoluir():
     return _pode("pode_evoluir", cadastros_.pode_evoluir)
 
 
+def _quantos_rascunhos():
+    """Quantos rascunhos tem quem está logado (o selo do menu), contados uma vez por requisição e só se a tela perguntar."""
+    if "quantos_rascunhos" not in g:
+        g.quantos_rascunhos = rascunhos.quantos(g.get("usuario"))
+    return g.quantos_rascunhos
+
+
 # pode('triagem') nos templates esconde o que a pessoa não pode usar; permissoes_js() leva o mesmo ao JavaScript das listas
-app.context_processor(lambda: {"usuario_atual": g.get("usuario"), "e_administrador": _e_administrador(),
+app.context_processor(lambda: {"quantos_rascunhos": _quantos_rascunhos, "usuario_atual": g.get("usuario"), "e_administrador": _e_administrador(),
                                "pode_servico_social": _pode_servico_social(), "pode_ler_social": _SobDemanda(_pode_ler_social),
                                "pode_escrever_saude": _SobDemanda(_pode_escrever_saude), "pode_assinar_saude": _SobDemanda(_pode_assinar_saude),
                                "pode_ler_saude": _SobDemanda(_pode_ler_saude), "pode_evoluir": _SobDemanda(_pode_evoluir),
@@ -505,9 +513,14 @@ def api_triagens():
 
 @app.get("/triagens/nova")
 def nova_triagem():
-    dados, pessoa = _dados_para_novo(request.args.get("pessoa", type=int))
-    dados.setdefault("primeiro_contato", servicos.opcoes_formulario()["hoje"])
-    return render_template("triagem_form.html", d=dados, erros={}, pessoa=pessoa,
+    rascunho = rascunhos.do_token(g.usuario, request.args.get("rascunho"), "triagem")
+    if rascunho:                                        # retomando um rascunho (Rascunhos, ou o aviso da própria tela)
+        dados = rascunhos.formulario(rascunho)
+        pessoa = db.session.get(Pessoa, dados.get("pessoa_id", type=int) or 0)
+    else:
+        dados, pessoa = _dados_para_novo(request.args.get("pessoa", type=int))
+        dados.setdefault("primeiro_contato", servicos.opcoes_formulario()["hoje"])
+    return render_template("triagem_form.html", d=dados, erros={}, pessoa=pessoa, rascunho=rascunhos.da_tela(g.usuario, "triagem", rascunho=rascunho),
                            **servicos.opcoes_formulario())
 
 
@@ -518,7 +531,9 @@ def salvar_triagem():
     if erros:
         pessoa = db.session.get(Pessoa, request.form.get("pessoa_id", type=int) or 0)
         return render_template("triagem_form.html", d=request.form, erros=erros, pessoa=pessoa,
+                               rascunho=rascunhos.da_tela(g.usuario, "triagem", alvo=request.form.get("internacao_id", type=int), form=request.form),
                                **servicos.opcoes_formulario(request.form.get("convenio", ""))), 400
+    rascunhos.concluir(g.usuario, request.form.get("rascunho"), "triagem", request.form.get("internacao_id", type=int))
     _registrar_gravacao("triagem", internacao, antes, request.form)
     # internação marcada: a lista pergunta se é para imprimir o pedido de exames e o enxoval (até alguém imprimir)
     return redirect(url_for("lista_triagens", novo=internacao.id, imprimir=1 if _perguntar_impressao(internacao) else None))
@@ -609,9 +624,14 @@ def registrar_envelope(id):
 
 @app.get("/prontuario/novo")
 def formulario():
-    dados, pessoa = _dados_para_novo(request.args.get("pessoa", type=int))
+    rascunho = rascunhos.do_token(g.usuario, request.args.get("rascunho"), "prontuario")
+    if rascunho:
+        dados = rascunhos.formulario(rascunho)
+        pessoa = db.session.get(Pessoa, dados.get("pessoa_id", type=int) or 0)
+    else:
+        dados, pessoa = _dados_para_novo(request.args.get("pessoa", type=int))
     anterior = pessoa.ultima_internacao if pessoa else None
-    return render_template("formulario.html", d=dados, erros={}, pessoa=pessoa, anterior=anterior,
+    return render_template("formulario.html", d=dados, erros={}, pessoa=pessoa, anterior=anterior, rascunho=rascunhos.da_tela(g.usuario, "prontuario", rascunho=rascunho),
                            **servicos.opcoes_formulario())
 
 
@@ -621,8 +641,10 @@ def gerar():
     internacao, erros = servicos.salvar_prontuario(request.form)
     if erros:
         pessoa = db.session.get(Pessoa, request.form.get("pessoa_id", type=int) or 0)
-        return render_template("formulario.html", d=request.form, erros=erros, pessoa=pessoa,
-                               anterior=None, **servicos.opcoes_formulario(request.form.get("convenio", ""))), 400
+        return render_template("formulario.html", d=request.form, erros=erros, pessoa=pessoa, anterior=None,
+                               rascunho=rascunhos.da_tela(g.usuario, "prontuario", alvo=request.form.get("internacao_id", type=int), form=request.form),
+                               **servicos.opcoes_formulario(request.form.get("convenio", ""))), 400
+    rascunhos.concluir(g.usuario, request.form.get("rascunho"), "prontuario", request.form.get("internacao_id", type=int))
     _registrar_gravacao("prontuario", internacao, antes, request.form)
     # Post/Redirect/Get: a lista destaca a linha e, se foi "Salvar e baixar", baixa o .docx
     baixar = 1 if request.form.get("acao") == "baixar" and permissoes.pode("documentos") else None
@@ -691,9 +713,14 @@ def editar_internacao(id):
     dados = internacao.dados_completos() | {"internacao_id": str(internacao.id),
                                             "pessoa_id": str(internacao.pessoa_id),
                                             "status": internacao.status}
-    modelo = "triagem_form.html" if internacao.e_triagem else "formulario.html"
-    return render_template(modelo, d=dados, erros={}, pessoa=internacao.pessoa, anterior=None,
-                           editando=internacao, **servicos.opcoes_formulario(internacao.convenio))
+    modelo, tipo = ("triagem_form.html", "triagem") if internacao.e_triagem else ("formulario.html", "prontuario")
+    rascunho = rascunhos.do_registro(g.usuario, tipo, internacao.id)
+    if rascunho:                                        # o que a pessoa já tinha mudado e não chegou a gravar
+        dados = rascunhos.formulario(rascunho)
+        dados["internacao_id"], dados["pessoa_id"] = str(internacao.id), str(internacao.pessoa_id)
+    return render_template(modelo, d=dados, erros={}, pessoa=internacao.pessoa, anterior=None, editando=internacao,
+                           rascunho=rascunhos.da_tela(g.usuario, tipo, internacao=internacao, rascunho=rascunho),
+                           **servicos.opcoes_formulario(dados.get("convenio") or internacao.convenio))
 
 
 @app.get("/internacoes/<int:id>/prontuario")
@@ -877,7 +904,7 @@ def _so_servico_social(id):
     return redirect(url_for("ficha", id=id))
 
 
-def _tela_relatorio(internacao, form, erros, status=200):
+def _tela_relatorio(internacao, form, erros, status=200, rascunho=None):
     relatorio = internacao.relatorio_social
     acolhido, responsavel = servico_social.identificacao(internacao, relatorios.hoje_no_brasil())
     valores = servico_social.valores_do_formulario(form, servico_social.campos_para(internacao)) if form is not None \
@@ -885,6 +912,7 @@ def _tela_relatorio(internacao, form, erros, status=200):
     anterior = servico_social.anterior(internacao) if relatorio is None and form is None else None      # readmissão: de onde vieram as respostas
     return render_template("servico_social_form.html", i=internacao, secoes=servico_social.secoes_para(internacao), visual=servico_social.VISUAL, v=valores, erros=erros,
                            relatorio=relatorio, acolhido=acolhido, responsavel=responsavel, anterior=anterior,
+                           rascunho=rascunhos.da_tela(g.usuario, "acolhimento", internacao=internacao, rascunho=rascunho, form=None if rascunho else form),
                            alteracao=versoes.ultima_alteracao(internacao, versoes.SOCIAL)), status
 
 
@@ -909,6 +937,7 @@ def relatorio_social(id):
                                                     assinatura=cadastros_.assinatura_do_usuario(g.get("usuario")))
         if erros:
             return _tela_relatorio(internacao, request.form, erros, 400)
+        rascunhos.concluir(g.usuario, request.form.get("rascunho"), "acolhimento", id)
         if finalizado:
             if versoes.quantas(internacao, versoes.SOCIAL) > antes:
                 auditoria.registrar("acolhimento.alterar", "internacao", id, internacao.pessoa_id, versoes.descricao_da_ultima(internacao, versoes.SOCIAL))
@@ -928,7 +957,8 @@ def relatorio_social(id):
             return redirect(url_for("ver_impressos", id=id, itens="relatorio-social", imprimir=1))
         flash("Rascunho salvo.")
         return redirect(url_for("relatorio_social", id=id))
-    return _tela_relatorio(internacao, None, {})
+    rascunho = rascunhos.do_registro(g.usuario, "acolhimento", id)
+    return _tela_relatorio(internacao, rascunhos.formulario(rascunho) if rascunho else None, {}, rascunho=rascunho)
 
 
 @app.get("/internacoes/<int:id>/rejeicao")
@@ -959,10 +989,11 @@ def _abas_da_saude(internacao, atual):
     return {"atual": atual, "registros": len(internacao.registros_enfermagem), "evolucoes": len(internacao.evolucoes_saude)}
 
 
-def _tela_saude(internacao, form, erros, status=200):
+def _tela_saude(internacao, form, erros, status=200, rascunho=None):
     ficha = internacao.ficha_saude
     valores = ficha_saude.valores_do_formulario(form) if form is not None else ficha_saude.valores(internacao, ficha)
     return render_template("saude_form.html", i=internacao, secoes=ficha_saude.SECOES, visual=ficha_saude.VISUAL, v=valores, erros=erros, ficha=ficha,
+                           rascunho=rascunhos.da_tela(g.usuario, "saude", internacao=internacao, rascunho=rascunho, form=None if rascunho else form),
                            abas=_abas_da_saude(internacao, "anamnese"), alteracao=versoes.ultima_alteracao(internacao, versoes.SAUDE)), status
 
 
@@ -995,6 +1026,7 @@ def saude_anamnese(id):
                                                assinatura=cadastros_.assinatura_do_usuario(g.get("usuario")))
         if erros:
             return _tela_saude(internacao, request.form, erros, 400)
+        rascunhos.concluir(g.usuario, request.form.get("rascunho"), "saude", id)
         if finalizada:
             if versoes.quantas(internacao, versoes.SAUDE) > antes:
                 auditoria.registrar("saude.alterar", "internacao", id, internacao.pessoa_id, versoes.descricao_da_ultima(internacao, versoes.SAUDE))
@@ -1012,7 +1044,8 @@ def saude_anamnese(id):
             return redirect(url_for("ver_impressos", id=id, itens="multiprofissional", imprimir=1))
         flash("Rascunho salvo.")
         return redirect(url_for("ficha_saude", id=id))
-    return _tela_saude(internacao, None, {})
+    rascunho = rascunhos.do_registro(g.usuario, "saude", id)
+    return _tela_saude(internacao, rascunhos.formulario(rascunho) if rascunho else None, {}, rascunho=rascunho)
 
 
 # ------------------------------------------------------- histórico de versões (só o administrador)
@@ -1053,7 +1086,7 @@ def abrir_versao(id, tipo, numero):
                     url_for("historico_do_relatorio", id=id, tipo=tipo))
 
 
-def _tela_registros(internacao, aba, form=None, erros=None, status=200, categoria=""):
+def _tela_registros(internacao, aba, form=None, erros=None, status=200, categoria="", rascunho=None):
     """Registros de enfermagem ou evolução multiprofissional: lista (a mais nova em cima) e, para quem escreve, o formulário."""
     erros = erros or {}
     if aba == "enfermagem":
@@ -1065,8 +1098,10 @@ def _tela_registros(internacao, aba, form=None, erros=None, status=200, categori
         itens = [e for e in sorted(internacao.evolucoes_saude, key=lambda e: (e.criado_em, e.id), reverse=True) if not categoria or e.categoria == categoria]
         pode_escrever = _pode_evoluir()
     agora = datetime.now().strftime("%Y-%m-%dT%H:%M")
+    tipo = "enfermagem" if aba == "enfermagem" else "evolucao"
     return render_template("saude_registros.html", i=internacao, aba=aba, itens=itens, pode_escrever=pode_escrever,
                            d=form if form else ({"quando": agora} if aba == "enfermagem" else {}), erros=erros,
+                           rascunho=rascunhos.da_tela(g.usuario, tipo, internacao=internacao, rascunho=rascunho, form=None if rascunho else form),
                            abas=_abas_da_saude(internacao, aba), categorias=categorias, categoria=categoria,
                            nomes_das_categorias={k: v[0] for k, v in ficha_saude.CATEGORIAS_DE_EVOLUCAO.items()}, finalizada=bool(internacao.ficha_saude and internacao.ficha_saude.finalizado)), status
 
@@ -1093,10 +1128,12 @@ def saude_registros_de_enfermagem(id):
         registro, erros = servicos.registrar_enfermagem(internacao, request.form, cadastros_.assinatura_do_usuario(g.get("usuario")))
         if erros:
             return _tela_registros(internacao, "enfermagem", request.form, erros, 400)
+        rascunhos.concluir(g.usuario, request.form.get("rascunho"), "enfermagem", id)
         auditoria.registrar("saude.enfermagem", "internacao", id, internacao.pessoa_id)
         flash("Registro de enfermagem salvo.")
         return redirect(url_for("saude_enfermagem", id=id))
-    return _tela_registros(internacao, "enfermagem")
+    rascunho = rascunhos.do_registro(g.usuario, "enfermagem", id) if _pode_assinar_saude() else None
+    return _tela_registros(internacao, "enfermagem", rascunhos.formulario(rascunho) if rascunho else None, rascunho=rascunho)
 
 
 @app.route("/internacoes/<int:id>/saude/evolucao", methods=["GET", "POST"], endpoint="saude_evolucao")
@@ -1114,11 +1151,51 @@ def saude_evolucao_multiprofissional(id):
                                            cadastros_.assinatura_do_usuario(g.get("usuario")))
         if erro:
             return _tela_registros(internacao, "evolucao", request.form, {"_": erro}, 400)
+        rascunhos.concluir(g.usuario, request.form.get("rascunho"), "evolucao", id)
         auditoria.registrar("saude.evolucao", "internacao", id, internacao.pessoa_id, "categoria: " + request.form.get("categoria", ""))
         flash("Anotação registrada.")
         return redirect(url_for("saude_evolucao", id=id))
     categoria = request.args.get("categoria", "")
-    return _tela_registros(internacao, "evolucao", categoria=categoria if categoria in ficha_saude.CATEGORIAS_DE_EVOLUCAO else "")
+    rascunho = rascunhos.do_registro(g.usuario, "evolucao", id) if _pode_evoluir() else None
+    return _tela_registros(internacao, "evolucao", rascunhos.formulario(rascunho) if rascunho else None,
+                           categoria=categoria if categoria in ficha_saude.CATEGORIAS_DE_EVOLUCAO else "", rascunho=rascunho)
+
+
+# ----------------------------------------------------------- rascunhos
+# Salvamento automático (rascunhos.py, static/rascunho.js): a página manda uma cópia do que está sendo digitado, que só a própria pessoa vê.
+@app.post("/rascunhos/salvar")
+def salvar_rascunho():
+    """A cópia automática. Não valida nem grava no prontuário: só guarda o rascunho (quem pode escrever naquela tela, e só para si)."""
+    if (request.content_length or 0) > rascunhos.LIMITE_DO_ENVIO:
+        return jsonify(ok=False, erros={"rascunho": "O formulário ficou grande demais para guardar como rascunho."}), 413
+    dados = request.get_json(silent=True)
+    if not isinstance(dados, dict):
+        return jsonify(ok=False, erros={"rascunho": "Cópia inválida."}), 400
+    try:
+        resultado = rascunhos.salvar(g.usuario, dados.get("tipo"), dados.get("token"), dados.get("alvo"), dados.get("campos"))
+    except rascunhos.ErroDeRascunho as erro:
+        return jsonify(ok=False, erros={"rascunho": erro.texto}), erro.status
+    return jsonify(ok=True, concluido=resultado["concluido"], quando=resultado["quando"].strftime("%H:%M"))
+
+
+@app.get("/rascunhos")
+def lista_rascunhos():
+    return render_template("rascunhos.html", itens=rascunhos.listar(g.usuario), dias=rascunhos.DIAS_DE_VALIDADE)
+
+
+@app.post("/rascunhos/<token>/descartar")
+def descartar_rascunho(token):
+    rascunho = rascunhos.descartar(g.usuario, token)
+    if rascunho is None:
+        flash("Esse rascunho já não existe.")
+        return redirect(url_for("lista_rascunhos"))
+    internacao = db.session.get(Internacao, rascunho.internacao_id) if rascunho.internacao_id else None
+    auditoria.registrar("rascunho.descartar", "internacao" if internacao else "", rascunho.internacao_id, internacao.pessoa_id if internacao else None,
+                        rascunhos.TIPOS[rascunho.tipo].rotulo)
+    flash("Rascunho descartado.")
+    if request.form.get("de") == "tela":              # do aviso da própria tela: volta a ela, já sem o rascunho
+        return redirect(rascunhos.endereco(rascunho.tipo, rascunho.internacao_id) or url_for("lista_rascunhos"))
+    return redirect(url_for("lista_rascunhos"))
 
 
 # ----------------------------------------------------------- excluir registros

@@ -339,6 +339,18 @@
     .barra-salvar .estado-form { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; font-size: .84rem; color: var(--atencao); font-weight: 600; }
     .barra-salvar .estado-form::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--atencao); }
     .barra-salvar .estado-form[hidden] { display: none; }
+    /* salvamento automático (static/rascunho.js): o texto diz se o rascunho já está guardado ou se deu problema */
+    .barra-salvar .estado-form[data-estado="salvo"] { color: var(--info); }
+    .barra-salvar .estado-form[data-estado="salvo"]::before { background: var(--info); }
+    .barra-salvar .estado-form[data-estado="erro"] { color: var(--perigo); }
+    .barra-salvar .estado-form[data-estado="erro"]::before { background: var(--perigo); }
+    .aviso-rascunho { display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; background: var(--info-suave); border: 1px solid var(--info-borda);
+                      border-radius: var(--r-md); padding: 10px 14px; margin-bottom: var(--e4); font-size: .92rem; color: var(--texto); }
+    .aviso-rascunho .texto { flex: 1 1 320px; }
+    .aviso-rascunho .atencao { display: block; margin-top: 4px; color: var(--atencao); font-weight: 600; }
+    .aviso-rascunho form { margin: 0; }
+    .topo .item .contagem { min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--info-suave); color: var(--info); border: 1px solid var(--info-borda);
+                            font-size: .74rem; line-height: 18px; text-align: center; }
     body:has(.barra-salvar) .mensagens { bottom: 84px; }
     /* seção opcional recolhida */
     details.opcional { margin: 0 0 var(--e4); }
@@ -417,7 +429,7 @@
       body { color: #000; font-size: 10pt; }
       * { box-shadow: none !important; animation: none !important; transition: none !important;
           -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .topo, .voltar-linha, .botao, dialog, .mensagens, .aviso, .busca, .busca-paciente, .botoes-form, .barra-salvar, .indice, .acoes, .acoes-aviso, .faixa-alerta,
+      .topo, .voltar-linha, .botao, dialog, .mensagens, .aviso, .aviso-rascunho, .busca, .busca-paciente, .botoes-form, .barra-salvar, .indice, .acoes, .acoes-aviso, .faixa-alerta,
       .atalhos-bloco, .agenda-rodape, .seta, .grupo-avisos summary .icone { display: none !important; }
       .cabecalho-impressao { display: flex; justify-content: space-between; gap: 12px; margin: 0 0 12px; padding-bottom: 5px;
                              border-bottom: 1px solid #888; font-size: 8.5pt; color: #444; }
@@ -506,6 +518,7 @@
       <a class="item {{ 'atual' if request.path == '/' }}" href="{{ url_for('home') }}">Início</a>
       <a class="item {{ 'atual' if request.path.startswith('/triagens') }}" href="{{ url_for('lista_triagens') }}">Triagens</a>
       <a class="item {{ 'atual' if request.path.startswith('/internos') }}" href="{{ url_for('lista_internos') }}">Internos</a>
+      {% set rascunhos_abertos = quantos_rascunhos() %}{% if rascunhos_abertos or request.path.startswith('/rascunhos') %}<a class="item {{ 'atual' if request.path.startswith('/rascunhos') }}" href="{{ url_for('lista_rascunhos') }}" title="O que você digitou e ainda não gravou">Rascunhos{% if rascunhos_abertos %}<span class="contagem">{{ rascunhos_abertos }}</span>{% endif %}</a>{% endif %}
       {# o menu só mostra o que o nível de acesso da pessoa permite (permissoes.py) #}
       {% if pode('relatorios') %}<a class="item {{ 'atual' if request.path.startswith('/relatorios') }}" href="{{ url_for('pagina_relatorios') }}">Relatórios</a>{% endif %}
       {% if pode('cadastros') %}<a class="item {{ 'atual' if request.path.startswith('/cadastros') }}" href="{{ url_for('cadastros') }}">Cadastros</a>{% endif %}

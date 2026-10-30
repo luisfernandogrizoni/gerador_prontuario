@@ -322,6 +322,9 @@ mesmo endereço `https://...ts.net`. O sistema é um só, com um banco só: os d
   limita as tentativas por computador, confirma o e-mail de cada pessoa e oferece o segundo fator (aplicativo autenticador). O
   administrador **não redefine a senha pelo e-mail** sem o segundo fator ligado. Detalhes em `docs\plano-de-seguranca.md`
   (fase 3).
+- **Rascunhos** (salvamento automático): enquanto alguém preenche um formulário longo, o sistema guarda uma cópia a cada pausa na digitação. Se a energia cair ou a
+  aba fechar, o que foi digitado está em **Rascunhos** (no menu) e a tela de cada registro já abre com ele. O rascunho é só de quem digitou, não aparece em lista nem
+  relatório nenhum, entra no backup e some sozinho depois de 30 dias sem mexer; só o botão *Salvar* grava no prontuário. Detalhes em `docs\plano-de-seguranca.md`.
 - O aviso por e-mail da troca do pen-drive (e de cópia externa atrasada) sai pela mesma tarefa do backup, uma vez por dia, para
   `financeiro@restauracao.org.br`.
 - Acesso de fora do escritório só pelo Tailscale (parte 5); nunca por porta aberta no roteador.

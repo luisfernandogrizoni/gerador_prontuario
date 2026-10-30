@@ -97,6 +97,12 @@ Um botão **cheio** (primário) por tela, para a ação principal. Os outros sã
 - **Barra de salvar fixa** (`.barra-salvar`, no fim do `<form>`): o primeiro botão de envio é o que o Enter aciona, então
   vem primeiro; só um é primário. Leva o `span.estado-form` ("Alterações não salvas", aparece quando o formulário difere
   do que abriu). Sem botão "Cancelar": o Voltar do topo já faz isso.
+- **Salvamento automático** (`rascunhos.py`, `static/rascunho.js`, `templates/_rascunho.html`): todo formulário longo (triagem, prontuário,
+  acolhimento social, ficha de saúde, registro de enfermagem, evolução) leva `{{ campo_rascunho(rascunho) }}` dentro do `<form>`,
+  `{{ aviso_rascunho(rascunho) }}` acima dele e `rascunho.js` por último. O `span.estado-form` passa a dizer o que acontece com o que foi digitado, nunca só
+  pela cor: âmbar "Alterações não salvas" (a caminho), azul "Rascunho salvo às 14:32 · ainda não gravado" e vinho para o que deu errado (sem conexão,
+  sessão terminou). O navegador só pergunta ao sair se há texto que **não chegou ao servidor**. Formulário de cadastro (funcionário, nível, convênio) **não** leva
+  rascunho: tem senha e é curto.
 - Seção que a pessoa pode pular fica em `<details class="opcional">`.
 - A seção leva só o título (sem subtítulo nem texto explicativo): o que o papel traz a mais, como o subtítulo do modelo do
   escritório, fica no documento impresso, não na tela.

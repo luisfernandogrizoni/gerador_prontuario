@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_voltar.html" import linha_voltar with context %}
 {% from "_cartao.html" import legenda %}
+{% from "_rascunho.html" import campo_rascunho, aviso_rascunho with context %}
 {% from "_abas_saude.html" import abas as abas_da_saude with context %}
 {#
   A anamnese da ficha de saúde, escrita direto no sistema (ficha_saude.py descreve as perguntas).
@@ -77,9 +78,11 @@
   </div>
   <p class="ajuda">{{ i.pessoa.nome }} · {{ i.status_txt }}</p>
   {{ abas_da_saude(i, abas) }}
+  {{ aviso_rascunho(rascunho) }}
 
   <div class="form-grade">
   <form method="post" id="form-saude" data-indice><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {{ campo_rascunho(rascunho) }}
     {% if erros %}<div class="caixa-erros"><strong>{{ erros['_'] if erros.get('_') else 'Confira os campos marcados em vermelho.' }}</strong></div>{% endif %}
     {% for secao in secoes %}
     {% set vis = visual.get(secao.titulo, ('documento', 'neutro')) %}
@@ -126,14 +129,6 @@
   if (finalizar) finalizar.addEventListener("click", function (e) {
     if (!confirm("Finalizar a ficha de saúde de " + finalizar.dataset.nome + "?")) e.preventDefault();
   });
-
-  // avisa antes de sair da página com texto ainda não salvo
-  (function () {
-    var form = document.getElementById("form-saude"), alterado = false, enviando = false;
-    form.addEventListener("input", function () { alterado = true; });
-    form.addEventListener("change", function () { alterado = true; });
-    form.addEventListener("submit", function () { enviando = true; });
-    window.addEventListener("beforeunload", function (e) { if (alterado && !enviando) { e.preventDefault(); e.returnValue = ""; } });
-  })();
 </script>
+<script src="{{ url_for('static', filename='rascunho.js') }}"></script>
 {% endblock %}

@@ -550,6 +550,38 @@ opção B (Postgres central) continua disponível: o sistema já suporta (`DATAB
 **Como conferir.** `teste_polo2.py` (51 verificações: quando a exigência vale, o administrador barrado e liberado, quem não deve ser barrado,
 o aviso de aparelho novo em cada situação e a política do Tailscale).
 
+### Complemento — Salvamento automático e rascunhos (entregue em 2026-10-30)
+
+A pedido do usuário ("salvamento automático, para não correr risco de perder tudo em algum imprevisto; aí podemos adicionar a existência de rascunhos").
+A ameaça 1 ("perder tudo") cobre o banco; faltava cobrir **o que ainda não chegou ao banco**: a pessoa digitando uma triagem de 20 minutos quando a energia cai,
+o navegador trava, a aba fecha sem querer, a rede do escritório cai ou o login vence (`rascunhos.py`, `static/rascunho.js`, `templates/_rascunho.html`).
+
+- **Como funciona.** A cada pausa de 2,5 s na digitação (no máximo 20 s digitando direto, e ao trocar de aba ou fechar), a página manda uma cópia do formulário
+  para o servidor. A cópia é um **rascunho**: nunca vira registro sozinha, não valida nem aparece nas listas, nas fichas, nos relatórios ou nos impressos; só o botão
+  *Salvar* grava no prontuário, como sempre. Abre-se o rascunho por **Rascunhos** (no menu, com o número quando há algum), por `?rascunho=`, ou direto: nas telas de um
+  registro (editar, acolhimento, ficha de saúde...) a tela já abre com o rascunho da pessoa, com um aviso e o botão *Descartar rascunho* para voltar ao que está gravado;
+  se o registro foi alterado por outra pessoa depois de o rascunho começar, o aviso diz que gravar passa por cima.
+- **Onde fica (decisão): no servidor, não no navegador.** Dado de saúde não fica solto no computador de quem digitou, entra no backup e obedece às regras de acesso do
+  resto. Tabela `rascunhos`, uma linha por formulário em andamento.
+- **Quem vê: só quem digitou.** Toda consulta é pelo login da pessoa; o token de outra pessoa não encontra nada. Nos formulários sigilosos (acolhimento social, ficha de
+  saúde, registros de enfermagem, evolução) vale também a permissão de hoje: quem perdeu o acesso não vê o nome nem o conteúdo e só pode descartar. O administrador **não**
+  lê rascunho de outra pessoa.
+- **Quanto dura: 30 dias sem mexer** (`DIAS_DE_VALIDADE`); depois some sozinho (a limpeza roda de hora em hora quando alguém guarda ou lista rascunhos). Gravar de verdade
+  troca o rascunho por uma **lápide sem dados**, que dura 2 dias para uma cópia atrasada não ressuscitá-lo. Apagar um registro de vez (`exclusao.apagar`) leva os
+  rascunhos dele. Limites: 250 KB por cópia, 20 mil caracteres por campo, 100 rascunhos por pessoa.
+- **O que nunca entra.** Campo de senha, o token CSRF, o botão apertado. Os formulários de cadastro (funcionário, nível, convênio) não têm rascunho.
+- **Auditoria.** A cópia automática **não** entra na trilha (seria uma linha a cada pausa); a gravação de verdade continua sendo registrada como sempre, e o
+  **descarte** de um rascunho entra (`rascunho.descartar`, sem o conteúdo).
+- **Quando não consegue guardar**: a barra de salvar diz (sem conexão: tenta de novo sozinha, cada vez mais devagar; sessão terminou ou página venceu: para e diz até
+  que horas o rascunho está salvo) e o navegador pergunta antes de sair enquanto houver texto que não chegou ao servidor. O que não dá para salvar é o que foi digitado
+  depois de a sessão terminar: por isso o rascunho fica em **Rascunhos** depois de entrar de novo.
+- **Risco aceito.** Um rascunho é dado pessoal (e, nos sigilosos, sensível) guardado **antes** da validação e, até 30 dias, mesmo se a pessoa desistir do cadastro:
+  tem a mesma proteção do banco (acesso por login, backup criptografado, disco do servidor) e a validade curta limita o tempo. A cópia viaja pela mesma rede do resto
+  (HTTPS quando a fase 4 estiver ligada). Se a casa preferir que rascunhos sejam **compartilhados** (a secretária começa e outra pessoa termina) ou tenham outro prazo,
+  é mudança pequena em `rascunhos.py`; hoje são privados por decisão de segurança.
+- **Como conferir.** `teste_rascunhos.py` (a cópia, retomar, descartar, só do dono, permissão por tela, sigilo, lápide, apagar de vez, validade, limite, auditoria) e a conferência
+  no navegador (digitar, recarregar, rede que cai e volta, sessão que termina, gravar).
+
 ## 5. O que só uma pessoa na casa pode fazer
 
 | Quando | Tarefa |
