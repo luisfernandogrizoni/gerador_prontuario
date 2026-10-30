@@ -166,6 +166,15 @@ def _itens():
     return request.args.get("itens") or "padrão"
 
 
+def _leitura_da_lista(detalhe, segundos=60):
+    """A lista de internos pede ao servidor a cada busca, página e atualização automática: vira UMA linha por pessoa a cada `segundos` (e por tipo de
+    consulta, com ou sem busca), não uma por tecla. Quem lê a lista continua aparecendo: só o excesso de linhas iguais seguidas é cortado."""
+    desde = datetime.now() - timedelta(seconds=segundos)
+    ja_registrou = db.session.execute(db.select(Evento.id).filter(Evento.usuario == g.usuario.nome, Evento.acao == "ver.lista", Evento.detalhe == detalhe,
+                                                                   Evento.quando >= desde).limit(1)).first()
+    return None if ja_registrou else ("ver.lista", "", None, None, detalhe)
+
+
 # ====================================================================== o que se registra sozinho (leituras, depois da resposta 200)
 # endpoint -> função que devolve (acao, alvo_tipo, alvo_id, pessoa_id, detalhe) ou None
 LEITURAS = {
@@ -193,6 +202,7 @@ LEITURAS = {
     "baixar_relatorio_anual": lambda: ("relatorio.baixar", "", None, None, "quem passou pela casa no ano" + _com_nomes()),
     "api_triagens": lambda: ("ver.lista", "", None, None, "triagens"),
     "api_internos": lambda: ("ver.lista", "", None, None, "internos"),
+    "api_internos_busca": lambda: _leitura_da_lista("internos · com busca" if request.args.get("q", "").strip() else "internos"),
     "api_pessoas": lambda: ("busca.pessoa", "", None, None, ""),
     "lixeira": lambda: ("ver.lixeira", "", None, None, ""),
     "lista_funcionarios": lambda: ("ver.funcionarios", "", None, None, ""),

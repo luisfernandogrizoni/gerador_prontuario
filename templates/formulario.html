@@ -40,7 +40,7 @@
         {% for chave, rotulo in documentos.items() %}
           {{ f.escolha('doc_' ~ chave, rotulo, ['Sim', 'Não'] + (['Original', 'Cópia'] if 'Cópia' in rotulo else []), 'c2') }}
         {% endfor %}
-        {{ f.entrada('doc_outro', 'Outro documento', 'c2') }}
+        {{ f.entrada('doc_outro', 'Outro documento', 'c2', attrs={'data-forma': 'frase'}) }}
       </div>
     </fieldset>
 

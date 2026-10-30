@@ -56,21 +56,21 @@
 <fieldset class="tom-azul">
   {{ legenda('Acolhido', 'usuario') }}
   <div class="grade">
-    {{ entrada('nome', 'Nome completo', 'c6', obrig=true) }}
+    {{ entrada('nome', 'Nome completo', 'c6', obrig=true, attrs={'data-forma': 'nome'}) }}
     {{ entrada('nascimento', 'Data de nascimento', 'c2', 'date') }}
     {{ entrada('cpf', 'CPF', 'c2', attrs={'data-mascara': 'cpf', 'inputmode': 'numeric', 'placeholder': '000.000.000-00'}) }}
     {{ entrada('rg', 'RG', 'c2', attrs={'data-mascara': 'rg', 'placeholder': '00.000.000-0'}) }}
     {{ entrada('cartao_sus', 'Cartão SUS', 'c3', attrs={'data-mascara': 'sus', 'inputmode': 'numeric', 'placeholder': '000 0000 0000 0000'}) }}
     {% if completo %}
       {{ escolha('estado_civil', 'Estado civil', ['Casado', 'Solteiro', 'Divorciado', 'Outros'], 'c1') }}
-      {{ entrada('estado_civil_outro', 'Se "Outros", qual?', 'c2') }}
-      {{ entrada('conjuge', 'Cônjuge', 'c6') }}
-      {{ entrada('escolaridade', 'Escolaridade', 'c3') }}
-      {{ entrada('religiao', 'Religião', 'c3') }}
-      {{ entrada('profissao', 'Profissão', 'c3') }}
-      {{ entrada('mae', 'Mãe', 'c3') }}
+      {{ entrada('estado_civil_outro', 'Se "Outros", qual?', 'c2', attrs={'data-forma': 'frase'}) }}
+      {{ entrada('conjuge', 'Cônjuge', 'c6', attrs={'data-forma': 'nome'}) }}
+      {{ entrada('escolaridade', 'Escolaridade', 'c3', attrs={'data-forma': 'frase'}) }}
+      {{ entrada('religiao', 'Religião', 'c3', attrs={'data-forma': 'frase'}) }}
+      {{ entrada('profissao', 'Profissão', 'c3', attrs={'data-forma': 'frase'}) }}
+      {{ entrada('mae', 'Mãe', 'c3', attrs={'data-forma': 'nome'}) }}
     {% else %}
-      {{ entrada('mae', 'Mãe', 'c3') }}
+      {{ entrada('mae', 'Mãe', 'c3', attrs={'data-forma': 'nome'}) }}
     {% endif %}
   </div>
 </fieldset>
@@ -81,10 +81,10 @@
   {{ legenda('Endereço e contatos', 'pin') }}
   <div class="grade">
     {{ entrada('cep', 'CEP', 'c2', attrs={'data-mascara': 'cep', 'inputmode': 'numeric', 'placeholder': '00000-000'}) }}
-    {{ entrada('endereco', 'Rua', 'c3') }}
+    {{ entrada('endereco', 'Rua', 'c3', attrs={'data-forma': 'local'}) }}
     {{ entrada('numero', 'Nº', 'c1') }}
-    {{ entrada('bairro', 'Bairro', 'c2') }}
-    {{ entrada('cidade', 'Cidade', 'c3') }}
+    {{ entrada('bairro', 'Bairro', 'c2', attrs={'data-forma': 'local'}) }}
+    {{ entrada('cidade', 'Cidade', 'c3', attrs={'data-forma': 'local'}) }}
     {{ entrada('estado', 'UF', 'c1', attrs={'maxlength': '2', 'style': 'text-transform: uppercase'}) }}
     {{ entrada('contato1', 'Contato 1 (família)', 'c2', attrs={'data-mascara': 'telefone', 'inputmode': 'tel', 'placeholder': '(18) 99999-9999'}) }}
     {{ entrada('contato2', 'Contato 2', 'c2', attrs={'data-mascara': 'telefone', 'inputmode': 'tel'}) }}
@@ -104,8 +104,8 @@
               data-resp_rg="{{ anterior.resp_rg }}" data-resp_cpf="{{ anterior.resp_cpf }}">Usar o mesmo</button></p>
   {% endif %}
   <div class="grade">
-    {{ entrada('resp_nome', 'Nome', 'c4') }}
-    {{ entrada('parentesco', 'Parentesco', 'c2') }}
+    {{ entrada('resp_nome', 'Nome', 'c4', attrs={'data-forma': 'nome'}) }}
+    {{ entrada('parentesco', 'Parentesco', 'c2', attrs={'data-forma': 'frase'}) }}
     {{ entrada('resp_rg', 'RG', 'c3', attrs={'data-mascara': 'rg'}) }}
     {{ entrada('resp_cpf', 'CPF', 'c3', attrs={'data-mascara': 'cpf', 'inputmode': 'numeric'}) }}
   </div>
@@ -136,7 +136,7 @@
       <input type="number" step="0.01" min="0" name="contribuicao_valor" id="f-contribuicao_valor"
              value="{{ d.get('contribuicao_valor', '') }}">
       <small id="categoria">&nbsp;</small></label>
-    {{ entrada('contribuicao_condicoes', 'Condições', 'c2', attrs={'placeholder': 'ex.: mensal, 9 parcelas'}) }}
+    {{ entrada('contribuicao_condicoes', 'Condições', 'c2', attrs={'placeholder': 'ex.: mensal, 9 parcelas', 'data-forma': 'frase'}) }}
   </div>
 </fieldset>
 <script nonce="{{ csp_nonce() }}">

@@ -30,7 +30,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from prontuario import (calcular_idade, categoria_efetiva, classificar, fmt_data, fmt_reais, ler_data,
                         ler_valor, previsao_termino, tipo_da_categoria)
 from servico_social import estado
-from validacao import fmt_cpf, fmt_hora, fmt_telefone, ler_hora, limpar_rg, so_digitos
+from validacao import escrever_bem, fmt_cpf, fmt_hora, fmt_telefone, ler_hora, limpar_rg, so_digitos
 
 db = SQLAlchemy()
 
@@ -48,6 +48,12 @@ STATUS_TRIAGEM = ("em_admissao", "lista_espera", "desistiu", "rejeitado")
 STATUS_INTERNACAO = ("ativo", "inativo")
 MODALIDADES = ["Presencial", "Online"]
 
+
+def status_texto(status, motivo=""):
+    """"Ativo", "Inativo (Desistência)"...: a situação como aparece nas telas (o motivo só vale para quem está inativo)."""
+    txt = STATUS.get(status, status)
+    return f"{txt} ({motivo})" if status == "inativo" and motivo else txt
+
 # Onde está o prontuário em papel (o envelope com os termos de compromisso) de quem recebeu baixa.
 # Ele vai para a casa de acolhida com o interno e precisa voltar ao escritório para o relatório de saída.
 # "" = sem controle (baixas anteriores a este recurso, que não geram aviso).
@@ -60,6 +66,8 @@ class CamposDeFormulario:
 
     CAMPOS_DO_SISTEMA = {"id", "pessoa_id", "internacao_id", "status", "criado_em", "atualizado_em",
                          "envelope", "envelope_recebido_em", "excluido_em", "excluido_por", "exames_impressos_para"}
+    # como cada campo de texto é escrito (validacao.FORMAS): FULANO DE TAL -> Fulano de Tal. O que não está aqui fica como foi digitado.
+    FORMAS = {}
 
     def preencher(self, form):
         for coluna in self.__table__.columns:
@@ -67,7 +75,7 @@ class CamposDeFormulario:
             # campos que só existem no prontuário, e vice-versa
             if coluna.name in self.CAMPOS_DO_SISTEMA or coluna.name not in form:
                 continue
-            bruto = (form.get(coluna.name) or "").strip()
+            bruto = escrever_bem(self.FORMAS.get(coluna.name), form.get(coluna.name))
             if isinstance(coluna.type, Date):
                 valor = ler_data(bruto)
             elif isinstance(coluna.type, Time):
@@ -139,6 +147,9 @@ class Pessoa(CamposDeFormulario, db.Model):
 
     internacoes: Mapped[list["Internacao"]] = relationship(
         back_populates="pessoa", order_by="Internacao.id")
+
+    FORMAS = {"nome": "nome", "conjuge": "nome", "mae": "nome", "endereco": "local", "bairro": "local", "cidade": "local", "estado": "uf",
+              "profissao": "frase", "religiao": "frase", "escolaridade": "frase", "estado_civil_outro": "frase"}
 
     def normalizar(self):
         self.cpf = so_digitos(self.cpf)
@@ -245,6 +256,8 @@ class Internacao(CamposDeFormulario, db.Model):
     versoes_relatorios: Mapped[list["VersaoRelatorio"]] = relationship(
         back_populates="internacao", order_by="VersaoRelatorio.id", cascade="all, delete-orphan")
 
+    FORMAS = {"resp_nome": "nome", "parentesco": "frase", "doc_outro": "frase", "contribuicao_condicoes": "frase"}
+
     def normalizar(self):
         self.resp_cpf = so_digitos(self.resp_cpf)
         self.resp_rg = limpar_rg(self.resp_rg)
@@ -258,8 +271,7 @@ class Internacao(CamposDeFormulario, db.Model):
 
     @property
     def status_txt(self):
-        txt = STATUS.get(self.status, self.status)
-        return f"{txt} ({self.motivo})" if self.status == "inativo" and self.motivo else txt
+        return status_texto(self.status, self.motivo)
 
     @property
     def convenio_txt(self):

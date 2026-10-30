@@ -103,6 +103,13 @@ Um botão **cheio** (primário) por tela, para a ação principal. Os outros sã
   pela cor: âmbar "Alterações não salvas" (a caminho), azul "Rascunho salvo às 14:32 · ainda não gravado" e vinho para o que deu errado (sem conexão,
   sessão terminou). O navegador só pergunta ao sair se há texto que **não chegou ao servidor**. Formulário de cadastro (funcionário, nível, convênio) **não** leva
   rascunho: tem senha e é curto.
+- **Nomes e endereços saem escritos do mesmo jeito** (`validacao.nome_proprio`, `frase`, `escrever_bem`): FULANO FICTICIO DE TAL ou fulano ficticio de tal
+  viram "Fulano Ficticio de Tal" (de, da, do, das, dos e e em minúsculas; numeral romano e S/N preservados). Campo de nome, mãe, cônjuge, responsável, rua,
+  bairro, cidade, profissão, religião, parentesco e cargo leva `data-forma="nome|local|frase|uf|email"` no `<input>` (`static/base.js` mostra o resultado ao
+  sair do campo); o **servidor** refaz ao gravar (`FORMAS` nos modelos, `forma=` nos campos do acolhimento social). Só muda o que está **todo** em maiúsculas
+  ou **todo** em minúsculas (McDonald e "Maria da Silva" ficam como foram escritos; em rua, bairro e cidade uma sigla num texto misturado, como "Jardim ABC",
+  também fica). Acento o sistema **não** coloca (JOSE vira Jose): o nome tem de ficar como no documento. Texto livre (relatórios, evolução) nunca é mexido.
+  Campo novo de nome ou endereço: ponha a forma nos dois lugares (modelo/`Campo` e `data-forma`).
 - Seção que a pessoa pode pular fica em `<details class="opcional">`.
 - A seção leva só o título (sem subtítulo nem texto explicativo): o que o papel traz a mais, como o subtítulo do modelo do
   escritório, fica no documento impresso, não na tela.
@@ -126,6 +133,23 @@ Um botão **cheio** (primário) por tela, para a ação principal. Os outros sã
 - **Vazio não ocupa lugar**: `dados([(rótulo, valor), ...])` mostra só o que tem valor e junta o resto numa linha,
   "Não informado: ...".
 - Impressão: botões e menus saem, uma coluna só, cartões sem cortar.
+
+## Listas que crescem (internos)
+
+- Lista que pode chegar a milhares de registros **não** baixa tudo para o navegador: `static/tabela.js` (`TabelaPaginada`) pede ao servidor só a página que mostra,
+  e `busca_de_internos.py` faz a busca, os filtros, a ordem e a paginação (`GET /api/internos/busca`). A lista de triagens, que é curta e some sozinha,
+  continua com a `TabelaDinamica` (tudo no navegador).
+- **Busca**: várias palavras em qualquer ordem (todas precisam aparecer), sem acento e sem diferença de maiúsculas; nome, mãe, responsável, cidade, categoria, situação,
+  e números (CPF, RG, cartão SUS, telefones, com ou sem pontuação); `#123` acha o registro nº 123. Sem ordem escolhida, quem tem o nome começando pelo que foi
+  digitado vem antes de quem só tem a mãe ou o responsável com aquele nome.
+- **Filtros**: situação (abas Ativos | Inativos | Todos), categoria e ano de início; os números das abas já levam em conta a busca e os outros filtros. "Limpar filtros"
+  aparece quando há busca ou filtro. 25, 50 (padrão) ou 100 por página, e "Todos (para imprimir)", que tem teto (`LIMITE_DE_TODOS`).
+- Tudo o que a pessoa escolhe (busca, filtros, ordem, página, tamanho) fica na URL; o "voltar" reencontra a lista como estava. Registro recém-gravado (`?novo=`) abre
+  na página em que ele está (`foco`). A atualização automática (30 s) só pede a página atual e espera se a aba está escondida.
+- **Auditoria**: cada consulta à lista é uma leitura de dados pessoais, mas a trilha guarda UMA linha por pessoa a cada minuto (e por tipo: com ou sem busca), nunca o
+  texto buscado (`auditoria._leitura_da_lista`).
+- Limite conhecido: o filtro roda em Python sobre uma consulta leve de todos os internos (cerca de 0,2 s com 5 mil registros). Passando de dezenas de milhares, o próximo
+  passo é uma coluna de busca já normalizada no banco.
 
 ## Estados vazios e erros
 

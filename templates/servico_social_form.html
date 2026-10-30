@@ -69,7 +69,7 @@
       </div></div>
   {% else %}
     <label class="{{ c.colunas }}{{ ' com-erro' if erros.get(nome) }}">{{ c.rotulo }}
-      <input type="{{ 'date' if c.tipo == 'data' else 'text' }}" name="{{ nome }}" value="{{ v.get(nome, '') }}"{{ ' maxlength=200' | safe if c.tipo != 'data' }}>
+      <input type="{{ 'date' if c.tipo == 'data' else 'text' }}" name="{{ nome }}" value="{{ v.get(nome, '') }}"{{ ' maxlength=200' | safe if c.tipo != 'data' }}{% if c.forma %} data-forma="{{ c.forma }}"{% endif %}>
       {% if erros.get(nome) %}<small class="erro">{{ erros[nome] }}</small>{% endif %}</label>
   {% endif %}
 {%- endmacro %}

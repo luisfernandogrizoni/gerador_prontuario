@@ -199,7 +199,7 @@ REGRAS = {
     # (a página de entrada, o código e o "esqueci minha senha" são autenticacao.ROTAS_LIVRES)
 
     "home": "ver", "api_pessoas": "ver", "lista_triagens": "ver", "api_triagens": "ver", "lista_internos": "ver",
-    "api_internos": "ver", "ficha": "ver", "relatorio_social": "ver", "relatorio_de_rejeicao": "ver",
+    "api_internos": "ver", "api_internos_busca": "ver", "ficha": "ver", "relatorio_social": "ver", "relatorio_de_rejeicao": "ver",
     "ficha_saude": "ver", "saude_enfermagem": "ver", "saude_evolucao": "ver",
     "historico_do_relatorio": "ver", "ver_versao_do_relatorio": "ver",
     "aviso_ciente": ("triagem", "internacao", "baixa"),

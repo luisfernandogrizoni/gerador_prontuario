@@ -28,7 +28,7 @@ from datetime import date
 
 from documentos import N, Paragrafo, Pauta, Texto
 from prontuario import calcular_idade, fmt_data, ler_data, previsao_termino
-from validacao import fmt_cep, fmt_cpf, fmt_rg
+from validacao import escrever_bem, fmt_cep, fmt_cpf, fmt_rg
 
 LIMITE_TEXTO, LIMITE_LONGO = 200, 5000
 EM_BRANCO = "_" * 24
@@ -61,6 +61,7 @@ class Campo:
     reaproveitar: bool = False  # numa readmissão, a resposta do acolhimento anterior vem como ponto de partida
     antigo: str = ""           # chave com que esta resposta foi gravada antes (modelo anterior da ficha)
     detalhe_rotulo: str = "especifique"    # sim_nao: o que o "se sim" pede ("especifique", "qual medicação", "obs"...)
+    forma: str = ""            # texto: como é escrito, uma chave de validacao.FORMAS (nome, local, frase, uf, email); vazio = como foi digitado
 
 
 @dataclass(frozen=True)
@@ -76,8 +77,8 @@ SECOES = (
     Secao("Identificação individual", (
         C("data_acolhimento", "Data do acolhimento", "data", colunas="c2", padrao="data_da_triagem"),
         C("sexo", "Sexo", "escolha", ("Masculino", "Feminino"), "c2", linha="a", reaproveitar=True),
-        C("genero", "Gênero", colunas="c2", linha="a", reaproveitar=True),
-        C("opcao_sexual", "Opção sexual", colunas="c2", linha="a", reaproveitar=True),
+        C("genero", "Gênero", colunas="c2", linha="a", reaproveitar=True, forma="frase"),
+        C("opcao_sexual", "Opção sexual", colunas="c2", linha="a", reaproveitar=True, forma="frase"),
         C("raca_cor", "Qual raça / cor você se considera?", "escolha",
           ("Negra/Preta", "Indígena", "Branca", "Amarela/Oriental", "Parda/Mestiça", "Não respondeu"), "c6", reaproveitar=True),
         C("moradia", "Qual a situação atual de moradia", colunas="c6"),
@@ -92,15 +93,15 @@ SECOES = (
         C("desligamento_motivo", "Motivo", "longo", colunas="c6", linhas=5, padrao="desligamento_motivo"),
     )),
     Secao("Responsável pelo acompanhamento do residente", subtitulo="Sócio econômico — identificação social", nova_pagina=True, campos=(
-        C("resp_endereco", "Endereço", colunas="c4", padrao="endereco"),
+        C("resp_endereco", "Endereço", colunas="c4", padrao="endereco", forma="local"),
         C("resp_numero", "Número", colunas="c1", linha="e", padrao="numero"),
-        C("resp_bairro", "Bairro", colunas="c3", linha="e", padrao="bairro"),
+        C("resp_bairro", "Bairro", colunas="c3", linha="e", padrao="bairro", forma="local"),
         C("resp_cep", "CEP", colunas="c2", padrao="cep"),
-        C("resp_cidade", "Cidade", colunas="c3", linha="f", padrao="cidade"),
-        C("resp_uf", "UF", colunas="c1", linha="f", padrao="estado"),
+        C("resp_cidade", "Cidade", colunas="c3", linha="f", padrao="cidade", forma="local"),
+        C("resp_uf", "UF", colunas="c1", linha="f", padrao="estado", forma="uf"),
         C("resp_contato", "Contato", colunas="c2", linha="f"),
-        C("resp_email", "E-mail", colunas="c3"),
-        C("resp_profissao", "Profissão", colunas="c3"),
+        C("resp_email", "E-mail", colunas="c3", forma="email"),
+        C("resp_profissao", "Profissão", colunas="c3", forma="frase"),
         C("moram_na_residencia", "Quantas pessoas moram na residência?", colunas="c3"),
         C("mantenedor", "Quem é o principal mantenedor da família?", colunas="c3"),
         C("contribui_renda", "Quem mais contribui com a renda?", colunas="c3"),
@@ -334,6 +335,7 @@ def ler_formulario(form, campos=None):
             if detalhe:
                 dados[campo.chave + "_detalhe"] = detalhe
         elif bruto:
+            bruto = escrever_bem(campo.forma, bruto) if campo.forma else bruto
             limite = LIMITE_LONGO if campo.tipo == "longo" else LIMITE_TEXTO
             if len(bruto) > limite:
                 erros[campo.chave] = f"Escreva até {limite} caracteres (tem {len(bruto)})."
