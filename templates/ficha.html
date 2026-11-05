@@ -80,6 +80,21 @@
   }
   .acoes-doc.espaco { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 6px; }
   .acoes-doc.espaco .botao { padding: 6px 11px; font-size: .84rem; }
+  /* documentos escaneados: o PDF do documento físico assinado (anexos.py) */
+  .escaneados { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .escaneados li { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px 12px; padding: 10px 12px; background: #fff;
+                   border: 1px solid var(--borda); border-radius: 12px; }
+  .escaneados li.removido { background: #fafafa; border-style: dashed; }
+  .escaneados li.removido .info strong { text-decoration: line-through; color: var(--suave); }
+  .chip-pdf { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; background: var(--vermelho-claro); color: var(--vermelho);
+              font-size: .72rem; font-weight: 800; letter-spacing: .03em; }
+  .escaneados .info { min-width: 0; }
+  .escaneados .info strong { display: block; overflow-wrap: anywhere; }
+  .escaneados .info small { display: block; color: var(--suave); }
+  .acoes-anexo { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+  .acoes-anexo form { margin: 0; }
+  form.novo-anexo { display: grid; gap: 10px; margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--borda); }
+  form.novo-anexo small { color: var(--suave); }
   /* situação + ação de um cartão (acolhimento social, prontuário em papel) */
   .envelope { display: grid; gap: 12px; }
   .envelope .situacao { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
@@ -106,7 +121,7 @@
     .cartao-secao { overflow: visible; border-color: #aaa; }
     .tabela-rolavel { overflow: visible; }
     .simples.larga { min-width: 0; }
-    form.nova-parcela { display: none; }
+    form.nova-parcela, form.novo-anexo, .acoes-anexo { display: none; }
   }
 {% endblock %}
 
@@ -315,6 +330,54 @@
         {{ dados([('Categoria', i.categoria), ('Contribuição', (i.contribuicao_valor | reais) ~ (' — ' ~ i.contribuicao_condicoes if i.contribuicao_condicoes else ''))]) }}
       {% endcall %}
 
+      {% if pode('documentos') %}
+      {% call cartao('Documentos escaneados', 'documento', 'neutro', id='escaneados') %}
+        {% if escaneados %}
+        <ul class="escaneados">
+          {% for a in escaneados %}
+          <li{{ ' class="removido"' | safe if a.excluido_em }}>
+            <span class="chip-pdf" aria-hidden="true">PDF</span>
+            <div class="info">
+              <strong>{{ a.titulo }}</strong>
+              <small>Enviado em {{ a.enviado_em | data }} · {{ a.tamanho | tamanho }}{% if a.enviado_por %} · por {{ a.enviado_por }}{% endif %}</small>
+              {% if a.excluido_em %}<small>Removido em {{ a.excluido_em | data }}{% if a.excluido_por %} por {{ a.excluido_por }}{% endif %} (só o administrador vê)</small>{% endif %}
+            </div>
+            <div class="acoes-anexo">
+              <a class="botao pequeno secundario" href="{{ url_for('ver_anexo', id=i.id, anexo_id=a.id) }}" target="_blank" rel="noopener">Abrir</a>
+              <a class="botao pequeno secundario" href="{{ url_for('baixar_anexo', id=i.id, anexo_id=a.id) }}">Baixar</a>
+              {% if not a.excluido_em and pode('anexar') %}
+              <form method="post" action="{{ url_for('remover_anexo', id=i.id, anexo_id=a.id) }}"
+                    data-confirmar="Remover este documento da ficha? O administrador ainda poderá restaurá-lo."><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="botao pequeno secundario">Remover</button></form>
+              {% endif %}
+              {% if a.excluido_em and e_administrador %}
+              <form method="post" action="{{ url_for('restaurar_anexo', id=i.id, anexo_id=a.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="botao pequeno secundario">Restaurar</button></form>
+              <form method="post" action="{{ url_for('apagar_anexo', id=i.id, anexo_id=a.id) }}"
+                    data-confirmar="Apagar este documento de vez? O arquivo é apagado do disco e não tem volta."><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="botao pequeno perigo">Apagar de vez</button></form>
+              {% endif %}
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+          <p class="nao-informado">Nenhum documento escaneado anexado.</p>
+        {% endif %}
+        {% if pode('anexar') %}
+        <form class="novo-anexo" method="post" action="{{ url_for('enviar_anexo', id=i.id) }}" enctype="multipart/form-data" data-limite="{{ limite_do_anexo }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <label>PDF do documento assinado *<input type="file" name="arquivo" accept="application/pdf,.pdf" required></label>
+          <label>Título (como vai aparecer na lista)
+            <input type="text" name="titulo" maxlength="100" list="titulos-de-anexo" placeholder="Prontuário assinado" autocomplete="off"></label>
+          <datalist id="titulos-de-anexo">{% for t in titulos_de_anexo %}<option value="{{ t }}">{% endfor %}</datalist>
+          <small>Só PDF, até {{ limite_do_anexo // 1048576 }} MB (150 a 200 dpi bastam). Enviar de novo o mesmo arquivo não faz diferença: o sistema avisa.</small>
+          <button class="botao suave">Anexar</button>
+        </form>
+        {% endif %}
+      {% endcall %}
+      {% endif %}
+
       {% if i.status == 'inativo' %}
       {% call cartao('Prontuário em papel', 'envelope', 'verde' if i.envelope == 'recebido' else 'amarelo' if i.envelope == 'pendente' else 'neutro', id='envelope') %}
         <div class="envelope">
@@ -412,6 +475,19 @@
       document.getElementById("fechar-documentos").addEventListener("click", function () { gaveta.close(); });
       gaveta.addEventListener("click", function (e) { if (e.target === gaveta) gaveta.close(); });
       if (location.hash === "#documentos") gaveta.showModal();
+    }
+    var novoAnexo = document.querySelector("form.novo-anexo");
+    if (novoAnexo) {
+      // confere o PDF antes de enviar (o servidor confere de novo): só PDF e dentro do limite
+      var arquivo = novoAnexo.querySelector('input[type="file"]'), limite = Number(novoAnexo.dataset.limite || 0), enviar = novoAnexo.querySelector("button");
+      arquivo.addEventListener("change", function () {
+        var f = arquivo.files[0], aviso = "";
+        if (f && !/\.pdf$/i.test(f.name) && f.type !== "application/pdf") aviso = "Só PDF é aceito.";
+        else if (f && limite && f.size > limite) aviso = "O arquivo passa de " + Math.floor(limite / 1048576) + " MB. Escaneie de novo com resolução menor.";
+        arquivo.setCustomValidity(aviso);
+        if (aviso) arquivo.reportValidity();
+      });
+      novoAnexo.addEventListener("submit", function () { enviar.disabled = true; enviar.textContent = "Enviando…"; });   // um clique só: o PDF pode demorar a subir
     }
     var dialogo = document.getElementById("excluir"), mais = document.querySelector("details.mais");
     if (dialogo) {

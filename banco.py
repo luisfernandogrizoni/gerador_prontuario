@@ -52,6 +52,12 @@ def opcoes_do_motor(url):
     return {**base, "pool_pre_ping": True, "pool_recycle": 1800}
 
 
+def pasta_dos_anexos(pasta_instance):
+    """Onde ficam os PDFs dos documentos escaneados (anexos.py): instance/anexos, ou o que a variável PASTA_ANEXOS indicar (os testes e quem quiser
+    pôr os arquivos em outro disco). O backup (backup.py) copia esta pasta junto com o banco."""
+    return Path(os.environ.get("PASTA_ANEXOS") or Path(pasta_instance) / "anexos")
+
+
 def arquivo_ultimo_backup(pasta_instance):
     """Arquivo onde o backup.py anota quando terminou o último backup (o sistema lê para avisar se atrasar)."""
     return Path(os.environ.get("ARQUIVO_ULTIMO_BACKUP") or Path(pasta_instance) / "ultimo_backup.txt")

@@ -16,29 +16,39 @@ O backup do dia (backup.py) fica neste computador. Aqui ele ganha uma segunda vi
   * **Com histórico**: em cada pen-drive ficam as cópias dos últimos 14 dias, uma por semana nas 8 semanas seguintes e uma
     por mês até completar um ano, para um erro descoberto tarde ainda ter de onde voltar.
   * **Testável**: `backup.py --testar-restauracao` abre a cópia mais nova com a frase do papel e confere o banco.
+  * **Com os documentos escaneados**: os PDFs anexados às fichas (anexos.py) não entram dentro de cada cópia do banco (seriam recopiados em todas as dezenas de
+    cópias do histórico). Cada pen-drive tem, ao lado, uma pasta `anexos` com UM arquivo criptografado por PDF (a mesma frase de recuperação), copiado uma vez só,
+    conferido na hora e restaurável (`backup.py --restaurar-anexos`). O que o administrador apaga de vez no sistema fica mais um ano no pen-drive, como as cópias do banco.
 
 Formato do arquivo (.pbk): "PBK1", parâmetros do scrypt (3 bytes), sal (16), nonce (12); depois o banco comprimido e
 criptografado (AES-GCM, com o cabeçalho como dado autenticado) e, no fim, a marca de autenticação (16 bytes). Trocar um byte
 qualquer, ou errar a frase, é detectado.
+Formato de cada documento escaneado (.pba): o mesmo cabeçalho com "PBA1", e o PDF criptografado como está (sem comprimir: PDF de escaneamento já é comprimido). O sal é
+o mesmo para todos os PDFs de um pen-drive (a chave sai do scrypt uma vez por rodada, e não uma vez por arquivo), mas vai no cabeçalho de cada arquivo: cada um abre sozinho.
 
 A biblioteca `cryptography` só é carregada quando se criptografa ou descriptografa: a página inicial e a tela de backup usam só
 o estado (instance/backup_externo.json) e funcionam sem ela.
 """
 
 import ctypes
+import errno
 import hashlib
 import json
 import os
 import re
 import secrets
+import shutil
 import sqlite3
 import tempfile
+import time
 import uuid
 import zlib
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
+
+import banco
 
 RAIZ = Path(__file__).resolve().parent
 PASTA_INSTANCE = RAIZ / "instance"
@@ -66,6 +76,16 @@ DIAS_SEM_TESTE = 100                  # teste de restauração: a cada ~3 meses
 DIAS_ATE_O_PRIMEIRO_TESTE = 7
 MANTER_DIARIAS, MANTER_SEMANAS, GUARDAR_ATE_DIAS = 14, 8, 366     # cópias: todas por 14 dias, 1 por semana por 8 semanas, 1 por mês até 1 ano
 
+# os documentos escaneados nos pen-drives
+PASTA_DOS_ANEXOS = "anexos"
+MAGICA_ANEXO = b"PBA1"
+SUFIXO_ANEXO = ".pba"
+SUFIXO_APAGADO = ".apagado"            # o PDF que sumiu do sistema (apagado de vez): fica GUARDAR_ATE_DIAS no pen-drive e sai
+ARQUIVO_DO_SAL = "chave.json"          # o sal que este pen-drive usa para os PDFs novos (os antigos levam o deles no próprio cabeçalho)
+SOBRA_DO_ANEXO = TAMANHO_DO_CABECALHO + TAMANHO_DA_MARCA      # o que a criptografia acrescenta ao tamanho do PDF
+ORCAMENTO_DOS_ANEXOS = 20 * 60         # segundos de cópia de PDFs por rodada e por pen-drive: a primeira vez pode ser longa, e continua na rodada seguinte
+DIAS_SEM_COPIA_COMPLETA = 3            # os PDFs não estão todos no pen-drive há mais que isso: aviso
+TESTAR_ANEXOS = 3                      # quantos PDFs o teste de restauração abre
 
 class ErroDeCopia(Exception):
     """Falha esperada (frase errada, pen-drive ausente, arquivo danificado): a mensagem é para a pessoa ler."""
@@ -347,6 +367,241 @@ def preparar_midia(raiz, nome="", instance=PASTA_INSTANCE, agora=None, proibidas
     return Midia(novo, nome, pasta, str(raiz)), False
 
 
+# ============================================================================= os documentos escaneados (.pba)
+def _chave_dos_anexos(frase, pasta):
+    """A chave dos PDFs novos deste pen-drive: scrypt(frase, sal da pasta). O sal nasce na primeira cópia e fica em `chave.json`; os PDFs já copiados levam o sal
+    deles no cabeçalho, então perder o `chave.json` não deixa nenhum arquivo sem abrir. Devolve (chave, sal)."""
+    arquivo = Path(pasta) / ARQUIVO_DO_SAL
+    try:
+        dados = json.loads(arquivo.read_text(encoding="utf-8"))
+        sal = bytes.fromhex(dados["sal"])
+        if len(sal) != 16:
+            raise ValueError("sal com tamanho errado")
+    except (FileNotFoundError, ValueError, KeyError, TypeError):           # (sem o arquivo, ou estragado: um sal novo; os PDFs antigos seguem abrindo pelo cabeçalho)
+        sal = secrets.token_bytes(16)
+        Path(pasta).mkdir(parents=True, exist_ok=True)
+        provisorio = arquivo.with_name(arquivo.name + ".tmp")
+        provisorio.write_text(json.dumps({"sal": sal.hex()}), encoding="utf-8")
+        os.replace(provisorio, arquivo)
+    return _chave(frase, sal, N_LOG2, R, P), sal
+
+
+def _criptografar_anexo(origem, destino, chave, sal):
+    """Criptografa o PDF `origem` em `destino` (por um nome provisório). Devolve (sha256 do PDF, tamanho): é o que a conferência compara."""
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    nonce = secrets.token_bytes(12)
+    cabecalho = MAGICA_ANEXO + bytes([N_LOG2, R, P]) + sal + nonce
+    cifra = Cipher(algorithms.AES(chave), modes.GCM(nonce)).encryptor()
+    cifra.authenticate_additional_data(cabecalho)
+    impressao, total = hashlib.sha256(), 0
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    provisorio = destino.with_name(destino.name + ".parcial")
+    try:
+        with open(origem, "rb") as de, open(provisorio, "wb") as para:
+            para.write(cabecalho)
+            while bloco := de.read(BLOCO):
+                impressao.update(bloco)
+                total += len(bloco)
+                para.write(cifra.update(bloco))
+            cifra.finalize()
+            para.write(cifra.tag)
+            para.flush()
+            os.fsync(para.fileno())
+        os.replace(provisorio, destino)
+    except BaseException:
+        provisorio.unlink(missing_ok=True)
+        raise
+    return impressao.hexdigest(), total
+
+
+def abrir_anexo(origem, frase, destino=None, chaves=None):
+    """Abre um .pba do jeito que uma restauração abriria: descriptografa e confere a marca de autenticação. Grava o PDF em `destino` (se vier; só vale se tudo deu
+    certo). Devolve (sha256, tamanho) do PDF. Frase errada ou arquivo mexido: ErroDeCopia. `chaves` guarda as chaves já derivadas (um scrypt por sal, não por arquivo)."""
+    from cryptography.exceptions import InvalidTag
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    origem = Path(origem)
+    chaves = {} if chaves is None else chaves
+    tamanho = origem.stat().st_size
+    if tamanho < SOBRA_DO_ANEXO:
+        raise ErroDeCopia(f"{origem.name} é pequeno demais para ser um documento do sistema (arquivo cortado?).")
+    provisorio = Path(destino).with_name(Path(destino).name + ".parcial") if destino else None
+    if provisorio:
+        provisorio.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with open(origem, "rb") as de:
+            cabecalho = de.read(TAMANHO_DO_CABECALHO)
+            if cabecalho[:4] != MAGICA_ANEXO:
+                raise ErroDeCopia(f"{origem.name} não é um documento criptografado do sistema.")
+            n_log2, r, p = cabecalho[4], cabecalho[5], cabecalho[6]
+            if not (10 <= n_log2 <= 20 and 1 <= r <= 16 and 1 <= p <= 4):
+                raise ErroDeCopia(f"{origem.name} tem um cabeçalho que não reconheço (arquivo danificado?).")
+            sal, nonce = cabecalho[7:23], cabecalho[23:35]
+            chave = chaves.get((sal, n_log2, r, p))
+            if chave is None:
+                chave = chaves[(sal, n_log2, r, p)] = _chave(frase, sal, n_log2, r, p)
+            de.seek(tamanho - TAMANHO_DA_MARCA)
+            marca = de.read(TAMANHO_DA_MARCA)
+            de.seek(TAMANHO_DO_CABECALHO)
+            restante = tamanho - SOBRA_DO_ANEXO
+            decifra = Cipher(algorithms.AES(chave), modes.GCM(nonce, marca)).decryptor()
+            decifra.authenticate_additional_data(cabecalho)
+            impressao, total = hashlib.sha256(), 0
+            saida = open(provisorio, "wb") if provisorio else None
+            try:
+                while restante > 0:
+                    bloco = de.read(min(BLOCO, restante))
+                    if not bloco:
+                        raise ErroDeCopia(f"{origem.name} acabou antes da hora (arquivo cortado?).")
+                    restante -= len(bloco)
+                    claro = decifra.update(bloco)
+                    impressao.update(claro)
+                    total += len(claro)
+                    if saida:
+                        saida.write(claro)
+                decifra.finalize()                 # é aqui que a frase errada ou um byte mexido aparece
+                if saida:
+                    saida.flush()
+                    os.fsync(saida.fileno())
+            finally:
+                if saida:
+                    saida.close()
+        if provisorio:
+            Path(destino).parent.mkdir(parents=True, exist_ok=True)
+            os.replace(provisorio, destino)
+    except InvalidTag as erro:
+        if provisorio:
+            provisorio.unlink(missing_ok=True)
+        raise ErroDeCopia("A frase de recuperação não confere, ou o arquivo está danificado.") from erro
+    except BaseException:
+        if provisorio:
+            provisorio.unlink(missing_ok=True)
+        raise
+    return impressao.hexdigest(), total
+
+
+def _pasta_dos_anexos_da_midia(midia_pasta):
+    return Path(midia_pasta) / PASTA_DOS_ANEXOS
+
+
+def copiar_anexos_para_a_midia(midia, frase, origem=None, instance=PASTA_INSTANCE, agora=None, orcamento=ORCAMENTO_DOS_ANEXOS, log=print, relogio=None):
+    """Leva os PDFs dos documentos escaneados para o pen-drive, criptografados, só os que ainda não estão lá (um PDF não muda depois de enviado). Cada cópia é
+    aberta de novo e comparada com o original antes de valer. Passou do `orcamento` (segundos), o resto fica para a próxima rodada. O que sumiu do sistema vira
+    `.apagado` e sai do pen-drive depois de GUARDAR_ATE_DIAS dias. Devolve {total, copiados, pendentes, falhas, apagados, descartados}."""
+    agora = agora or datetime.now()
+    relogio = relogio or time.monotonic
+    origem = Path(origem) if origem else banco.pasta_dos_anexos(Path(instance))
+    destino = _pasta_dos_anexos_da_midia(midia.pasta)
+    resultado = {"total": 0, "copiados": 0, "pendentes": 0, "falhas": 0, "apagados": 0, "descartados": 0}
+    fontes = sorted(origem.rglob("*.pdf")) if origem.is_dir() else []
+    resultado["total"] = len(fontes)
+    inicio, chave, sal, chaves, parar = relogio(), None, None, {}, False
+    for fonte in fontes:
+        relativo = fonte.relative_to(origem)
+        alvo = destino / relativo.with_name(relativo.name + SUFIXO_ANEXO)
+        tamanho = fonte.stat().st_size
+        if alvo.is_file() and alvo.stat().st_size == tamanho + SOBRA_DO_ANEXO:
+            continue
+        guardado = alvo.with_name(alvo.name + SUFIXO_APAGADO)
+        if guardado.is_file() and guardado.stat().st_size == tamanho + SOBRA_DO_ANEXO:      # tinha sumido e voltou (backup restaurado): só volta ao nome certo
+            os.replace(guardado, alvo)
+            continue
+        if parar or relogio() - inicio > orcamento:
+            resultado["pendentes"] += 1
+            continue
+        try:
+            os.utime(Path(instance) / ARQUIVO_DO_BLOQUEIO, None)         # uma rodada longa não deixa o bloqueio "vencer" e outra começar por cima
+        except OSError:
+            pass
+        try:
+            if chave is None:
+                chave, sal = _chave_dos_anexos(frase, destino)
+            impressao, total = _criptografar_anexo(fonte, alvo, chave, sal)
+            if abrir_anexo(alvo, frase, None, chaves) != (impressao, total):
+                raise ErroDeCopia("a cópia aberta de novo não bate com o original")
+            resultado["copiados"] += 1
+        except OSError as erro:
+            alvo.unlink(missing_ok=True)
+            resultado["falhas"] += 1
+            log(f"COPIA DOS DOCUMENTOS ESCANEADOS FALHOU em {midia.nome} ({midia.unidade}), {fonte.name}: {erro}")
+            if erro.errno in (errno.ENOSPC, errno.EROFS, errno.EIO, errno.EACCES):          # pen-drive cheio, protegido ou com defeito: não adianta insistir
+                parar = True
+        except ErroDeCopia as erro:
+            alvo.unlink(missing_ok=True)                                  # cópia que não abre não fica no pen-drive
+            resultado["falhas"] += 1
+            log(f"COPIA DOS DOCUMENTOS ESCANEADOS FALHOU em {midia.nome} ({midia.unidade}), {fonte.name}: {erro}")
+    if destino.is_dir():
+        for sobra in destino.rglob("*.parcial"):
+            sobra.unlink(missing_ok=True)
+        for alvo in sorted(destino.rglob("*" + SUFIXO_ANEXO)) if origem.is_dir() else ():            # (sem a pasta de origem não dá para dizer o que foi apagado: nada é separado)
+            nome_da_fonte = alvo.relative_to(destino).with_name(alvo.name[:-len(SUFIXO_ANEXO)])
+            if not (origem / nome_da_fonte).exists():                     # apagado de vez no sistema: o relógio de um ano começa agora
+                separado = alvo.with_name(alvo.name + SUFIXO_APAGADO)
+                os.replace(alvo, separado)
+                os.utime(separado, (agora.timestamp(), agora.timestamp()))
+                resultado["apagados"] += 1
+        for separado in sorted(destino.rglob("*" + SUFIXO_ANEXO + SUFIXO_APAGADO)):
+            if agora - datetime.fromtimestamp(separado.stat().st_mtime) > timedelta(days=GUARDAR_ATE_DIAS):
+                separado.unlink()
+                resultado["descartados"] += 1
+                try:
+                    separado.parent.rmdir()
+                except OSError:
+                    pass
+    return resultado
+
+
+def testar_anexos(pasta_da_midia, frase, quantos=TESTAR_ANEXOS):
+    """Abre alguns PDFs do pen-drive (o mais novo e os mais velhos) com a frase: prova que ela abre os documentos e não só o banco. Devolve quantos abriu
+    (0 se o pen-drive ainda não tem PDFs). Levanta ErroDeCopia se algum não abrir."""
+    arquivos = sorted((a for a in _pasta_dos_anexos_da_midia(pasta_da_midia).rglob("*" + SUFIXO_ANEXO)), key=lambda a: a.stat().st_mtime)
+    amostra = ([arquivos[-1]] + arquivos[:max(quantos - 1, 0)]) if arquivos else []
+    chaves = {}
+    for arquivo in dict.fromkeys(amostra):
+        abrir_anexo(arquivo, frase, None, chaves)
+    return len(set(amostra))
+
+
+def restaurar_anexos(origem, destino, frase, incluir_apagados=False, log=print):
+    """Abre TODOS os PDFs de um pen-drive em `destino` (uma pasta que ainda não existe), na mesma estrutura de instance/anexos. `origem` é o pen-drive (E:/), a
+    pasta prontuario-backup ou a pasta anexos dele. Só entra o que abre: um arquivo com defeito é contado à parte, e os outros seguem. Devolve (restaurados, com defeito)."""
+    origem, destino = Path(origem), Path(destino)
+    pasta = next((c for c in (origem / PASTA_NA_MIDIA / PASTA_DOS_ANEXOS, origem / PASTA_DOS_ANEXOS, origem) if (c / ARQUIVO_DO_SAL).exists() or any(c.rglob("*" + SUFIXO_ANEXO))), None) \
+        if origem.is_dir() else None
+    if pasta is None:
+        raise ErroDeCopia(f"Não achei documentos escaneados em {origem}. Informe a letra do pen-drive (E:\\) ou a pasta anexos dele.")
+    if destino.exists():
+        raise ErroDeCopia(f"{destino} já existe: não vou sobrescrever. Escolha outro nome (ou mova a pasta de lá).")
+    sufixos = (SUFIXO_ANEXO, SUFIXO_ANEXO + SUFIXO_APAGADO) if incluir_apagados else (SUFIXO_ANEXO,)
+    arquivos = sorted(a for a in pasta.rglob("*") if a.is_file() and a.name.endswith(sufixos))
+    restaurados = defeituosos = 0
+    chaves = {}
+    provisorio = destino.with_name(destino.name + ".restaurando")
+    if provisorio.exists():
+        raise ErroDeCopia(f"{provisorio} sobrou de uma restauração interrompida: apague essa pasta e tente de novo.")
+    try:
+        for arquivo in arquivos:
+            relativo = arquivo.relative_to(pasta)
+            nome = relativo.name[:-len(SUFIXO_APAGADO)] if relativo.name.endswith(SUFIXO_APAGADO) else relativo.name
+            try:
+                abrir_anexo(arquivo, frase, provisorio / relativo.with_name(nome[:-len(SUFIXO_ANEXO)]), chaves)
+                restaurados += 1
+            except ErroDeCopia as erro:
+                defeituosos += 1
+                log(f"NAO ABRIU: {arquivo} ({erro})")
+                if restaurados == 0 and defeituosos >= 3:                  # frase errada e arquivo estragado dão o mesmo erro: três seguidos sem nenhum que abra é a frase
+                    raise ErroDeCopia("Os primeiros documentos não abriram: a frase de recuperação está errada, ou o pen-drive está com defeito.") from erro
+        if arquivos and restaurados == 0:
+            raise ErroDeCopia("Nenhum documento abriu: a frase de recuperação está errada, ou o pen-drive está com defeito.")
+        if provisorio.exists():
+            os.replace(provisorio, destino)
+        else:
+            destino.mkdir(parents=True)                                     # nada a restaurar: a pasta fica vazia
+    finally:
+        if provisorio.exists():
+            shutil.rmtree(provisorio, ignore_errors=True)
+    return restaurados, defeituosos
+
+
 # ============================================================================= estado (instance/backup_externo.json)
 def _estado_vazio():
     return {"midias": {}, "ultima_midia": None, "ultima_copia": None, "vistas": [], "vistas_em": None, "ultimo_teste": None,
@@ -433,8 +688,9 @@ def podar_midia(pasta, agora):
 
 
 # ============================================================================= a cópia
-def copiar_para_as_midias(arquivo_local, instance=PASTA_INSTANCE, agora=None, raizes=None, log=print):
-    """Criptografa `arquivo_local` (o backup do dia) para cada pen-drive preparado que estiver plugado, confere e anota.
+def copiar_para_as_midias(arquivo_local, instance=PASTA_INSTANCE, agora=None, raizes=None, log=print, anexos_de=None, orcamento=ORCAMENTO_DOS_ANEXOS):
+    """Criptografa `arquivo_local` (o backup do dia) para cada pen-drive preparado que estiver plugado, confere e anota. Depois leva também os documentos
+    escaneados que ainda não estão lá (copiar_anexos_para_a_midia; falha deles não vira falha da cópia do banco: fica anotada no estado e vira aviso).
     Devolve uma lista de (Midia, resultado): "copiada", "já tinha" ou o texto do erro. Sem frase guardada, não faz nada."""
     agora = agora or datetime.now()
     frase = frase_guardada(instance)
@@ -472,16 +728,31 @@ def copiar_para_as_midias(arquivo_local, instance=PASTA_INSTANCE, agora=None, ra
             log(f"Cópia externa ok em {midia.nome} ({midia.unidade}): {destino.name} ({destino.stat().st_size // 1024} KB; "
                 f"conferida, registros — {resumo}). Cópias antigas apagadas: {apagadas}.")
         salvar(estado, instance)
+        for midia in midias:                                  # os documentos escaneados: um arquivo criptografado por PDF, só os que ainda não estão lá
+            ficha, quando = estado["midias"][midia.id], agora.isoformat(timespec="seconds")
+            try:
+                r = copiar_anexos_para_a_midia(midia, frase, anexos_de, instance, agora, orcamento, log)
+            except (ErroDeCopia, OSError, ImportError) as erro:
+                ficha["anexos"] = {**(ficha.get("anexos") or {}), "em": quando, "erro": str(erro)}
+                log(f"COPIA DOS DOCUMENTOS ESCANEADOS FALHOU em {midia.nome} ({midia.unidade}): {erro}")
+                continue
+            completa = r["pendentes"] == 0 and r["falhas"] == 0
+            ficha["anexos"] = {**r, "em": quando, "completa_em": quando if completa else (ficha.get("anexos") or {}).get("completa_em")}
+            if r["copiados"] or r["pendentes"] or r["falhas"] or r["apagados"] or r["descartados"]:
+                log(f"Documentos escaneados em {midia.nome} ({midia.unidade}): {r['total']} no sistema; copiados agora: {r['copiados']}; faltam: {r['pendentes']}; "
+                    f"falhas: {r['falhas']}; separados por apagados: {r['apagados']}; descartados (apagados há mais de um ano): {r['descartados']}.")
+        salvar(estado, instance)
     return resultados
 
 
 def testar_restauracao(instance=PASTA_INSTANCE, frase=None, arquivo=None, agora=None, raizes=None):
-    """O teste de restauração: abre a cópia mais nova (ou `arquivo`) com a frase e confere o banco. Anota o resultado no estado.
-    Devolve (arquivo, contagem)."""
+    """O teste de restauração: abre a cópia mais nova (ou `arquivo`) com a frase e confere o banco; achando a cópia sozinho, abre também alguns documentos
+    escaneados do mesmo pen-drive (testar_anexos). Anota o resultado no estado. Devolve (arquivo, contagem)."""
     agora = agora or datetime.now()
     frase = frase or frase_guardada(instance)
     if not frase:
         raise ErroDeCopia("Faltou a frase de recuperação.")
+    sugerida = arquivo is None
     if arquivo is None:
         candidatas = [(data_da_copia(p.name), p) for m in achar_midias(raizes) for p in m.pasta.glob("prontuario-*.pbk") if data_da_copia(p.name)]
         if not candidatas:
@@ -489,8 +760,9 @@ def testar_restauracao(instance=PASTA_INSTANCE, frase=None, arquivo=None, agora=
         arquivo = max(candidatas)[1]
     arquivo = Path(arquivo)
     contagem = verificar_copia(arquivo, frase, Path(instance) / "tmp_backup")
+    pdfs = testar_anexos(arquivo.parent, frase) if sugerida else 0        # (um arquivo informado à mão pode estar em qualquer pasta: só o banco)
     estado = carregar(instance)
-    estado["ultimo_teste"] = {"em": agora.isoformat(timespec="seconds"), "arquivo": arquivo.name, "registros": contagem}
+    estado["ultimo_teste"] = {"em": agora.isoformat(timespec="seconds"), "arquivo": arquivo.name, "registros": contagem, "documentos": pdfs}
     salvar(estado, instance)
     return arquivo, contagem
 
@@ -549,6 +821,15 @@ def pendencias(instance=PASTA_INSTANCE, agora=None):
     if len(estado["vistas"]) >= 2 and vistas and (agora - vistas).days <= DIAS_SEM_COPIA:
         lista.append(("externo:duas", "Cópia externa do backup",
                       "Os dois pen-drives estão plugados ao mesmo tempo: um deles precisa ficar guardado, sem estar plugado, senão um vírus, um incêndio ou um roubo leva os dois."))
+    anexos = atual.get("anexos") or {}
+    if anexos.get("erro") or (anexos.get("total") and (anexos.get("pendentes") or anexos.get("falhas"))):
+        completa = _quando(anexos.get("completa_em"))
+        if completa is None or (agora - completa).days >= DIAS_SEM_COPIA_COMPLETA:
+            faltam = f"faltam {anexos['pendentes']} de {anexos['total']}" if anexos.get("pendentes") else "a última cópia deu erro"
+            lista.append(("externo:anexos", "Cópia externa do backup",
+                          f"Os documentos escaneados não estão todos no pen-drive {atual.get('nome', '?')} ({faltam}"
+                          + (f"; a última cópia completa foi em {completa:%d/%m}" if completa else "")
+                          + "). Se o pen-drive está plugado, veja o registro do backup (logs\\backup.log): pode estar cheio ou com defeito."))
     primeira = min((_quando(m.get("preparada_em")) for m in midias.values() if _quando(m.get("preparada_em"))), default=None)
     teste = _quando((estado["ultimo_teste"] or {}).get("em"))
     if teste is None and primeira and (agora - primeira).days >= DIAS_ATE_O_PRIMEIRO_TESTE:
@@ -642,10 +923,11 @@ def resumo(instance=PASTA_INSTANCE, agora=None):
         midias.append({"nome": ficha.get("nome", chave[:6]), "preparada_em": _quando(ficha.get("preparada_em")), "desde": desde, "ultima_copia": ultima,
                        "no_computador": chave in estado["vistas"], "atual": chave == estado["ultima_midia"],
                        "dias_no_computador": _dias(agora, desde) if desde and chave == estado["ultima_midia"] else None,
-                       "arquivo": ficha.get("ultimo_arquivo", "")})
+                       "arquivo": ficha.get("ultimo_arquivo", ""), "anexos": ficha.get("anexos") or {},
+                       "anexos_em": _quando((ficha.get("anexos") or {}).get("em"))})
     midias.sort(key=lambda m: (not m["atual"], m["nome"]))
     teste = estado["ultimo_teste"] or {}
     return {"configurado": bool(frase_guardada(instance)), "midias": midias, "ultima_copia": _quando(estado["ultima_copia"]),
             "ultimo_teste": _quando(teste.get("em")), "ultimo_teste_arquivo": teste.get("arquivo", ""),
-            "ultimo_teste_registros": teste.get("registros") or {}, "vistas_em": _quando(estado["vistas_em"]),
+            "ultimo_teste_registros": teste.get("registros") or {}, "ultimo_teste_documentos": teste.get("documentos") or 0, "vistas_em": _quando(estado["vistas_em"]),
             "pendencias": [{"chave": c, "texto": t} for c, _, t in pendencias(instance, agora)]}

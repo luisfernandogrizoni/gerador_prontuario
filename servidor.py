@@ -132,13 +132,15 @@ def main():
     os.environ["MANTER_HTTP_NA_REDE"] = "1" if (modo == "misto" and carregar_manter_http()) else "0"          # avisos._avisos_de_rede
 
     from waitress import serve
+    from anexos import LIMITE_DA_REQUISICAO
     from app import app
 
     onde = endereco_na_rede() if host == "0.0.0.0" else host
     log.warning("Sistema no ar (modo %s): http://%s:%s (computador %s)", modo, onde, porta, socket.gethostname())
     print(f"Sistema no ar (modo {modo}): http://{onde}:{porta}  (Ctrl+C para parar)")
     try:
-        serve(app, host=host, port=porta, threads=4, **opcoes)
+        # o teto do envio (um PDF escaneado, anexos.py): sem ele o waitress aceitaria até 1 GB por pedido
+        serve(app, host=host, port=porta, threads=4, max_request_body_size=LIMITE_DA_REQUISICAO + 1024 * 1024, **opcoes)
     except OSError as erro:
         log.error("Não foi possível abrir a porta %s (já está em uso?): %s", porta, erro)
         sys.exit(1)

@@ -55,7 +55,7 @@
         {% else %}
           <div class="rolagem">
           <table class="pen-lista">
-            <thead><tr><th>Pen-drive</th><th>No computador desde</th><th>Última cópia</th><th>Arquivo</th></tr></thead>
+            <thead><tr><th>Pen-drive</th><th>No computador desde</th><th>Última cópia</th><th>Arquivo</th><th>Documentos escaneados</th></tr></thead>
             <tbody>
               {% for m in externo.midias %}
               <tr>
@@ -64,6 +64,13 @@
                 <td data-rotulo="No computador desde">{% if m.atual and m.desde %}{{ m.desde.strftime('%d/%m/%Y') }} · {{ m.dias_no_computador }} dia{{ '' if m.dias_no_computador == 1 else 's' }}{% else %}—{% endif %}</td>
                 <td data-rotulo="Última cópia">{{ m.ultima_copia.strftime('%d/%m/%Y %H:%M') if m.ultima_copia else 'nenhuma' }}</td>
                 <td data-rotulo="Arquivo">{{ m.arquivo or '—' }}</td>
+                <td data-rotulo="Documentos escaneados">
+                  {% if m.anexos.erro %}<span class="selo desistiu">Erro</span>
+                  {% elif not m.anexos %}—
+                  {% elif not m.anexos.total %}nenhum ainda
+                  {% elif m.anexos.pendentes or m.anexos.falhas %}<span class="selo lista_espera">Copiando</span> <small>faltam {{ m.anexos.pendentes + m.anexos.falhas }} de {{ m.anexos.total }}</small>
+                  {% else %}<span class="selo ativo">Todos</span> <small>{{ m.anexos.total }} arquivo{{ '' if m.anexos.total == 1 else 's' }}</small>{% endif %}
+                </td>
               </tr>
               {% endfor %}
             </tbody>
@@ -90,7 +97,7 @@
           {% else %}<span class="selo lista_espera">Nunca feito</span>{% endif %}
         </div>
         {% if externo.ultimo_teste %}
-          <p class="contagem">Abriu {{ externo.ultimo_teste_arquivo }}{% if externo.ultimo_teste_registros %} · {{ externo.ultimo_teste_registros.get('pessoas', 0) }} pessoas, {{ externo.ultimo_teste_registros.get('internacoes', 0) }} internações{% endif %}.</p>
+          <p class="contagem">Abriu {{ externo.ultimo_teste_arquivo }}{% if externo.ultimo_teste_registros %} · {{ externo.ultimo_teste_registros.get('pessoas', 0) }} pessoas, {{ externo.ultimo_teste_registros.get('internacoes', 0) }} internações{% endif %}{% if externo.ultimo_teste_documentos %} · {{ externo.ultimo_teste_documentos }} documento{{ '' if externo.ultimo_teste_documentos == 1 else 's' }} escaneado{{ '' if externo.ultimo_teste_documentos == 1 else 's' }}{% endif %}.</p>
         {% endif %}
       {% endcall %}
 

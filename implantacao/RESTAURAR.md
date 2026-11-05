@@ -10,6 +10,10 @@ da folha com a frase de recuperação.** O que você precisa ter em mãos:
 
 Os usuários e as senhas ficam **dentro do banco**: voltam junto. Só as sessões abertas caem (todo mundo entra de novo).
 
+Os **documentos escaneados** (os PDFs anexados às fichas) **não ficam no banco**: ficam em `C:\prontuario\instance\anexos`. O backup do dia os copia para a pasta `anexos` da
+pasta de backup (aqui `E:\backup-prontuario\anexos`) e a cópia dos pen-drives leva também cada PDF, criptografado com a mesma frase, na pasta `anexos` do pen-drive. Se tudo isso se
+perder, os originais em papel assinados continuam sendo a fonte.
+
 ## Caso A: o computador está bom, mas o banco estragou ou foi apagado
 
 1. Pare o sistema (PowerShell **como administrador**):
@@ -39,13 +43,25 @@ Os usuários e as senhas ficam **dentro do banco**: voltam junto. Só as sessõe
    Rename-Item C:\prontuario\instance\internos_restaurado.db internos.db
    ```
 
-4. Ligue o sistema e confira:
+4. Os PDFs dos documentos escaneados ficam onde estavam (`instance\anexos`). Se essa pasta também se perdeu, traga o espelho do backup:
+
+   ```powershell
+   Copy-Item "E:\backup-prontuario\anexos" C:\prontuario\instance\anexos -Recurse
+   ```
+
+   Sem o espelho, restaure do pen-drive (pede a frase do papel; a pasta de destino não pode existir):
+
+   ```powershell
+   .\.venv\Scripts\python.exe backup.py --restaurar-anexos F: --para C:\prontuario\instance\anexos
+   ```
+
+5. Ligue o sistema e confira:
 
    ```powershell
    Start-ScheduledTask "Prontuario - servidor"
    ```
 
-   Abra o sistema, entre e veja a lista de internos. Guarde o `internos_ESTRAGADO.db` até ter certeza de que está tudo certo.
+   Abra o sistema, entre e veja a lista de internos e abra um documento escaneado. Guarde o `internos_ESTRAGADO.db` até ter certeza de que está tudo certo.
 
 ## Caso B: o computador foi perdido ou será trocado
 
@@ -71,7 +87,22 @@ Os usuários e as senhas ficam **dentro do banco**: voltam junto. Só as sessõe
    powershell -ExecutionPolicy Bypass -File implantacao\instalar.ps1 -PastaBackup "E:\backup-prontuario" -BancoAtual C:\banco_restaurado.db
    ```
 
-5. Refaça a cópia externa neste computador **com a mesma frase do papel** (com um pen-drive do rodízio plugado: o sistema confere
+5. Traga os PDFs dos documentos escaneados. Do pen-drive (pede a frase do papel; a pasta de destino não pode existir):
+
+   ```powershell
+   .\.venv\Scripts\python.exe backup.py --restaurar-anexos F: --para C:\prontuario\instance\anexos
+   ```
+
+   Ou, se tiver o espelho do disco de backup antigo:
+
+   ```powershell
+   Copy-Item "E:\backup-prontuario\anexos" C:\prontuario\instance\anexos -Recurse
+   ```
+
+   Se um arquivo aparecer como `NAO ABRIU`, os outros foram restaurados mesmo assim; o que faltar vem dos originais em papel assinados. Para trazer também os que foram apagados de vez no
+   sistema (o pen-drive os guarda por um ano), acrescente `--incluir-apagados`.
+
+6. Refaça a cópia externa neste computador **com a mesma frase do papel** (com um pen-drive do rodízio plugado: o sistema confere
    se a frase abre a cópia antes de guardar):
 
    ```powershell

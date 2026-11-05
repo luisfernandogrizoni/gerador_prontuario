@@ -66,6 +66,7 @@ GRUPOS = (
         Permissao("triagem", "Registrar e editar triagens", "Inclui mudar a situação e admitir"),
         Permissao("internacao", "Registrar e editar prontuários", "Internações e dados do acolhido"),
         Permissao("baixa", "Dar baixa e anotar o prontuário em papel", "Saída do interno e retorno do envelope"),
+        Permissao("anexar", "Anexar e remover documentos escaneados", "O PDF do documento físico assinado, na ficha; quem vê é quem imprime os documentos; só o administrador apaga de vez"),
         Permissao("financeiro", "Lançar e excluir parcelas", "Contribuição de cada internação"),
         Permissao("excluir", "Excluir registros", "Vão para a lixeira; só o administrador apaga de vez"),
         Permissao("unificar", "Unificar cadastros duplicados", "Junta duas fichas da mesma pessoa", padrao=0),
@@ -212,6 +213,8 @@ REGRAS = {
     "nova_triagem": "triagem", "salvar_triagem": "triagem", "mudar_status": "triagem",
     "formulario": "internacao", "gerar": "internacao", "editar_internacao": _quem_edita,
     "baixa_interno": "baixa", "registrar_envelope": "baixa",
+    "ver_anexo": "documentos", "baixar_anexo": "documentos", "enviar_anexo": "anexar", "remover_anexo": "anexar",
+    "restaurar_anexo": "lixeira", "apagar_anexo": "lixeira",
     "lancar_parcela": "financeiro", "excluir_parcela": "financeiro",
     "excluir_registro": "excluir", "unificar_pessoas": "unificar",
 

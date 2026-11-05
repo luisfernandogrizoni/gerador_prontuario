@@ -87,6 +87,7 @@ from flask import (Flask, Response, abort, flash, g, jsonify, redirect, render_t
 from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash
 
+import anexos
 import auditoria
 import autenticacao
 import banco
@@ -135,6 +136,7 @@ app.config.update(
     SESSION_COOKIE_SECURE=not app.debug and os.environ.get("SESSAO_SEM_HTTPS") != "1",
     SESSION_REFRESH_EACH_REQUEST=False,    # o login não se renova sozinho: vale 10 h (ou 30 dias, se a pessoa marcou "manter conectado") e acabou
     PERMANENT_SESSION_LIFETIME=autenticacao.DURACAO_LEMBRADA,      # o maior prazo que um cookie assinado aceita; o prazo de cada sessão é conferido em autenticacao.usuario_da_sessao
+    MAX_CONTENT_LENGTH=anexos.LIMITE_DA_REQUISICAO,      # o maior envio aceito: um PDF escaneado (anexos.py); o resto do sistema manda pouca coisa
     CSRF_ATIVO=True,                    # csrf.py: todo envio que muda coisas precisa do token da página (os testes antigos desligam)
     CSP_SOMENTE_RELATORIO=os.environ.get("CSP_SOMENTE_RELATORIO") == "1",    # emergência: a política só avisa, não bloqueia (csrf.py)
 )
@@ -226,7 +228,7 @@ app.context_processor(lambda: {"quantos_rascunhos": _quantos_rascunhos, "usuario
 
 # filtros usados nos templates: {{ p.cpf | cpf }}, {{ i.inicio | data }} ...
 app.jinja_env.filters.update(cpf=fmt_cpf, rg=fmt_rg, cep=fmt_cep, data=fmt_data, hora=fmt_hora,
-                             reais=lambda v: fmt_reais(v or 0.0))
+                             reais=lambda v: fmt_reais(v or 0.0), tamanho=anexos.tamanho_legivel)
 
 
 def _buscar(modelo, id):
@@ -239,6 +241,7 @@ MENSAGENS_DE_ERRO = {
     403: ("Sem permissão", "Você não tem permissão para abrir esta página."),
     404: ("Página não encontrada", "O endereço não existe, ou o registro foi excluído."),
     405: ("Ação não permitida", "Esta página não aceita essa ação."),
+    413: ("Arquivo grande demais", f"O envio passa de {anexos.LIMITE_DO_ARQUIVO // (1024 * 1024)} MB. Escaneie de novo com resolução menor (150 a 200 dpi bastam) e envie outra vez."),
     500: ("Algo deu errado", "O sistema não conseguiu concluir. Tente de novo e, se continuar, avise o administrador."),
 }
 
@@ -674,7 +677,9 @@ def ficha(id):
                            idade=calcular_idade(p.nascimento, hoje),
                            previsao=previsao_termino(internacao.inicio, internacao.tratamento_ate) if internacao.inicio else None,
                            permanencia=_duracao(permanencia) if permanencia is not None and permanencia >= 0 else "",
-                           avatar=avatar_da_pessoa(p.nome))
+                           avatar=avatar_da_pessoa(p.nome),
+                           escaneados=anexos.do_registro(internacao, com_removidos=_e_administrador()), titulos_de_anexo=anexos.TITULOS_SUGERIDOS,
+                           limite_do_anexo=anexos.LIMITE_DO_ARQUIVO)
 
 
 def _duracao(dias):
@@ -1212,6 +1217,85 @@ def descartar_rascunho(token):
 # excluído na lixeira (Cadastros), restaura ou apaga de vez, e também pode apagar de vez direto da ficha (exclusao.py).
 def _nome_do_usuario():
     return g.usuario.nome if g.get("usuario") else ""
+
+
+# ============================================================ documentos escaneados (anexos.py)
+@app.post("/internacoes/<int:id>/anexos")
+def enviar_anexo(id):
+    """Anexa o PDF do documento físico assinado e escaneado à ficha."""
+    internacao = _buscar(Internacao, id)
+    try:
+        anexo = anexos.guardar(internacao, request.files.get("arquivo"), request.form.get("titulo"), _nome_do_usuario())
+    except anexos.ErroDeAnexo as erro:
+        flash(str(erro))
+        return redirect(url_for("ficha", id=id, _anchor="escaneados"))
+    auditoria.registrar("anexo.enviar", "internacao", id, internacao.pessoa_id, f"anexo nº {anexo.id}, {anexos.tamanho_legivel(anexo.tamanho)}")
+    flash("Documento anexado.")
+    return redirect(url_for("ficha", id=id, _anchor="escaneados"))
+
+
+def _servir_anexo(id, anexo_id, baixar):
+    internacao = _buscar(Internacao, id)
+    anexo = anexos.achar(internacao, anexo_id, com_removidos=_e_administrador())          # o removido só o administrador abre
+    if anexo is None:
+        abort(404)
+    try:
+        arquivo = anexos.caminho(anexo)
+    except anexos.ErroDeAnexo:
+        abort(404)
+    if not arquivo.is_file():
+        app.logger.error("O arquivo do anexo %s (registro %s) não está no disco", anexo.id, id)
+        abort(404)
+    return send_file(arquivo, mimetype="application/pdf", as_attachment=baixar, download_name=anexos.nome_para_baixar(anexo), conditional=True)
+
+
+@app.get("/internacoes/<int:id>/anexos/<int:anexo_id>")
+def ver_anexo(id, anexo_id):
+    """Abre o PDF no leitor do navegador (em outra aba)."""
+    return _servir_anexo(id, anexo_id, baixar=False)
+
+
+@app.get("/internacoes/<int:id>/anexos/<int:anexo_id>/baixar")
+def baixar_anexo(id, anexo_id):
+    return _servir_anexo(id, anexo_id, baixar=True)
+
+
+def _anexo_do_registro(id, anexo_id):
+    internacao = _buscar(Internacao, id)
+    anexo = anexos.achar(internacao, anexo_id, com_removidos=True) or abort(404)
+    return internacao, anexo
+
+
+@app.post("/internacoes/<int:id>/anexos/<int:anexo_id>/remover")
+def remover_anexo(id, anexo_id):
+    """Esconde o documento da ficha (o arquivo continua guardado; só o administrador restaura ou apaga de vez)."""
+    internacao, anexo = _anexo_do_registro(id, anexo_id)
+    if anexo.excluido_em is None:
+        anexos.remover(anexo, _nome_do_usuario())
+        auditoria.registrar("anexo.remover", "internacao", id, internacao.pessoa_id, f"anexo nº {anexo.id}")
+        flash("Documento removido da ficha. O administrador ainda pode restaurá-lo.")
+    return redirect(url_for("ficha", id=id, _anchor="escaneados"))
+
+
+@app.post("/internacoes/<int:id>/anexos/<int:anexo_id>/restaurar")
+def restaurar_anexo(id, anexo_id):
+    internacao, anexo = _anexo_do_registro(id, anexo_id)
+    if anexo.excluido_em is not None:
+        anexos.restaurar(anexo)
+        auditoria.registrar("anexo.restaurar", "internacao", id, internacao.pessoa_id, f"anexo nº {anexo.id}")
+        flash("Documento restaurado.")
+    return redirect(url_for("ficha", id=id, _anchor="escaneados"))
+
+
+@app.post("/internacoes/<int:id>/anexos/<int:anexo_id>/apagar")
+def apagar_anexo(id, anexo_id):
+    """Apaga o documento do disco e do banco. Não tem volta (só o administrador)."""
+    internacao, anexo = _anexo_do_registro(id, anexo_id)
+    numero = anexo.id
+    anexos.apagar(anexo)
+    auditoria.registrar("anexo.apagar", "internacao", id, internacao.pessoa_id, f"anexo nº {numero}")
+    flash("Documento apagado de vez.")
+    return redirect(url_for("ficha", id=id, _anchor="escaneados"))
 
 
 @app.post("/internacoes/<int:id>/excluir")

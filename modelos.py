@@ -255,6 +255,8 @@ class Internacao(CamposDeFormulario, db.Model):
         back_populates="internacao", order_by="EvolucaoSaude.criado_em, EvolucaoSaude.id", cascade="all, delete-orphan")
     versoes_relatorios: Mapped[list["VersaoRelatorio"]] = relationship(
         back_populates="internacao", order_by="VersaoRelatorio.id", cascade="all, delete-orphan")
+    anexos: Mapped[list["Anexo"]] = relationship(
+        back_populates="internacao", order_by="Anexo.id", cascade="all, delete-orphan")
 
     FORMAS = {"resp_nome": "nome", "parentesco": "frase", "doc_outro": "frase", "contribuicao_condicoes": "frase"}
 
@@ -464,6 +466,27 @@ class VersaoRelatorio(db.Model):
     criado_por: Mapped[str] = mapped_column(String(200), default="")         # "Nome — cargo — registro" de quem finalizou, alterou ou escreveu
 
     internacao: Mapped[Internacao] = relationship(back_populates="versoes_relatorios")
+
+
+class Anexo(db.Model):
+    """Um documento escaneado anexado a um registro (anexos.py): o PDF do documento físico assinado. O arquivo fica em disco (instance/anexos/<registro>/<arquivo>);
+    aqui está só o que o sistema precisa saber dele. Quem não é administrador só "remove" (some da ficha, o arquivo continua no disco); o administrador restaura
+    ou apaga de vez, como nos registros (exclusao.py)."""
+    __tablename__ = "anexos"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    internacao_id: Mapped[int] = mapped_column(ForeignKey("internacoes.id"), index=True)
+    titulo: Mapped[str] = mapped_column(String(100), default="")                  # "Prontuário assinado", "Termo de compromisso"...
+    nome_original: Mapped[str] = mapped_column(String(200), default="")           # como o arquivo se chamava no computador de quem enviou (só para mostrar)
+    arquivo: Mapped[str] = mapped_column(String(40))                              # o nome no disco: um código sorteado + ".pdf" (nunca o que a pessoa digitou)
+    tamanho: Mapped[int] = mapped_column(default=0)                               # bytes
+    sha256: Mapped[str] = mapped_column(String(64), index=True)                   # a impressão digital do arquivo: acha o mesmo arquivo enviado duas vezes e prova que não mudou
+    enviado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    enviado_por: Mapped[str] = mapped_column(String(50), default="")              # o login
+    excluido_em: Mapped[datetime | None] = mapped_column(DateTime)
+    excluido_por: Mapped[str] = mapped_column(String(50), default="")
+
+    internacao: Mapped[Internacao] = relationship(back_populates="anexos")
 
 
 # =========================================================================
