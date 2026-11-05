@@ -14,7 +14,7 @@ Cópia externa criptografada em pen-drives em rodízio (fase 5 do plano de segur
     python backup.py --preparar-midia E: --nome A     prepara um pen-drive (faça com cada um)
     python backup.py --listar-midias            mostra as unidades e quais pen-drives estão preparados
     python backup.py --so-externo               só a cópia externa do backup mais novo (a tarefa de hora em hora)
-    python backup.py --testar-restauracao       abre a cópia mais nova com a frase do papel e confere o banco
+    python backup.py --testar-restauracao       abre a cópia mais nova com a frase do papel e confere o banco (e alguns documentos escaneados)
     python backup.py --restaurar ARQ.pbk --para NOVO.db     restaura uma cópia externa (pede a frase)
 
 O backup do dia (que roda como sempre) leva a cópia externa junto quando ela está configurada. Falha da cópia externa
@@ -22,6 +22,14 @@ O backup do dia (que roda como sempre) leva a cópia externa junto quando ela es
 
 A pasta de backup é, nesta ordem: --destino, a variável PASTA_BACKUP, o texto de instance/pasta_backup.txt
 (gravado pelo implantacao/instalar.ps1) ou a pasta backups/ do projeto.
+
+Os documentos escaneados (os PDFs anexados às fichas, anexos.py) ficam em instance/anexos, fora do banco: o backup do dia os espelha em <pasta de backup>/anexos,
+copiando só o que ainda não está lá (um PDF não muda depois de enviado). O que o administrador apaga de vez sai do espelho 30 dias depois. A cópia externa
+criptografada dos pen-drives leva os PDFs também, um arquivo criptografado por PDF na pasta `anexos` do pen-drive (copia_externa.py). Falha na cópia dos PDFs para o
+disco de backup não impede o backup do banco nem a cópia externa: o comando termina com erro no fim.
+
+    python backup.py --restaurar-anexos E: --para C:\\prontuario\\instance\\anexos     restaura os PDFs de um pen-drive (pede a frase; a pasta não pode existir)
+                    [--incluir-apagados]
 
 A cópia usa o backup do próprio SQLite: sai inteira e consistente mesmo com o sistema em uso, coisa que
 copiar o arquivo na mão não garante. Depois de copiar, o arquivo é aberto e conferido; só então a cópia
@@ -32,8 +40,10 @@ sem ele, ou velho, a página inicial avisa). Os arquivos de backup têm dados pe
 import argparse
 import getpass
 import os
+import shutil
 import sqlite3
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -130,6 +140,53 @@ def fazer_backup(origem, destino_pasta, manter):
     registrar(f"Backup ok: {arquivo} ({arquivo.stat().st_size // 1024} KB; registros — {resumo}). "
               f"Cópias antigas apagadas: {removidas}.")
     return arquivo
+
+
+DIAS_NO_ESPELHO = 30               # quanto tempo um PDF apagado de vez ainda fica no espelho (como os 30 backups do banco)
+
+
+def espelhar_anexos(destino_pasta, agora=None):
+    """Copia os PDFs dos documentos escaneados para <destino_pasta>/anexos, só os que ainda não estão lá (mesmo nome e tamanho). Quem sumiu da origem (apagado
+    de vez) é separado como .apagado e some do espelho depois de DIAS_NO_ESPELHO dias. Devolve (arquivos na origem, bytes, copiados agora, descartados)."""
+    agora = agora or time.time()
+    origem, espelho = banco.pasta_dos_anexos(PASTA_INSTANCE), destino_pasta / "anexos"
+    total = tamanho_total = copiados = descartados = 0
+    if origem.is_dir():
+        for arquivo in sorted(origem.rglob("*.pdf")):
+            alvo = espelho / arquivo.relative_to(origem)
+            tamanho = arquivo.stat().st_size
+            total, tamanho_total = total + 1, tamanho_total + tamanho
+            if alvo.is_file() and alvo.stat().st_size == tamanho:
+                continue
+            alvo.parent.mkdir(parents=True, exist_ok=True)
+            provisorio = alvo.with_name(alvo.name + ".parcial")
+            shutil.copy2(arquivo, provisorio)
+            if provisorio.stat().st_size != tamanho:
+                provisorio.unlink(missing_ok=True)
+                raise ErroDeBackup(f"A cópia de {arquivo.name} ficou com tamanho diferente do original.")
+            os.replace(provisorio, alvo)
+            copiados += 1
+    if espelho.is_dir():
+        for alvo in sorted(espelho.rglob("*.pdf")):
+            if not (origem / alvo.relative_to(espelho)).exists():           # apagado de vez na origem: separa, e o relógio dos 30 dias começa agora
+                separado = alvo.with_name(alvo.name + ".apagado")
+                os.replace(alvo, separado)
+                os.utime(separado, (agora, agora))
+        for separado in sorted(espelho.rglob("*.apagado")):
+            if agora - separado.stat().st_mtime > DIAS_NO_ESPELHO * 86400:
+                separado.unlink()
+                descartados += 1
+                try:
+                    separado.parent.rmdir()
+                except OSError:
+                    pass
+    return total, tamanho_total, copiados, descartados
+
+
+def copiar_anexos(destino_pasta):
+    total, tamanho, copiados, descartados = espelhar_anexos(destino_pasta)
+    if total or copiados or descartados:
+        registrar(f"Documentos escaneados: {total} arquivo(s), {tamanho / (1024 * 1024):.1f} MB; copiados agora: {copiados}; descartados do espelho: {descartados}.")
 
 
 def levar_para_externo(arquivo):
@@ -254,8 +311,20 @@ def testar_restauracao(arquivo, usar_guardada):
         raise ErroDeBackup("Faltou a frase. Rode no PowerShell e digite a frase do papel (o teste vale mais assim: prova que o papel está certo).")
     abriu, contagem = copia_externa.testar_restauracao(PASTA_INSTANCE, frase, Path(arquivo) if arquivo else None)
     resumo = ", ".join(f"{n}: {q}" for n, q in contagem.items())
-    registrar(f"TESTE DE RESTAURAÇÃO OK: {abriu.name} abriu e o banco está íntegro (registros — {resumo}).")
+    pdfs = (copia_externa.carregar(PASTA_INSTANCE).get("ultimo_teste") or {}).get("documentos") or 0
+    registrar(f"TESTE DE RESTAURAÇÃO OK: {abriu.name} abriu e o banco está íntegro (registros — {resumo})"
+              + (f"; {pdfs} documento(s) escaneado(s) do pen-drive também abriram." if pdfs else "."))
     return 0
+
+
+def restaurar_anexos_externo(origem, destino, incluir_apagados):
+    frase = pedir_frase()
+    if not frase:
+        raise ErroDeBackup("Faltou a frase de recuperação.")
+    restaurados, defeituosos = copia_externa.restaurar_anexos(Path(origem), Path(destino), frase, incluir_apagados, log=registrar)
+    registrar(f"Documentos escaneados restaurados: {origem} -> {destino} ({restaurados} arquivo(s)"
+              + (f"; {defeituosos} NÃO abriram: veja as linhas NAO ABRIU acima" if defeituosos else "") + "). Para usar, pare o sistema e coloque esta pasta em instance\\anexos.")
+    return 1 if defeituosos else 0
 
 
 def restaurar_externo(arquivo, destino):
@@ -284,7 +353,9 @@ def main(argv=None):
     ap.add_argument("--arquivo", help="a cópia (.pbk) a testar, em vez da mais nova dos pen-drives plugados")
     ap.add_argument("--usar-chave-guardada", action="store_true", help="no teste, usa a frase guardada neste computador em vez de pedir")
     ap.add_argument("--restaurar", metavar="ARQ.pbk", help="restaura uma cópia externa (pede a frase de recuperação)")
-    ap.add_argument("--para", metavar="NOVO.db", help="onde gravar o banco restaurado (não pode existir)")
+    ap.add_argument("--para", metavar="NOVO.db", help="onde gravar o banco restaurado, ou a pasta dos documentos restaurados (não pode existir)")
+    ap.add_argument("--restaurar-anexos", metavar="PENDRIVE", help="restaura os documentos escaneados de um pen-drive (ex.: E:) em --para (pede a frase de recuperação)")
+    ap.add_argument("--incluir-apagados", action="store_true", help="na restauração dos documentos, traz também os que foram apagados de vez no sistema (guardados por um ano)")
     args = ap.parse_args(argv)
 
     if os.environ.get("DATABASE_URL", "").strip() and not os.environ["DATABASE_URL"].lower().startswith("sqlite"):
@@ -302,6 +373,10 @@ def main(argv=None):
             return preparar_midia(args.preparar_midia, args.nome)
         if args.testar_restauracao:
             return testar_restauracao(args.arquivo, args.usar_chave_guardada)
+        if args.restaurar_anexos:
+            if not args.para:
+                raise ErroDeBackup("Diga onde gravar: --restaurar-anexos E: --para PASTA_NOVA")
+            return restaurar_anexos_externo(args.restaurar_anexos, args.para, args.incluir_apagados)
         if args.restaurar:
             if not args.para:
                 raise ErroDeBackup("Diga onde gravar: --restaurar ARQ.pbk --para NOVO.db")
@@ -320,8 +395,16 @@ def main(argv=None):
             contagem = copiar(origem, destino)
             print(f"Copiado para {destino} (registros — {', '.join(f'{n}: {q}' for n, q in contagem.items())}).")
         else:
-            levar_para_externo(fazer_backup(origem, pasta_de_backup(args.destino), args.manter))
+            arquivo = fazer_backup(origem, pasta_de_backup(args.destino), args.manter)
+            falha_dos_pdfs = None
+            try:
+                copiar_anexos(pasta_de_backup(args.destino))
+            except (ErroDeBackup, OSError) as erro:                  # o banco já foi copiado: a cópia externa e o aviso seguem, e o comando termina com erro
+                falha_dos_pdfs = erro
+            levar_para_externo(arquivo)
             avisar_por_email()
+            if falha_dos_pdfs is not None:
+                raise ErroDeBackup(f"O banco foi copiado, mas a cópia dos documentos escaneados falhou: {falha_dos_pdfs}")
     except (ErroDeBackup, copia_externa.ErroDeCopia) as erro:
         registrar(f"BACKUP FALHOU: {erro}")
         return 1

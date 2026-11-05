@@ -134,6 +134,13 @@ Um botão **cheio** (primário) por tela, para a ação principal. Os outros sã
   "Não informado: ...".
 - Impressão: botões e menus saem, uma coluna só, cartões sem cortar.
 
+## Anexos (documentos escaneados)
+
+- O PDF do documento físico assinado entra pelo cartão "Documentos escaneados" da ficha (`templates/ficha.html`, `anexos.py`): lista com o chip PDF, o título, quando e por quem foi
+  enviado e o tamanho; **Abrir** (outra aba), **Baixar** e **Remover** (com confirmação). Quem removeu esconde; só o administrador vê o removido (tracejado, título riscado) e restaura
+  ou apaga de vez. O formulário de envio fica embaixo do cartão, com o limite dito na tela e conferido no navegador antes de enviar (`data-limite`); o servidor confere de novo.
+- Quem não pode ver os documentos (`documentos`) não vê o cartão; quem vê mas não pode anexar (`anexar`) não vê o formulário nem o Remover. Na impressão da ficha o formulário e os botões saem.
+
 ## Listas que crescem (internos)
 
 - Lista que pode chegar a milhares de registros **não** baixa tudo para o navegador: `static/tabela.js` (`TabelaPaginada`) pede ao servidor só a página que mostra,

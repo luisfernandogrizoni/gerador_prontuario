@@ -582,6 +582,43 @@ o navegador trava, a aba fecha sem querer, a rede do escritório cai ou o login 
 - **Como conferir.** `teste_rascunhos.py` (a cópia, retomar, descartar, só do dono, permissão por tela, sigilo, lápide, apagar de vez, validade, limite, auditoria) e a conferência
   no navegador (digitar, recarregar, rede que cai e volta, sessão que termina, gravar).
 
+### Complemento — Documentos escaneados (entregue em 2026-11-05)
+
+A pedido do usuário: anexar a cada prontuário o PDF do documento físico, assinado e escaneado (`anexos.py`, `modelos.Anexo`, cartão "Documentos escaneados" da ficha).
+É o primeiro arquivo que entra no sistema vindo de fora, então o desenho cuida do que um arquivo traz de risco.
+
+- **Onde fica (decisão): em disco, não no banco.** `instance/anexos/<nº do registro>/<código sorteado>.pdf`; a tabela `anexos` guarda título, nome original (só para mostrar), tamanho,
+  sha256, quem enviou e quando. PDFs são grandes e o backup do dia copia o banco inteiro (30 cópias): dentro do banco, cada PDF seria copiado 30 vezes. O nome no disco nunca
+  é o que a pessoa digitou (não há como escapar da pasta); o valor guardado no banco é conferido de novo antes de abrir (`anexos.caminho`). A pasta herda o acesso restrito de
+  `instance` (só SISTEMA, administradores e o dono da instalação: `implantacao/instalar.ps1`).
+- **O que é aceito.** Só PDF de verdade e inteiro: começa com `%PDF-`, termina com `%%EOF`, até 25 MB, sem senha e sem script (`/JavaScript`, `/JS`), programa a abrir (`/Launch`),
+  arquivo embutido (`/EmbeddedFile`) nem mídia rica (`/RichMedia`). Os mesmos bytes não entram duas vezes no mesmo registro (sha256), até 30 documentos por registro. **É uma
+  conferência do que dá para ver sem abrir o PDF, não um antivírus**: um PDF que esconda esses marcadores dentro de fluxos comprimidos passa. A defesa de fundo é quem abre: o
+  leitor de PDF do navegador, isolado; o sistema serve com `Content-Type: application/pdf`, `nosniff`, sem cache e nunca dentro de outra página (`X-Frame-Options: DENY`).
+- **Quem pode.** Ver e baixar: a permissão `documentos` (quem já imprime o prontuário). Anexar e remover: a permissão nova `anexar` (de fábrica, até o Operador; configurável em
+  Cadastros > Permissões). Restaurar e apagar de vez: só o administrador (permissão fixa `lixeira`). **Remover só esconde** (o arquivo continua no disco), como "excluir" nos
+  registros: documento de prontuário tem prazo de guarda (a pesquisa de prontuário digital aponta 20 anos), e quem não é administrador não pode destruí-lo. Apagar um registro
+  de vez leva os PDFs dele (`exclusao.apagar`).
+- **Auditoria.** Anexar, remover, restaurar e apagar (`anexo.*`), e abrir ou baixar (`doc.ver`, `doc.baixar` com "documento escaneado", ligados ao acolhido). A trilha não guarda o
+  nome do arquivo nem o título (podem ter nome de gente), só o número do anexo e o tamanho.
+- **Tamanho do envio.** `MAX_CONTENT_LENGTH` do Flask e `max_request_body_size` do waitress valem o limite do arquivo mais 2 MB (o waitress aceitaria 1 GB por padrão). Acima disso a
+  pessoa vê a página "Arquivo grande demais"; a tela confere tipo e tamanho antes de enviar.
+- **Backup.** `backup.py` espelha `instance/anexos` em `<pasta de backup>/anexos`, copiando só o que ainda não está lá (um PDF não muda depois de enviado); o que o administrador apaga
+  de vez fica 30 dias no espelho (como os 30 backups do banco) e sai. Se a cópia dos PDFs falhar, o banco e a cópia externa seguem e o comando termina com erro (a atualização
+  é cancelada, como com qualquer backup que falha). **Os pen-drives também levam os PDFs** (decisão do usuário, 2026-11-05), de outro jeito que o banco: dentro de cada
+  `.pbk` eles seriam recopiados nas dezenas de cópias do histórico, então cada pen-drive tem uma pasta `anexos` com **um arquivo criptografado por PDF** (`.pba`: AES-256-GCM, a mesma
+  frase de recuperação, sem comprimir), copiado uma vez só e **aberto de novo e comparado com o original** antes de valer. A primeira vez pode ser longa: cada rodada copia por até
+  20 minutos e continua na seguinte (a tela Cadastros > Backup mostra "Copiando, faltam N de M"; sem cópia completa há 3 dias, o aviso "externo:anexos" aparece na página inicial). O que o
+  administrador apaga de vez fica mais um ano no pen-drive (`.apagado`), como as cópias do banco, e só então sai. O teste de restauração (`backup.py --testar-restauracao`) abre também até 3
+  documentos, e `backup.py --restaurar-anexos E: --para PASTA_NOVA` restaura todos (um arquivo com defeito não impede os outros; `--incluir-apagados` traz os apagados). Cada `.pba` leva o sal
+  no cabeçalho: perder o `chave.json` do pen-drive não deixa nenhum documento sem abrir.
+  O `copiar_banco.py` (levar os dados para outro banco) não leva os PDFs: copie `instance\anexos` junto.
+- **O que isso NÃO é.** Anexar o escaneamento **não substitui o papel**: a Lei 13.787/2018 exige, para dispensar o original, digitalização com certificado ICP-Brasil (ou padrão aceito),
+  sistema de gestão de documentos e análise da comissão de revisão de prontuários. Enquanto isso não existir, o papel assinado continua sendo o original (a fase 11 trata disso).
+- **Como conferir.** `teste_anexos.py` (envio, validações, nome malicioso, permissões, remover/restaurar/apagar, auditoria, CSRF, 413, registro apagado de vez e o espelho do backup),
+  `teste_anexos_externo.py` (PDFs nos pen-drives: criptografia e abertura, incremental, orçamento de tempo, pen-drive cheio, apagados, avisos, teste e restauração, tela de Backup) e a
+  conferência no navegador (enviar, abrir, validar tipo e tamanho antes de enviar).
+
 ## 5. O que só uma pessoa na casa pode fazer
 
 | Quando | Tarefa |

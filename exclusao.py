@@ -19,6 +19,7 @@ from flask import g, has_app_context
 from sqlalchemy import event
 from sqlalchemy.orm import Session, with_loader_criteria
 
+import anexos
 from modelos import AvisoDispensado, Internacao, Pessoa, Rascunho, db
 
 # avisos que citam o registro (avisos.py): ao apagar de vez, as dispensas deles também vão (o SQLite reaproveita ids)
@@ -72,6 +73,7 @@ def apagar(internacao):
     """Apaga do banco: o registro, o que depende dele (parcelas, relatórios) e a pessoa, se não sobrou nenhum registro
     dela. Não tem volta. Chamar dentro de `vendo_tudo()`."""
     pessoa, id_internacao, id_pessoa = internacao.pessoa, internacao.id, internacao.pessoa_id
+    arquivos = anexos.arquivos_do_registro(internacao)            # os PDFs dos documentos escaneados: as linhas saem com o registro, os arquivos saem depois
     db.session.delete(internacao)
     db.session.execute(db.delete(Rascunho).filter_by(internacao_id=id_internacao))        # o que alguém digitava sobre este registro
     db.session.flush()
@@ -80,6 +82,7 @@ def apagar(internacao):
         db.session.delete(pessoa)
         _limpar_dispensas(AVISOS_DA_PESSOA, id_pessoa)
     db.session.commit()
+    anexos.apagar_arquivos(id_internacao, arquivos)
 
 
 def _limpar_dispensas(prefixos, id_):

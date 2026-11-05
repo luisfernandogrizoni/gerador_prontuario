@@ -84,6 +84,10 @@ ACOES = {
     "prontuario.editar": ("alteracao", "Editou um prontuário"),
     "status.mudar": ("alteracao", "Mudou a situação de uma triagem"),
     "baixa.dar": ("alteracao", "Deu baixa em um interno"),
+    "anexo.enviar": ("alteracao", "Anexou um documento escaneado"),
+    "anexo.remover": ("alteracao", "Removeu um documento escaneado da ficha"),
+    "anexo.restaurar": ("alteracao", "Restaurou um documento escaneado"),
+    "anexo.apagar": ("alteracao", "Apagou de vez um documento escaneado"),
     "envelope.registrar": ("alteracao", "Anotou onde está o prontuário em papel"),
     "parcela.lancar": ("alteracao", "Lançou uma parcela"),
     "parcela.excluir": ("alteracao", "Excluiu uma parcela"),
@@ -194,6 +198,8 @@ LEITURAS = {
     "ver_impressos": lambda: _da_internacao("doc.imprimir" if request.args.get("imprimir") else "doc.ver", _itens()),
     "baixar_prontuario": lambda: _da_internacao("doc.baixar", "prontuário"),
     "baixar_declaracao": lambda: _da_internacao("doc.baixar", "declaração"),
+    "ver_anexo": lambda: _da_internacao("doc.ver", "documento escaneado"),
+    "baixar_anexo": lambda: _da_internacao("doc.baixar", "documento escaneado"),
     "baixar_impressos": lambda: _da_internacao("doc.baixar", _itens()),
     "pagina_relatorios": lambda: ("relatorio.ver", "", None, None, "painel de relatórios" + _com_nomes()),
     "ver_relatorio": lambda: ("relatorio.ver", "", None, None, f"internos ativos: {(request.view_args or {}).get('slug', '')}" + _com_nomes()),
@@ -220,6 +226,7 @@ EXPLICITAS = {
     "novo_convenio", "editar_convenio", "novo_funcionario", "novo_nivel", "editar_nivel", "mover_nivel", "salvar_permissoes",
     "pagina_auditoria", "exportar_auditoria", "login_codigo", "esqueci_senha", "redefinir_senha", "enviar_codigo_email", "confirmar_email",
     "ativar_autenticador", "desativar_autenticador", "marcar_revisao", "descartar_rascunho",
+    "enviar_anexo", "remover_anexo", "restaurar_anexo", "apagar_anexo",
 }
 
 # o que não se registra, e por quê
