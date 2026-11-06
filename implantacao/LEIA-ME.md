@@ -89,8 +89,13 @@ registros (`logs`) ficam com acesso só do SISTEMA, dos administradores e de que
    contra a lista pública de vulnerabilidades e agenda a conferência mensal; `implantacao\verificar-servidor.ps1` confere o Windows (disco
    criptografado, atualizações, antivírus, portas) e deve ser repetido a cada 3 meses. O passo a passo do que só você pode fazer (roteador, contas do
    Windows, sala, impressora) está em `implantacao\ROTEIRO-DO-WINDOWS-E-DA-REDE.md`. A página inicial avisa o administrador quando algo vence.
-8. **Testar** a partir de outro computador: abra o endereço que o instalador mostrou e entre. Salve como favorito.
-9. **Aposente o banco antigo.** Depois de conferir que os dados estão no servidor, renomeie o `instance\internos.db` do
+8. **Polo de cada funcionário** (depois da atualização que trouxe os dois polos, uma vez, como Administrador): *Cadastros > Funcionários*, editar cada pessoa e
+   escolher o **Polo de trabalho**, *Escritório* (administrador, assistente social, equipe administrativa) ou *Saúde* (enfermagem, psicologia, medicina, nutrição e
+   coordenação). Enquanto uma pessoa está *Não definido*, valem para ela só os níveis de acesso, como antes, e a página inicial do administrador lembra de quem
+   falta. Depois de definidos: a triagem é só do Escritório; cadastrar prontuário e admitir é do Escritório e da enfermeira(o); dar baixa é só da enfermeira(o) (o
+   Escritório continua registrando a chegada do envelope); a assistente social recebe a cobrança do relatório de alta. Detalhes em `docs\polos-e-notificacoes.md`.
+9. **Testar** a partir de outro computador: abra o endereço que o instalador mostrou e entre. Salve como favorito.
+10. **Aposente o banco antigo.** Depois de conferir que os dados estão no servidor, renomeie o `instance\internos.db` do
    projeto de desenvolvimento (por exemplo para `internos_ANTIGO_nao_usar.db`). Dois bancos em uso ao mesmo tempo
    significam dados espalhados e perdidos.
 

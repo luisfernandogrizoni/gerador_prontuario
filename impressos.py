@@ -5,7 +5,7 @@ Os impressos de cada acolhido, reunidos num documento só (um arquivo Word, ou u
       exames   Pedido       prontuario         o prontuário                resumo-social      Resumo do acolhimento social
       enxoval  Enxoval      manual             Manual de orientação        relatorio-social   Relatório do Serviço Social
                             multiprofissional  Ficha multiprofissional                        (ficha, relatório e parecer)
-                            capa               Capa do envelope
+                            capa               Capa do envelope            relatorio-alta     Relatório de alta (só de quem recebeu baixa)
 
 Quem escolhe o que entra é a barra acima do documento (?itens=exames,enxoval). Sem escolha, vale o conjunto de cada
 situação: a triagem leva exames e enxoval; a internação leva o prontuário, o manual, a ficha multiprofissional e a capa
@@ -29,6 +29,7 @@ import catalogo
 import ficha_saude
 import fichas
 import manual_de_orientacao
+import relatorio_alta
 import servico_social
 from documentos import Documento, Pagina
 from prontuario import calcular_idade, fmt_data, montar_documento
@@ -42,13 +43,15 @@ ROTULOS = {
     "capa": "Capa do envelope",
     "resumo-social": "Resumo do Serviço Social",
     "relatorio-social": "Relatório do Serviço Social",
+    "relatorio-alta": "Relatório de alta",
 }
 GRUPOS = (("Triagem", ("exames", "enxoval")),
           ("Na internação", ("prontuario", "manual", "multiprofissional", "capa")),
-          ("Serviço Social", ("resumo-social", "relatorio-social")))
+          ("Serviço Social", ("resumo-social", "relatorio-social", "relatorio-alta")))
 ORDEM = tuple(chave for _, chaves in GRUPOS for chave in chaves)
 DA_TRIAGEM = ("exames", "enxoval")
-SIGILOSOS = ("relatorio-social",)          # só quem é do Serviço Social (ou administrador) vê
+SIGILOSOS = ("relatorio-social", "relatorio-alta")          # só quem é do Serviço Social (ou administrador) e quem lê os sigilosos vê
+DA_BAIXA = ("relatorio-alta",)                              # só entram na barra de quem já recebeu baixa
 
 
 def _social(internacao, completo):
@@ -101,6 +104,8 @@ def _blocos(chave, internacao, hoje, saude=False):
         return fichas.capa_do_envelope(pessoa.nome, fmt_data(internacao.inicio), _convenio_sus(internacao), pessoa.cidade)
     if chave == "resumo-social":
         return [Pagina(), *servico_social.blocos_resumo(internacao, internacao.relatorio_social, hoje)]
+    if chave == "relatorio-alta":
+        return [Pagina(), *relatorio_alta.blocos(internacao, internacao.relatorio_alta, hoje)]
     return [Pagina(), *servico_social.blocos(internacao, internacao.relatorio_social, hoje)]      # relatorio-social
 
 
@@ -125,6 +130,9 @@ def _aviso_do_item(chave, internacao, saude=False):
     if chave == "multiprofissional":
         situacao = ficha_saude.estado(internacao.ficha_saude) if saude else "finalizado"
         return "" if situacao == "finalizado" else (situacao or "em branco")
+    if chave == "relatorio-alta":
+        situacao = relatorio_alta.estado(internacao.relatorio_alta)
+        return "" if situacao == "finalizado" else (situacao or "em branco")
     if chave not in ("resumo-social", "relatorio-social"):
         return ""
     situacao = servico_social.estado(internacao.relatorio_social)
@@ -140,7 +148,7 @@ def barra(internacao, itens, endereco, completo=False, saude=False):
     grupos = []
     for titulo, chaves in GRUPOS:
         marcas = []
-        for chave in (c for c in chaves if completo or c not in SIGILOSOS):
+        for chave in (c for c in chaves if (completo or c not in SIGILOSOS) and (c not in DA_BAIXA or internacao.status == "inativo")):
             ativa = chave in itens
             novos = [c for c in ORDEM if (c in itens) != (c == chave)]
             marcas.append({"nome": ROTULOS[chave], "ativa": ativa,

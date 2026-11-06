@@ -58,6 +58,7 @@ ACOES = {
     "ver.pessoa_no_formulario": ("leitura", "Abriu um formulário com os dados de um acolhido já cadastrado"),
     "ver.acolhimento": ("leitura", "Abriu o acolhimento social"),
     "ver.saude": ("leitura", "Abriu a ficha de saúde"),
+    "ver.alta": ("leitura", "Abriu o relatório de alta"),
     "ver.historico": ("leitura", "Abriu o histórico de versões de um relatório"),
     "ver.lista": ("leitura", "Carregou a lista de acolhidos"),
     "busca.pessoa": ("leitura", "Buscou um acolhido pelo nome"),
@@ -99,6 +100,9 @@ ACOES = {
     "acolhimento.finalizar": ("alteracao", "Finalizou o acolhimento social"),
     "acolhimento.alterar": ("alteracao", "Alterou o acolhimento social já finalizado (ficou no histórico de versões)"),
     "acolhimento.adendo": ("alteracao", "Escreveu um adendo no acolhimento social (adendos não existem mais)"),
+    "alta.salvar": ("alteracao", "Salvou o rascunho do relatório de alta"),
+    "alta.finalizar": ("alteracao", "Finalizou o relatório de alta"),
+    "alta.alterar": ("alteracao", "Alterou o relatório de alta já finalizado (ficou no histórico de versões)"),
     "saude.salvar": ("alteracao", "Salvou o rascunho da ficha de saúde"),
     "saude.finalizar": ("alteracao", "Finalizou a ficha de saúde"),
     "saude.alterar": ("alteracao", "Alterou a ficha de saúde já finalizada (ficou no histórico de versões)"),
@@ -166,6 +170,11 @@ def _da_internacao(acao, detalhe=""):
     return (acao, "internacao", id_, internacao.pessoa_id if internacao else None, detalhe)
 
 
+def _nome_do_relatorio():
+    """O relatório do histórico de versões que está sendo aberto, em palavras."""
+    return {"social": "acolhimento social", "alta": "relatório de alta"}.get((request.view_args or {}).get("tipo"), "ficha de saúde")
+
+
 def _itens():
     return request.args.get("itens") or "padrão"
 
@@ -188,9 +197,9 @@ LEITURAS = {
     "ficha_saude": lambda: _da_internacao("ver.saude", "anamnese"),
     "saude_enfermagem": lambda: _da_internacao("ver.saude", "registros de enfermagem"),
     "saude_evolucao": lambda: _da_internacao("ver.saude", "evolução multiprofissional"),
-    "historico_do_relatorio": lambda: _da_internacao("ver.historico", "acolhimento social" if (request.view_args or {}).get("tipo") == "social" else "ficha de saúde"),
-    "ver_versao_do_relatorio": lambda: _da_internacao("ver.historico", f"{'acolhimento social' if (request.view_args or {}).get('tipo') == 'social' else 'ficha de saúde'}, "
-                                                                        f"versão {(request.view_args or {}).get('numero')}"),
+    "relatorio_de_alta": lambda: _da_internacao("ver.alta"),
+    "historico_do_relatorio": lambda: _da_internacao("ver.historico", _nome_do_relatorio()),
+    "ver_versao_do_relatorio": lambda: _da_internacao("ver.historico", f"{_nome_do_relatorio()}, versão {(request.view_args or {}).get('numero')}"),
     "formulario": lambda: ("ver.pessoa_no_formulario", "pessoa", request.args.get("pessoa", type=int), request.args.get("pessoa", type=int), "") if request.args.get("pessoa", type=int) else None,
     "nova_triagem": lambda: ("ver.pessoa_no_formulario", "pessoa", request.args.get("pessoa", type=int), request.args.get("pessoa", type=int), "") if request.args.get("pessoa", type=int) else None,
     "ver_prontuario": lambda: _da_internacao("doc.ver", "prontuário"),
@@ -242,6 +251,8 @@ NAO_REGISTRA = {
     "seguranca": "a página da própria pessoa (as ações dela são registradas quando acontecem)",
     "salvar_rascunho": "a cópia automática do que a pessoa digita (a cada pausa): só dela, e vira registro quando ela grava, que aí é registrado; só o descarte entra na trilha",
     "lista_rascunhos": "a lista dos rascunhos da própria pessoa (o que ela mesma digitou)",
+    "lista_notificacoes": "a lista dos avisos da própria pessoa (os dados do acolhido que ela abre dali são registrados quando a ficha abre)",
+    "marcar_notificacoes_lidas": "a pessoa marca os próprios avisos como lidos: não mexe em nenhum registro de acolhido",
 }
 
 

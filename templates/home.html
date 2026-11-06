@@ -321,7 +321,7 @@
                       {% for campo, valor in (a.acao.campos or {}).items() %}<input type="hidden" name="{{ campo }}" value="{{ valor }}">{% endfor %}
                       <button class="botao pequeno{{ '' if a.acao.principal else ' secundario' }}">{{ a.acao.rotulo }}</button></form>
                   {% endif %}
-                  {% if a.dispensavel and pode('triagem', 'internacao', 'baixa') %}
+                  {% if a.dispensavel and pode('triagem', 'admitir', 'internacao', 'baixa', 'envelope') %}
                   <form method="post" action="{{ url_for('aviso_ciente') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="chave" value="{{ a.chave }}">
                     <button class="botao pequeno secundario" title="Tirar do quadro sem corrigir">Ciente</button></form>

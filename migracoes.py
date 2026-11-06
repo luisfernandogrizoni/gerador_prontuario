@@ -88,6 +88,16 @@ def migrar(db):
         db.session.execute(text("UPDATE funcionarios SET profissao = 'assistente_social' WHERE servico_social"))
         db.session.commit()
 
+    # 6e) os dois polos (Escritório e Saúde): o polo de cada funcionário (vazio = o administrador ainda não definiu: vale como antes) e quando a baixa
+    #     foi dada (é dele que se cobra o relatório de alta; as baixas de antes ficam sem data e não cobram nada)
+    if "polo" not in _colunas(db, "funcionarios"):
+        db.session.execute(text("ALTER TABLE funcionarios ADD COLUMN polo VARCHAR(10) NOT NULL DEFAULT ''"))
+        db.session.commit()
+    if "baixa_em" not in _colunas(db, "internacoes"):
+        db.session.execute(text("ALTER TABLE internacoes ADD COLUMN baixa_em TIMESTAMP"))
+        db.session.commit()
+    _permissoes_dos_polos(db)
+
     # 6) o relatório de rejeição virou o parecer do acolhimento social: o que já foi escrito passa para lá
     _rejeicoes_para_o_acolhimento(db)
 
@@ -97,6 +107,21 @@ def migrar(db):
 
     # 7) cadastros: na primeira subida trazem os convênios e o funcionário com que o sistema sempre trabalhou
     semear(db)
+
+
+# A permissão "baixa" se dividiu em duas (dar baixa x registrar a chegada do envelope em papel) e "triagem" ganhou a "admitir": quem já tinha escolhido o nível
+# mínimo da antiga, nas Permissões, continua com a mesma escolha nas novas (senão elas voltariam ao padrão de fábrica sem ninguém pedir).
+HERDEIRAS = (("envelope", "baixa"), ("admitir", "triagem"))
+
+
+def _permissoes_dos_polos(db):
+    existentes = {linha[0] for linha in db.session.execute(text("SELECT chave FROM permissoes_nivel"))}
+    for nova, antiga in HERDEIRAS:
+        if antiga in existentes and nova not in existentes:
+            db.session.execute(text("INSERT INTO permissoes_nivel (chave, nivel_id, alterado_em, alterado_por) "
+                                    "SELECT CAST(:nova AS VARCHAR(40)), nivel_id, alterado_em, alterado_por FROM permissoes_nivel WHERE chave = :antiga"),
+                               {"nova": nova, "antiga": antiga})
+    db.session.commit()
 
 
 def _rejeicoes_para_o_acolhimento(db):

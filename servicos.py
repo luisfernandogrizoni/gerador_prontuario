@@ -11,10 +11,11 @@ from datetime import date, datetime
 
 import catalogo
 import ficha_saude
+import relatorio_alta
 import servico_social
 import versoes
 from modelos import (ENVELOPE_PENDENTE, ENVELOPE_RECEBIDO, STATUS, STATUS_TRIAGEM, EvolucaoSaude, FichaSaude,
-                     Internacao, Parcela, Pessoa, RegistroEnfermagem, RelatorioSocial, db)
+                     Internacao, Parcela, Pessoa, RegistroEnfermagem, RelatorioAlta, RelatorioSocial, db)
 from prontuario import CONVENIO_A_DEFINIR, ler_data, ler_valor
 from relatorios import hoje_no_brasil
 from validacao import cpf_valido, fmt_cpf, ler_hora, normalizar_nome, rg_valido, so_digitos
@@ -113,10 +114,12 @@ def salvar_prontuario(form):
     internacao.status = "inativo" if (internacao.termino or internacao.motivo) else "ativo"
     if internacao.status == "ativo":
         _limpar_envelope(internacao)          # voltou a ser interno: não há envelope para esperar
+        internacao.baixa_em = None            # e a baixa que havia (se havia) não vale mais
     elif era_ativo:
         # a baixa veio por aqui, sem a pergunta da janela "Dar baixa": o envelope fica como pendente
         # (um clique em "Chegou" resolve; esquecer um envelope na casa de acolhida é o que se quer evitar)
         _esperar_envelope(internacao)
+        internacao.baixa_em = datetime.now()      # é daqui que se cobra o relatório de alta
     db.session.commit()
     return internacao, {}
 
@@ -205,6 +208,7 @@ def dar_baixa(internacao, dados):
     internacao.termino = saida
     internacao.motivo = dados["motivo"]
     internacao.status = "inativo"
+    internacao.baixa_em = datetime.now()          # é daqui que se cobra o relatório de alta da assistente social
     _limpar_envelope(internacao)                  # o que valia de uma baixa anterior (se houve) não vale mais
     if voltou == "sim":
         _envelope_recebido(internacao)
@@ -275,6 +279,38 @@ def salvar_relatorio_social(internacao, form, usuario="", finalizar=False, assin
         versoes.registrar(internacao, versoes.SOCIAL, versoes.ALTERADO, dados, campos, assinatura or usuario, agora)
     if (finalizar or finalizado) and dados["parecer"] == servico_social.NAO_CONDIZENTE and internacao.e_triagem:
         internacao.status = "rejeitado"
+    db.session.add(relatorio)
+    db.session.commit()
+    return relatorio, {}
+
+
+# ------------------------------------------------------- relatório de alta (relatorio_alta.py)
+def salvar_relatorio_alta(internacao, form, usuario="", finalizar=False, assinatura=""):
+    """Grava o texto que a assistente social escreveu no relatório de alta. Devolve (relatório, erros): com erros, nada foi gravado. `finalizar` exige o texto e guarda data,
+    hora e `assinatura` de quem finalizou. Um relatório já finalizado continua podendo ser alterado: vale a mesma exigência, e cada alteração vira uma versão no histórico
+    (versoes.py); se nada mudou, não vira nada."""
+    relatorio = internacao.relatorio_alta
+    finalizado = relatorio is not None and relatorio.finalizado
+    dados, erros = relatorio_alta.ler_formulario(form)
+    if finalizar or finalizado:
+        erros = {**relatorio_alta.validar_finalizacao(dados), **erros}
+    if erros:
+        return None, erros
+    campos = versoes.campos_alterados(versoes.ALTA, relatorio.dados if relatorio is not None else {}, dados)
+    if finalizado and not campos:
+        return relatorio, {}                    # nada mudou: não é uma versão nova
+    if finalizado:
+        versoes.garantir_original(internacao, versoes.ALTA, relatorio)        # antes de trocar o texto
+    relatorio = relatorio or RelatorioAlta(internacao=internacao)
+    relatorio.dados = dados                 # um dicionário novo: é assim que o SQLAlchemy percebe a mudança no JSON
+    relatorio.atualizado_por = usuario[:50]
+    agora = datetime.now()
+    if finalizar and not finalizado:
+        relatorio.situacao, relatorio.finalizado_em = "finalizado", agora
+        relatorio.finalizado_por, relatorio.assinatura = usuario[:50], assinatura[:200]
+        versoes.registrar(internacao, versoes.ALTA, versoes.FINALIZADO, dados, [], assinatura or usuario, agora)
+    elif finalizado:
+        versoes.registrar(internacao, versoes.ALTA, versoes.ALTERADO, dados, campos, assinatura or usuario, agora)
     db.session.add(relatorio)
     db.session.commit()
     return relatorio, {}

@@ -47,6 +47,12 @@ PROFISSOES = {
 }
 DA_EQUIPE = tuple(PROFISSOES)                       # quem escreve na evolução multiprofissional (cada um com a sua categoria)
 
+# Os dois polos de trabalho (Cadastros > Funcionários; só o administrador define): o Escritório (administrativo, serviço social e administração) e a Saúde (a casa de
+# acolhida: enfermagem, psicologia, medicina, nutrição e coordenação). O polo restringe o que cada um faz (permissoes.POR_POLO) e decide quem é avisado do que o outro
+# polo fez (notificacoes.py). Os dados são os mesmos para todos. Quem ainda não tem polo (o administrador não definiu) vale como antes: só o nível decide.
+# (Não confundir com o "polo 1 e polo 2" do plano de segurança, que são os dois lugares físicos que usam o mesmo banco.)
+POLOS = {"escritorio": "Escritório", "saude": "Saúde"}
+
 
 # ====================================================================== convênios
 def convenios():
@@ -239,6 +245,16 @@ def profissao_de(funcionario):
     return funcionario.profissao or ("assistente_social" if funcionario.servico_social else "")
 
 
+def polo_de(funcionario):
+    """O polo do funcionário (a chave de POLOS), ou '' enquanto o administrador não definiu."""
+    return funcionario.polo if funcionario is not None and funcionario.polo in POLOS else ""
+
+
+def polo_do_usuario(usuario):
+    """O polo de quem está logado (o do funcionário ativo que tem o login dele), ou ''."""
+    return polo_de(funcionario_do_usuario(usuario))
+
+
 def _erro_do_registro(profissao, registro):
     """O que falta no registro do conselho de quem tem uma função com conselho (None se está certo)."""
     conselho = PROFISSOES[profissao][1]
@@ -284,6 +300,8 @@ def validar_funcionario(form, funcionario=None, pode_acessos=True):
         if erro:
             erros["registro_profissional"] = erro
     if pode_acessos:
+        if (form.get("polo") or "").strip() not in ("", *POLOS):
+            erros["polo"] = "Escolha um dos polos da lista."
         erros.update(_validar_acesso(form, funcionario, ativo))
     return erros
 
@@ -312,6 +330,7 @@ def salvar_funcionario(form, funcionario=None, por=None):
             funcionario.profissao = profissao
             funcionario.servico_social = profissao == "assistente_social"
             funcionario.le_sigilosos = form.get("le_sigilosos") == "1"
+            funcionario.polo = (form.get("polo") or "").strip()
             funcionario.nivel_id = int(form["nivel_id"])
             novo_email = (form.get("email") or "").strip().lower()
             if novo_email != (funcionario.email or "").lower():       # e-mail novo ou trocado: só vale depois de confirmado de novo

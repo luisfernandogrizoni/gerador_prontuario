@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% from "_voltar.html" import linha_voltar with context %}
+{% from "_cartao.html" import legenda %}
+{#
+  O relatório de alta, escrito direto no sistema (relatorio_alta.py): um texto livre, sem perguntas fixas. O documento sai no timbre, com os dados básicos do
+  acolhido e a assinatura da assistente social (nome e CRESS).
+  Variáveis: i (internação), v ({texto}), erros, relatorio (o já gravado, ou None), basicos ([(rótulo, valor)] que vêm do cadastro), alteracao (a última alteração
+  depois de finalizado, ou None).
+#}
+
+{% set titulo = 'Relatório de alta' %}
+{% block titulo %}{{ titulo }} · {{ i.pessoa.nome }}{% endblock %}
+
+{% block estilo %}
+  .cabecalho-rel { display: flex; align-items: flex-end; gap: 8px 16px; flex-wrap: wrap; margin-bottom: 4px; }
+  .cabecalho-rel h1 { margin: 0 auto 0 0; }
+  .cabecalho-rel .estado { font-size: .85rem; color: var(--suave); }
+  .cadastro-resumo { margin-bottom: 16px; background: linear-gradient(115deg, var(--info-suave), #fff 70%); border: 1px solid var(--info-borda); border-radius: var(--r-lg); padding: 14px 18px; }
+  .cadastro-resumo dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px 18px; margin: 0; }
+  .cadastro-resumo dt { font-size: .76rem; color: var(--suave); }
+  .cadastro-resumo dd { margin: 1px 0 0; font-size: .93rem; overflow-wrap: anywhere; }
+  .cadastro-resumo dd:empty::after { content: "—"; color: #bbb; }
+  .cadastro-resumo h3 { margin: 0 0 8px; font-size: .8rem; color: var(--suave); text-transform: uppercase; letter-spacing: .05em; }
+  .cadastro-resumo .corrigir { font-size: .85rem; margin: 12px 0 0; }
+  .rotulo-campo { display: block; font-size: .9rem; margin-bottom: 4px; }
+  textarea { resize: vertical; line-height: 1.5; min-height: 16em; }
+{% endblock %}
+
+{% block conteudo %}
+<main class="largo">
+  {{ linha_voltar(url_for('ficha', id=i.id)) }}
+  {% with msgs = get_flashed_messages() %}
+    {% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
+  {% endwith %}
+
+  <div class="cabecalho-rel">
+    <h1>{{ titulo }}</h1>
+    {% if relatorio and relatorio.finalizado %}
+      <span class="estado">finalizado em {{ relatorio.finalizado_em.strftime('%d/%m/%Y às %H:%M') }}{{ ' por ' ~ relatorio.assinatura.split(' — ')[0] if relatorio.assinatura }}{% if alteracao %} · alterado em {{ alteracao.quando.strftime('%d/%m/%Y às %H:%M') }}{{ ' por ' ~ alteracao.por.split(' — ')[0] if alteracao.por }}{% endif %}</span>
+    {% elif relatorio and relatorio.dados %}
+      <span class="estado">rascunho salvo em {{ relatorio.atualizado_em.strftime('%d/%m/%Y às %H:%M') }}{{ ' por ' ~ relatorio.atualizado_por if relatorio.atualizado_por }}</span>
+    {% else %}
+      <span class="estado">ainda não escrito</span>
+    {% endif %}
+  </div>
+  <p class="ajuda">{{ i.pessoa.nome }} · {{ i.status_txt }}</p>
+
+  <section class="cadastro-resumo">
+    <h3>Do cadastro do acolhido (sai no documento)</h3>
+    <dl>{% for rotulo, valor in basicos %}<div><dt>{{ rotulo }}</dt><dd>{{ valor }}</dd></div>{% endfor %}</dl>
+    {% if pode('internacao') %}<p class="corrigir"><a href="{{ url_for('editar_internacao', id=i.id) }}">Corrigir no cadastro</a></p>{% endif %}
+  </section>
+
+  <div>      {# (sem .form-grade: ele reserva a coluna do índice de seções, que não existe com uma seção só) #}
+  <form method="post" id="form-relatorio" data-indice><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if erros %}<div class="caixa-erros"><strong>{{ erros['_'] if erros.get('_') else 'Confira o campo marcado em vermelho.' }}</strong></div>{% endif %}
+    <fieldset class="tom-azul">
+      {{ legenda('Relatório', 'documento') }}
+      <div class="grade">
+        <label class="c6{{ ' com-erro' if erros.get('texto') }}"><span class="rotulo-campo">Escreva o relatório de alta</span>
+          <textarea name="texto" rows="16" maxlength="20000" data-cresce autofocus>{{ v.get('texto', '') }}</textarea>
+          {% if erros.get('texto') %}<small class="erro">{{ erros['texto'] }}</small>{% endif %}</label>
+      </div>
+    </fieldset>
+
+    <div class="barra-salvar">
+      {% set ja_finalizado = relatorio and relatorio.finalizado %}
+      <button class="botao{{ '' if ja_finalizado else ' secundario' }}" type="submit" name="acao" value="salvar">{{ 'Salvar alterações' if ja_finalizado else 'Salvar rascunho' }}</button>
+      <button class="botao secundario" type="submit" name="acao" value="imprimir"><svg class="icone"><use href="#i-impressora"/></svg>Salvar e imprimir</button>
+      {% if not ja_finalizado %}<button class="botao" type="submit" name="acao" value="finalizar" id="finalizar">Finalizar e assinar</button>{% endif %}
+      <span class="estado-form" hidden>Alterações não salvas</span>
+    </div>
+  </form>
+  </div>
+</main>
+<script src="{{ url_for('static', filename='secoes.js') }}"></script>
+<script nonce="{{ csp_nonce() }}">
+  // o campo de texto cresce enquanto se escreve (sem barra de rolagem dentro dele)
+  function crescer(t) { t.style.height = "auto"; t.style.height = Math.max(t.scrollHeight + 2, 0) + "px"; }
+  document.querySelectorAll("textarea[data-cresce]").forEach(function (t) { crescer(t); t.addEventListener("input", function () { crescer(t); }); });
+
+  // finalizar pede confirmação
+  var finalizar = document.getElementById("finalizar");
+  if (finalizar) finalizar.addEventListener("click", function (e) {
+    if (!confirm("Finalizar o relatório de alta de " + {{ i.pessoa.nome | tojson }} + "?")) e.preventDefault();
+  });
+</script>
+{% endblock %}

@@ -18,6 +18,9 @@ Como funciona (plano de segurança, fase 1 — docs/plano-de-seguranca.md):
     social, enfermeira com COREN válido: cadastros.pode_servico_social e pode_assinar_saude) e, para só ler, por uma permissão dada pessoa a pessoa
     (cadastros.pode_ler_sigilosos), porque são funções e acessos pontuais, não uma hierarquia.
   * O que só o administrador faz (criar usuário e senha, mexer nos níveis e nas permissões, lixeira) é fixo: não se configura.
+  * Os dois polos (cadastros.POLOS: Escritório e Saúde) restringem algumas permissões além do nível (POR_POLO): a triagem é só do Escritório; cadastrar prontuário e
+    admitir são do Escritório e da enfermeira(o); dar baixa é só da enfermeira(o) (o Escritório só registra a chegada do envelope). Quem ainda não tem polo
+    (o administrador não definiu) vale como antes, só pelo nível.
 
 Toda negação vai para o registro do servidor (logs/servidor.log), com quem foi, o quê e qual permissão faltou.
 """
@@ -63,9 +66,11 @@ GRUPOS = (
         Permissao("documentos", "Imprimir e baixar os documentos do acolhido", "Prontuário, declaração, pedido de exames e enxoval"),
     )),
     Grupo("Triagem e internação", "prancheta", "verde", (
-        Permissao("triagem", "Registrar e editar triagens", "Inclui mudar a situação e admitir"),
-        Permissao("internacao", "Registrar e editar prontuários", "Internações e dados do acolhido"),
-        Permissao("baixa", "Dar baixa e anotar o prontuário em papel", "Saída do interno e retorno do envelope"),
+        Permissao("triagem", "Registrar e editar triagens", "Inclui mudar a situação (menos admitir); só o polo Escritório"),
+        Permissao("admitir", "Admitir: transformar a triagem em prontuário", "O polo Escritório e a enfermeira(o); a data de internação e o convênio"),
+        Permissao("internacao", "Registrar e editar prontuários", "Internações e dados do acolhido; o polo Escritório e a enfermeira(o)"),
+        Permissao("baixa", "Dar baixa", "Saída do interno; só a enfermeira(o) do polo Saúde (o Escritório não)"),
+        Permissao("envelope", "Anotar a chegada do prontuário em papel", "O envelope que volta da casa de acolhida; o polo Escritório"),
         Permissao("anexar", "Anexar e remover documentos escaneados", "O PDF do documento físico assinado, na ficha; quem vê é quem imprime os documentos; só o administrador apaga de vez"),
         Permissao("financeiro", "Lançar e excluir parcelas", "Contribuição de cada internação"),
         Permissao("excluir", "Excluir registros", "Vão para a lixeira; só o administrador apaga de vez"),
@@ -90,6 +95,50 @@ CONFIGURAVEIS = tuple(p for p in PERMISSOES if not p.fixa and not p.todos)
 # (cadastros.pode_servico_social, pode_escrever_saude); quem só lê recebeu a permissão `le_sigilosos` (cadastros.pode_ler_sigilosos). A tela de
 # permissões mostra isso em linhas à parte.
 ACOLHIMENTO_SOCIAL = "Acolhimento social (sigiloso)"
+
+
+# ====================================================================== os polos
+@dataclass(frozen=True)
+class DoPolo:
+    escritorio: bool = True        # quem é do polo Escritório pode (pelo nível)
+    saude: bool = False            # quem é do polo Saúde pode, desde que seja enfermeira(o) (psicóloga, médica... não)
+
+
+# Só as permissões que dependem do polo estão aqui; as outras (documentos, anexar...) valem para os dois polos, pelo nível. O administrador passa por tudo.
+POR_POLO = {
+    "triagem": DoPolo(escritorio=True, saude=False),
+    "admitir": DoPolo(escritorio=True, saude=True),
+    "internacao": DoPolo(escritorio=True, saude=True),
+    "baixa": DoPolo(escritorio=False, saude=True),
+    "envelope": DoPolo(escritorio=True, saude=False),
+    "financeiro": DoPolo(escritorio=True, saude=False),
+    "relatorios": DoPolo(escritorio=True, saude=False),
+    "excluir": DoPolo(escritorio=True, saude=False),
+    "unificar": DoPolo(escritorio=True, saude=False),
+    "cadastros": DoPolo(escritorio=True, saude=False),
+}
+
+
+def _polo_e_enfermeira(usuario):
+    """(polo, é enfermeira(o) com COREN válido) de quem pergunta; guardado por requisição para o usuário logado (as telas perguntam várias vezes)."""
+    if usuario is g.get("usuario"):
+        if "polo_e_enfermeira" not in g:
+            g.polo_e_enfermeira = (cadastros.polo_do_usuario(usuario), cadastros.e_enfermeira(usuario))
+        return g.polo_e_enfermeira
+    return cadastros.polo_do_usuario(usuario), cadastros.e_enfermeira(usuario)
+
+
+def _polo_permite(chave, usuario):
+    """O polo da pessoa deixa usar esta permissão? Sem polo definido, deixa (como antes dos polos)."""
+    regra = POR_POLO.get(chave)
+    if regra is None:
+        return True
+    polo, enfermeira = _polo_e_enfermeira(usuario)
+    if polo == "escritorio":
+        return regra.escritorio
+    if polo == "saude":
+        return regra.saude and enfermeira
+    return True
 
 
 # ====================================================================== quem pode
@@ -147,6 +196,8 @@ def _pode(chave, usuario):
         return True
     if permissao.fixa:
         return False
+    if not _polo_permite(chave, usuario):
+        return False
     if usuario is g.get("usuario"):
         if "ordem_do_usuario" not in g:
             g.ordem_do_usuario = _ordem_do_usuario(usuario)
@@ -180,7 +231,14 @@ def _quem_edita():
 # Os impressos dos relatórios sigilosos (o acolhimento social e a ficha de saúde): pedidos sozinhos, quem pode lê-los (quem escreve e quem recebeu a
 # permissão de ler os sigilosos) os abre mesmo num nível sem "documentos". Pedidos com outros impressos (prontuário, exames...) continuam pedindo
 # "documentos".
-QUEM_LE_O_IMPRESSO = {"relatorio-social": cadastros.pode_ler_social, "resumo-social": cadastros.pode_ler_social, "multiprofissional": cadastros.pode_ler_saude}
+QUEM_LE_O_IMPRESSO = {"relatorio-social": cadastros.pode_ler_social, "resumo-social": cadastros.pode_ler_social, "relatorio-alta": cadastros.pode_ler_social,
+                      "multiprofissional": cadastros.pode_ler_saude}
+
+
+def _quem_muda_status():
+    """Mudar a situação de uma triagem pede "triagem"; admitir (virar prontuário) pede "admitir": a enfermeira admite, mas não mexe no resto da triagem."""
+    dados = request.get_json(silent=True, force=True)
+    return "admitir" if isinstance(dados, dict) and dados.get("status") == "ativo" else "triagem"
 
 
 def _quem_imprime():
@@ -191,7 +249,7 @@ def _quem_imprime():
 
 
 # Uma permissão, várias (basta uma delas) ou uma função que devolve isso (ou LIVRE). Rota que não está aqui fica FECHADA.
-# (relatorio_social, o histórico de versões e as rotas da ficha de saúde só pedem "ver" aqui: o sigilo é conferido na própria rota, com o aviso
+# (relatorio_social, relatorio_de_alta, o histórico de versões e as rotas da ficha de saúde só pedem "ver" aqui: o sigilo é conferido na própria rota, com o aviso
 # explicando por que não abriu — veja _pode_servico_social, _pode_ler_saude e _pode_assinar_saude em app.py.)
 REGRAS = {
     "sair": LIVRE, "alterar_senha": LIVRE, "seguranca": LIVRE, "enviar_codigo_email": LIVRE, "confirmar_email": LIVRE,
@@ -201,18 +259,19 @@ REGRAS = {
 
     "home": "ver", "api_pessoas": "ver", "lista_triagens": "ver", "api_triagens": "ver", "lista_internos": "ver",
     "api_internos": "ver", "api_internos_busca": "ver", "ficha": "ver", "relatorio_social": "ver", "relatorio_de_rejeicao": "ver",
-    "ficha_saude": "ver", "saude_enfermagem": "ver", "saude_evolucao": "ver",
+    "ficha_saude": "ver", "saude_enfermagem": "ver", "saude_evolucao": "ver", "relatorio_de_alta": "ver",
     "historico_do_relatorio": "ver", "ver_versao_do_relatorio": "ver",
-    "aviso_ciente": ("triagem", "internacao", "baixa"),
+    "lista_notificacoes": "ver", "marcar_notificacoes_lidas": "ver",       # só os avisos da própria pessoa
+    "aviso_ciente": ("triagem", "admitir", "internacao", "baixa", "envelope"),
 
     "ver_prontuario": "documentos", "baixar_prontuario": "documentos", "ver_declaracao": "documentos",
     "baixar_declaracao": "documentos", "ver_impressos": _quem_imprime, "baixar_impressos": _quem_imprime,
     "pagina_relatorios": "relatorios", "ver_relatorio": "relatorios", "baixar_relatorio": "relatorios",
     "ver_relatorio_anual": "relatorios", "baixar_relatorio_anual": "relatorios",
 
-    "nova_triagem": "triagem", "salvar_triagem": "triagem", "mudar_status": "triagem",
+    "nova_triagem": "triagem", "salvar_triagem": "triagem", "mudar_status": _quem_muda_status,
     "formulario": "internacao", "gerar": "internacao", "editar_internacao": _quem_edita,
-    "baixa_interno": "baixa", "registrar_envelope": "baixa",
+    "baixa_interno": "baixa", "registrar_envelope": "envelope",
     "ver_anexo": "documentos", "baixar_anexo": "documentos", "enviar_anexo": "anexar", "remover_anexo": "anexar",
     "restaurar_anexo": "lixeira", "apagar_anexo": "lixeira",
     "lancar_parcela": "financeiro", "excluir_parcela": "financeiro",

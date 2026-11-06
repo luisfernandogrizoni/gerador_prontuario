@@ -16,6 +16,7 @@ from flask import current_app, url_for
 
 import copia_externa
 import ficha_saude
+import relatorio_alta
 import servico_social
 from banco import arquivo_ultimo_backup
 from modelos import ENVELOPE_PENDENTE, AvisoDispensado, Internacao, Pessoa, db
@@ -32,6 +33,9 @@ CATEGORIA_SAUDE = "Ficha de saúde a finalizar"                  # a pessoa foi 
 # Só cobra a ficha de quem entrou nos últimos dias: quem já estava na casa quando a ficha passou a ser digital tem a dela no papel, e cobrar de todos de
 # uma vez encheria a página inicial de pendências antigas (a ficha desses continua aberta para preencher).
 PRAZO_FICHA_DE_SAUDE_DIAS = 15
+CATEGORIA_ALTA = "Relatório de alta a escrever"           # a pessoa recebeu baixa e a assistente social ainda não finalizou o relatório de alta (só ela e o administrador veem)
+CATEGORIA_NOVO_PRONTUARIO = "Novo prontuário do Escritório"   # o Escritório cadastrou um prontuário (ou admitiu uma triagem) e a enfermeira ainda não abriu a ficha (só ela vê)
+CATEGORIA_POLOS = "Polos"                                 # funcionários com acesso ainda sem polo (só o administrador vê)
 
 # No servidor do escritório (servidor.py), o backup diário (backup.py) anota quando terminou. Passou deste
 # prazo sem backup, a página inicial avisa. 3 dias cobrem um fim de semana prolongado com o computador desligado.
@@ -67,10 +71,12 @@ def tempo_decorrido(dias):
     return "hoje" if dias == 0 else f"há {dias} dia{'' if dias == 1 else 's'}"
 
 
-def gerar_avisos(pode_servico_social=False, da_conta=(), de_manutencao=(), pode_assinar_saude=False):
+def gerar_avisos(pode_servico_social=False, da_conta=(), de_manutencao=(), pode_assinar_saude=False, novos_prontuarios=(), sem_polo=()):
     """`pode_servico_social`: quem olha é do Serviço Social (ou administrador); só para ele o aviso do acolhimento social
     leva direto ao formulário (os outros vão à ficha, onde veem se já foi feito, sem o conteúdo). `pode_assinar_saude`: quem olha é a enfermeira (assina
-    a ficha de saúde); só para ela aparece o aviso das fichas de saúde a finalizar."""
+    a ficha de saúde); só para ela aparece o aviso das fichas de saúde a finalizar. `pode_servico_social` também decide quem vê a cobrança do relatório de alta.
+    `novos_prontuarios`: as notificações de prontuário novo que a enfermeira ainda não leu (notificacoes.do_quadro). `sem_polo`: os nomes dos funcionários com acesso
+    e sem polo definido (só o administrador recebe esta lista)."""
     avisos = []
     pessoas = db.session.execute(db.select(Pessoa)).scalars().all()
     internacoes = db.session.execute(db.select(Internacao)).scalars().all()
@@ -136,6 +142,14 @@ def gerar_avisos(pode_servico_social=False, da_conta=(), de_manutencao=(), pode_
                                 f"{nome}: internado em {i.inicio.strftime('%d/%m/%Y')}, e a ficha de saúde ainda não foi finalizada "
                                 f"({'em rascunho' if ficha_saude.estado(i.ficha_saude) else 'não iniciada'}).",
                                 url_for("ficha_saude", id=i.id), f"saude:{i.id}", dispensavel=False, rotulo_url="Abrir a ficha de saúde"))
+        if pode_servico_social and i.status == "inativo" and i.baixa_em is not None and relatorio_alta.estado(i.relatorio_alta) != "finalizado":
+            dias = relatorio_alta.dias_desde_a_baixa(i, hoje_no_brasil())
+            saida = f"em {i.termino.strftime('%d/%m/%Y')}" if i.termino else "sem data de saída"
+            avisos.append(Aviso(CATEGORIA_ALTA,
+                                f"{nome}: baixa por {i.motivo or 'motivo não informado'} {saida}, e o relatório de alta ainda não foi finalizado "
+                                f"({'em rascunho' if relatorio_alta.estado(i.relatorio_alta) else 'não iniciado'}).",
+                                url_for("relatorio_de_alta", id=i.id), f"alta:{i.id}", dispensavel=False, rotulo_url="Escrever o relatório de alta",
+                                etiqueta=("vencido" if dias > relatorio_alta.PRAZO_EM_DIAS else "proximo", tempo_decorrido(dias))))
         if (i.status in ("em_admissao", "lista_espera") and i.internacao_agendada
                 and i.internacao_agendada < date.today()):
             avisos.append(Aviso("Internação agendada já passou",
@@ -170,6 +184,15 @@ def gerar_avisos(pode_servico_social=False, da_conta=(), de_manutencao=(), pode_
     avisos.extend(a for a in (_aviso_do_backup(),) if a)
     avisos.extend(_avisos_do_backup_externo())
     avisos.extend(_avisos_de_rede())
+    for n in novos_prontuarios:
+        avisos.append(Aviso(CATEGORIA_NOVO_PRONTUARIO, n.texto, _ficha(n.internacao), f"novoprontuario:{n.id}", dispensavel=False,
+                            etiqueta=("proximo", tempo_decorrido(max((hoje_no_brasil() - n.criado_em.date()).days, 0)))))
+    if sem_polo:
+        quantos = len(sem_polo)
+        avisos.append(Aviso(CATEGORIA_POLOS,
+                            f"{quantos} funcionário{'s' if quantos != 1 else ''} com acesso ao sistema ainda sem polo (Escritório ou Saúde): {', '.join(sem_polo[:6])}"
+                            f"{' e mais ' + str(quantos - 6) if quantos > 6 else ''}. Enquanto não tem polo, valem só os níveis de acesso, como antes.",
+                            url_for("lista_funcionarios"), "polos", dispensavel=False, rotulo_url="Abrir os funcionários"))
     avisos.extend(Aviso(CATEGORIA_CONTA, texto, url_for("seguranca"), chave, dispensavel=False, rotulo_url="Abrir Minha segurança") for chave, texto in da_conta)
     avisos.extend(Aviso(CATEGORIA_MANUTENCAO, texto, url_for(endpoint) if endpoint else "", chave, dispensavel=False, rotulo_url=rotulo or "Abrir")
                   for chave, texto, endpoint, rotulo in de_manutencao)
@@ -178,7 +201,8 @@ def gerar_avisos(pode_servico_social=False, da_conta=(), de_manutencao=(), pode_
     for a in avisos:
         grupos[a.categoria].append(a)
     # o backup, o envelope pendente e o acolhimento social são tarefas, não correções de cadastro: vêm primeiro
-    tarefas = (CATEGORIA_CONTA, CATEGORIA_REDE, CATEGORIA_MANUTENCAO, CATEGORIA_BACKUP, CATEGORIA_BACKUP_EXTERNO, CATEGORIA_ENVELOPE, CATEGORIA_REJEICAO, CATEGORIA_ACOLHIMENTO, CATEGORIA_SAUDE)
+    tarefas = (CATEGORIA_CONTA, CATEGORIA_REDE, CATEGORIA_MANUTENCAO, CATEGORIA_POLOS, CATEGORIA_BACKUP, CATEGORIA_BACKUP_EXTERNO, CATEGORIA_ENVELOPE, CATEGORIA_REJEICAO,
+               CATEGORIA_ACOLHIMENTO, CATEGORIA_SAUDE, CATEGORIA_ALTA, CATEGORIA_NOVO_PRONTUARIO)
     return dict(sorted(grupos.items(), key=lambda g: (g[0] not in tarefas, g[0])))
 
 
@@ -243,4 +267,4 @@ def _aviso_do_envelope(i, hoje):
     etiqueta = None if dias is None else ("vencido" if atrasado else "proximo", tempo_decorrido(dias))
     return Aviso(CATEGORIA_ENVELOPE, texto, _ficha(i), f"envelope:{i.id}", etiqueta=etiqueta, dispensavel=False,
                  acao={"rotulo": "Chegou ao escritório", "url": url_for("registrar_envelope", id=i.id),
-                       "campos": {"situacao": "recebido", "voltar": "home"}, "principal": True, "exige": "baixa"})
+                       "campos": {"situacao": "recebido", "voltar": "home"}, "principal": True, "exige": "envelope"})

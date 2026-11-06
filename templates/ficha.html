@@ -290,6 +290,31 @@
         {% endif %}
       {% endcall %}
 
+      {% if alta is not none %}
+      {% call cartao('Relatório de alta', 'documento', 'roxo', id='alta') %}
+        <div class="envelope">
+          <div class="situacao">
+            {% if alta.estado == 'finalizado' %}
+              <span class="selo ativo">Finalizado</span>
+              <span>{{ alta.em.strftime('%d/%m/%Y às %H:%M') }}{{ ' · ' ~ alta.por if pode_ler_social and alta.por }}</span>
+            {% elif alta.estado == 'rascunho' %}
+              <span class="selo lista_espera">Em andamento</span>
+              <span>salvo em {{ alta.em.strftime('%d/%m/%Y às %H:%M') }}{{ ' · ' ~ alta.por if pode_ler_social and alta.por }}</span>
+            {% else %}
+              <span class="selo{{ ' lista_espera' if i.baixa_em }}">Não escrito</span>
+            {% endif %}
+          </div>
+          {% if pode_servico_social %}
+            <a class="botao {{ 'secundario' if alta.estado == 'finalizado' else 'suave' }}" href="{{ url_for('relatorio_de_alta', id=i.id) }}">{{ 'Alterar' if alta.estado == 'finalizado' else 'Continuar' if alta.estado == 'rascunho' else 'Escrever o relatório de alta' }}</a>
+          {% endif %}
+          {% if alta.historico %}<a class="botao secundario" href="{{ url_for('historico_do_relatorio', id=i.id, tipo='alta') }}">Histórico de versões</a>{% endif %}
+        </div>
+        {% if alta.estado == 'finalizado' and pode_ler_social and pode('documentos') %}
+          {{ acoes_documento(url_for('ver_impressos', id=i.id, itens='relatorio-alta'), url_for('baixar_impressos', id=i.id, itens='relatorio-alta'), 'espaco') }}
+        {% endif %}
+      {% endcall %}
+      {% endif %}
+
       {% if saude is not none %}
       {% call cartao('Ficha de saúde', 'prancheta', 'turquesa', id='saude') %}
         <div class="envelope">
@@ -403,7 +428,7 @@
               <span class="selo">Sem registro</span><span>O prontuário voltou ao escritório?</span>
             {% endif %}
           </div>
-          {% if pode('baixa') %}
+          {% if pode('envelope') %}
           <form method="post" action="{{ url_for('registrar_envelope', id=i.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             {% if i.envelope == 'recebido' %}
               <button class="botao secundario" name="situacao" value="pendente">Desfazer</button>
