@@ -207,6 +207,38 @@
     /* caixa de marcar (ativo, assina por padrão...) */
     label.caixa { flex-direction: row; align-items: center; gap: 9px; font-size: .92rem; cursor: pointer; }
     label.caixa input { width: auto; margin: 0; accent-color: var(--vermelho); }
+    /* escolher arquivo (data-escolher-arquivo, static/base.js): no lugar do campo cru do navegador, uma área com ícone, texto e botão. O <input type="file"> fica
+       transparente POR CIMA dela: clicar e soltar um arquivo ali são do próprio navegador, e o foco do teclado continua nele. */
+    .escolher-arquivo { position: relative; display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 12px 14px; background: #fafbfc;
+                        border: 1.5px dashed var(--borda-forte); border-radius: var(--r-md); font-size: var(--t-corpo); font-weight: 400; color: var(--texto); cursor: pointer;
+                        transition: background .12s, border-color .12s, box-shadow .12s; }
+    .escolher-arquivo:hover { background: var(--neutro-suave); border-color: #b9c1ce; }
+    .escolher-arquivo:focus-within { border-color: var(--foco); box-shadow: 0 0 0 3px rgba(91,141,239,.22); }
+    .escolher-arquivo input[type="file"] { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; border-radius: inherit; opacity: 0; cursor: pointer; }
+    .escolher-icone { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--neutro-suave); color: var(--suave);
+                      transition: background .12s, color .12s; }
+    .escolher-arquivo:hover .escolher-icone { background: #fff; }
+    .escolher-icone .icone { width: 20px; height: 20px; }
+    .escolher-icone .pdf { display: none; font-size: .72rem; font-weight: 800; letter-spacing: .03em; }
+    .escolher-texto { flex: 1; min-width: 0; display: grid; gap: 2px; }
+    .escolher-texto strong { font-weight: 600; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }   /* nome comprido: 2 linhas (o inteiro está no title do campo) */
+    .escolher-texto small { color: var(--suave); }
+    .escolher-botao { flex: none; }                                                                    /* a aparência é de .botao.secundario.pequeno */
+    .escolher-arquivo:hover .escolher-botao { background: #e3e8f0; border-color: #cfd6e2; }
+    .escolher-arquivo .sem-mouse { display: none; }
+    @media (hover: none) and (pointer: coarse) { .escolher-arquivo .com-mouse { display: none; } .escolher-arquivo .sem-mouse { display: inline; } }
+    .escolher-arquivo.arrastando { background: var(--info-suave); border-color: var(--foco); border-style: solid; }
+    .escolher-arquivo.arrastando .escolher-icone { background: #fff; color: var(--info); }
+    .escolher-arquivo.com-arquivo { background: #fff; border-style: solid; border-color: var(--borda); }  /* igual a um item da lista: é o que vai ser anexado */
+    .escolher-arquivo.com-arquivo .escolher-icone { background: var(--vermelho-claro); color: var(--vermelho); }
+    .escolher-arquivo.com-arquivo .escolher-icone .icone { display: none; }
+    .escolher-arquivo.com-arquivo .escolher-icone .pdf { display: block; }
+    .escolher-arquivo.invalido { background: var(--perigo-suave); border-style: solid; border-color: var(--perigo-borda); }
+    .escolher-arquivo.invalido .escolher-icone { background: #fff; color: var(--perigo); }
+    .escolher-arquivo.invalido .escolher-texto small { color: var(--perigo); font-weight: 500; }
+    .campo-arquivo { container-type: inline-size; }                                                    /* quem decide é a largura do campo (a ficha o põe numa coluna estreita), não a da tela */
+    .escolher-arquivo { flex-wrap: wrap; }
+    @container (max-width: 400px) { .escolher-botao { flex: 1 1 100%; } }
     .segmentado .n { font-size: .74rem; padding: 1px 8px; border-radius: 999px; background: rgba(16,24,40,.08); font-variant-numeric: tabular-nums; }
     .segmentado button.ativo .n, .segmentado a.ativo .n { background: var(--vermelho-claro); color: var(--vermelho); }
     .busca { position: relative; flex: 1 1 300px; max-width: 440px; }
@@ -511,6 +543,7 @@
       <symbol id="i-lixeira" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></symbol>
       <symbol id="i-impressora" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></symbol>
       <symbol id="i-baixar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/></symbol>
+      <symbol id="i-enviar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5M12 3v12"/></symbol>
       <symbol id="i-usuario" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
       <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></symbol>
       <symbol id="i-telefone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></symbol>

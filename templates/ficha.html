@@ -95,6 +95,7 @@
   .acoes-anexo form { margin: 0; }
   form.novo-anexo { display: grid; gap: 10px; margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--borda); }
   form.novo-anexo small { color: var(--suave); }
+  form.novo-anexo .botao { justify-self: start; }
   /* situação + ação de um cartão (acolhimento social, prontuário em papel) */
   .envelope { display: grid; gap: 12px; }
   .envelope .situacao { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
@@ -367,12 +368,22 @@
         {% if pode('anexar') %}
         <form class="novo-anexo" method="post" action="{{ url_for('enviar_anexo', id=i.id) }}" enctype="multipart/form-data" data-limite="{{ limite_do_anexo }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <label>PDF do documento assinado *<input type="file" name="arquivo" accept="application/pdf,.pdf" required></label>
+          <label class="campo-arquivo">PDF do documento assinado *
+            <span class="escolher-arquivo" data-escolher-arquivo data-extensao="pdf" data-limite="{{ limite_do_anexo }}">
+              <input type="file" name="arquivo" accept="application/pdf,.pdf" required title="Escolher o PDF">
+              <span class="escolher-icone" aria-hidden="true"><svg class="icone"><use href="#i-enviar"/></svg><span class="pdf">PDF</span></span>
+              <span class="escolher-texto">
+                <strong class="escolher-titulo"><span class="com-mouse">Arraste o PDF para cá</span><span class="sem-mouse">Toque para escolher o PDF</span></strong>
+                <small class="escolher-dica"><span class="com-mouse">ou escolha no computador · </span>só PDF, até {{ limite_do_anexo // 1048576 }}&nbsp;MB</small>
+              </span>
+              <span class="botao secundario pequeno escolher-botao" aria-hidden="true">Escolher arquivo</span>
+            </span>
+          </label>
           <label>Título (como vai aparecer na lista)
             <input type="text" name="titulo" maxlength="100" list="titulos-de-anexo" placeholder="Prontuário assinado" autocomplete="off"></label>
           <datalist id="titulos-de-anexo">{% for t in titulos_de_anexo %}<option value="{{ t }}">{% endfor %}</datalist>
-          <small>Só PDF, até {{ limite_do_anexo // 1048576 }} MB (150 a 200 dpi bastam). Enviar de novo o mesmo arquivo não faz diferença: o sistema avisa.</small>
-          <button class="botao suave">Anexar</button>
+          <small>150 a 200 dpi bastam. Enviar de novo o mesmo arquivo não faz diferença: o sistema avisa.</small>
+          <button class="botao suave"><svg class="icone"><use href="#i-enviar"/></svg><span>Anexar</span></button>
         </form>
         {% endif %}
       {% endcall %}
@@ -478,16 +489,9 @@
     }
     var novoAnexo = document.querySelector("form.novo-anexo");
     if (novoAnexo) {
-      // confere o PDF antes de enviar (o servidor confere de novo): só PDF e dentro do limite
-      var arquivo = novoAnexo.querySelector('input[type="file"]'), limite = Number(novoAnexo.dataset.limite || 0), enviar = novoAnexo.querySelector("button");
-      arquivo.addEventListener("change", function () {
-        var f = arquivo.files[0], aviso = "";
-        if (f && !/\.pdf$/i.test(f.name) && f.type !== "application/pdf") aviso = "Só PDF é aceito.";
-        else if (f && limite && f.size > limite) aviso = "O arquivo passa de " + Math.floor(limite / 1048576) + " MB. Escaneie de novo com resolução menor.";
-        arquivo.setCustomValidity(aviso);
-        if (aviso) arquivo.reportValidity();
-      });
-      novoAnexo.addEventListener("submit", function () { enviar.disabled = true; enviar.textContent = "Enviando…"; });   // um clique só: o PDF pode demorar a subir
+      // (a conferência do PDF antes de enviar, só PDF e dentro do limite, é do static/base.js: data-escolher-arquivo; o servidor confere de novo)
+      var enviar = novoAnexo.querySelector("button");
+      novoAnexo.addEventListener("submit", function () { enviar.disabled = true; enviar.querySelector("span").textContent = "Enviando…"; });   // um clique só: o PDF pode demorar a subir
     }
     var dialogo = document.getElementById("excluir"), mais = document.querySelector("details.mais");
     if (dialogo) {
