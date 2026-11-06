@@ -110,6 +110,11 @@ Um botão **cheio** (primário) por tela, para a ação principal. Os outros sã
   ou **todo** em minúsculas (McDonald e "Maria da Silva" ficam como foram escritos; em rua, bairro e cidade uma sigla num texto misturado, como "Jardim ABC",
   também fica). Acento o sistema **não** coloca (JOSE vira Jose): o nome tem de ficar como no documento. Texto livre (relatórios, evolução) nunca é mexido.
   Campo novo de nome ou endereço: ponha a forma nos dois lugares (modelo/`Campo` e `data-forma`).
+- **Escolher arquivo**: nunca o campo cru do navegador. `<label>` com o rótulo acima e, dentro, `<span class="escolher-arquivo" data-escolher-arquivo data-extensao="pdf"
+  data-limite="bytes">` com o `<input type="file">` transparente **por cima** (clicar e soltar um arquivo ali são do próprio navegador, e o teclado continua funcionando), o
+  ícone (`i-enviar`), o texto "Arraste o PDF para cá" (no celular, "Toque para escolher"), a dica do limite e o botão pastel "Escolher arquivo". Escolhido o arquivo, a área
+  vira um item da lista (chip PDF, nome, tamanho, "pronto para enviar") e o botão passa a "Trocar arquivo"; tipo ou tamanho que não servem aparecem na hora, em vinho suave, e
+  travam o envio (`static/base.js`, seção 4; o servidor confere de novo). Um arquivo solto fora da área não troca a página pelo PDF. Modelo: o formulário de anexo da ficha.
 - Seção que a pessoa pode pular fica em `<details class="opcional">`.
 - A seção leva só o título (sem subtítulo nem texto explicativo): o que o papel traz a mais, como o subtítulo do modelo do
   escritório, fica no documento impresso, não na tela.
@@ -138,7 +143,7 @@ Um botão **cheio** (primário) por tela, para a ação principal. Os outros sã
 
 - O PDF do documento físico assinado entra pelo cartão "Documentos escaneados" da ficha (`templates/ficha.html`, `anexos.py`): lista com o chip PDF, o título, quando e por quem foi
   enviado e o tamanho; **Abrir** (outra aba), **Baixar** e **Remover** (com confirmação). Quem removeu esconde; só o administrador vê o removido (tracejado, título riscado) e restaura
-  ou apaga de vez. O formulário de envio fica embaixo do cartão, com o limite dito na tela e conferido no navegador antes de enviar (`data-limite`); o servidor confere de novo.
+  ou apaga de vez. O formulário de envio fica embaixo do cartão: a área "Escolher arquivo" (ver Formulários) com o limite dito nela e conferido no navegador antes de enviar (`data-limite`), o título e o botão **Anexar** em pastel (`.botao.suave`, com o ícone de envio); o servidor confere de novo.
 - Quem não pode ver os documentos (`documentos`) não vê o cartão; quem vê mas não pode anexar (`anexar`) não vê o formulário nem o Remover. Na impressão da ficha o formulário e os botões saem.
 
 ## Listas que crescem (internos)

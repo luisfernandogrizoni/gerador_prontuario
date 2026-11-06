@@ -4,7 +4,9 @@
 //  2) o que antes eram atributos nas tags (onclick, onsubmit, onchange), que a política não deixa rodar, agora são atributos de dados:
 //     data-confirmar="texto"   no <form> ou no <button>: pergunta antes de enviar;
 //     data-imprimir            no botão: abre a janela de impressão;
-//     data-trocar-emissor      no <select>: recarrega o documento com quem assina (função trocarEmissor da própria página).
+//     data-trocar-emissor      no <select>: recarrega o documento com quem assina (função trocarEmissor da própria página);
+//  3) nomes e endereços escritos do mesmo jeito (data-forma);
+//  4) escolher arquivo (data-escolher-arquivo): nome e tamanho depois da escolha, aviso na hora, destaque no arrasto.
 (function () {
   var meta = document.querySelector('meta[name="csrf-token"]');
   var token = meta ? meta.content : "";
@@ -98,4 +100,62 @@
     c.value = novo;
     c.dispatchEvent(new Event("input", { bubbles: true }));         // o salvamento automático (rascunho.js) e as máscaras enxergam a mudança
   });
+
+  // ---- 4) escolher arquivo: <span class="escolher-arquivo" data-escolher-arquivo data-extensao="pdf" data-limite="bytes"> com o <input type="file"> por cima dela
+  //         (o HTML está em templates/ficha.html, o estilo em base.html). Escolhido o arquivo, mostra o nome e o tamanho (chip PDF, como um item da lista) e troca o botão
+  //         para "Trocar arquivo"; se o tipo ou o tamanho não servem, avisa na hora e trava o envio (o servidor confere de novo). Soltar um arquivo sobre a área já o
+  //         escolhe: é do próprio navegador, o script só destaca a área durante o arrasto e impede que um arquivo solto FORA dela abra o PDF no lugar da página.
+  function tamanhoLegivel(n) {
+    return n < 1048576 ? Math.max(1, Math.round(n / 1024)) + " KB" : (n / 1048576).toFixed(1).replace(".", ",") + " MB";
+  }
+  function atualizarEscolha(area, avisar) {
+    var campo = area.querySelector('input[type="file"]'), titulo = area.querySelector(".escolher-titulo"),
+        dica = area.querySelector(".escolher-dica"), botao = area.querySelector(".escolher-botao");
+    if (!campo || !titulo || !dica || !botao) return;
+    if (!area._originais) area._originais = { titulo: titulo.innerHTML, dica: dica.innerHTML, botao: botao.textContent, dicaDoCampo: campo.title };   // o texto de antes da escolha, vindo da própria página
+    var f = campo.files && campo.files[0], aviso = "";
+    if (f) {
+      var ext = (area.getAttribute("data-extensao") || "").toLowerCase(), limite = Number(area.getAttribute("data-limite") || 0);
+      if (ext && !new RegExp("\\." + ext + "$", "i").test(f.name) && f.type !== "application/" + ext) aviso = "Só " + ext.toUpperCase() + " é aceito.";
+      else if (limite && f.size > limite) aviso = "O arquivo passa de " + Math.floor(limite / 1048576) + " MB. Escaneie de novo com resolução menor.";
+    }
+    campo.setCustomValidity(aviso);
+    area.classList.toggle("com-arquivo", !!f && !aviso);
+    area.classList.toggle("invalido", !!aviso);
+    if (f) {
+      titulo.textContent = f.name;
+      dica.textContent = aviso || tamanhoLegivel(f.size) + " · pronto para enviar";
+      botao.textContent = "Trocar arquivo";
+      campo.title = f.name;                                         // no lugar do "Nenhum arquivo escolhido" do navegador
+    } else {
+      titulo.innerHTML = area._originais.titulo; dica.innerHTML = area._originais.dica; botao.textContent = area._originais.botao; campo.title = area._originais.dicaDoCampo;
+    }
+    if (aviso && avisar) campo.reportValidity();
+  }
+  function areaDoEvento(e) { return e.target && e.target.closest ? e.target.closest("[data-escolher-arquivo]") : null; }
+  function arrastandoArquivos(e) { return !!(e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], "Files") >= 0); }
+  document.addEventListener("change", function (e) {
+    var area = areaDoEvento(e);
+    if (area && e.target.type === "file") atualizarEscolha(area, true);
+  });
+  document.addEventListener("dragover", function (e) {
+    if (!arrastandoArquivos(e) || !document.querySelector("[data-escolher-arquivo]")) return;
+    var area = areaDoEvento(e);
+    if (!area) { e.preventDefault(); e.dataTransfer.dropEffect = "none"; return; }               // fora da área: nada acontece, a página não é trocada pelo PDF
+    area.classList.add("arrastando");
+  });
+  document.addEventListener("dragleave", function (e) {
+    var area = areaDoEvento(e);
+    if (area) area.classList.remove("arrastando");
+  });
+  document.addEventListener("drop", function (e) {
+    if (!arrastandoArquivos(e) || !document.querySelector("[data-escolher-arquivo]")) return;
+    var area = areaDoEvento(e);
+    if (area) area.classList.remove("arrastando"); else e.preventDefault();
+  });
+  function atualizarTodasAsEscolhas() {                              // ao abrir e ao voltar pelo histórico (o navegador pode devolver o arquivo ao campo)
+    Array.prototype.forEach.call(document.querySelectorAll("[data-escolher-arquivo]"), function (a) { atualizarEscolha(a, false); });
+  }
+  document.addEventListener("DOMContentLoaded", atualizarTodasAsEscolhas);
+  window.addEventListener("pageshow", function (e) { if (e.persisted) atualizarTodasAsEscolhas(); });
 })();
