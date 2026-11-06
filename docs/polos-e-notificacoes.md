@@ -61,4 +61,5 @@ O texto livre que a assistente social escreve quando a pessoa recebe baixa, de p
 
 - Toda rota nova entra em `permissoes.REGRAS` e na classificação da auditoria (um teste confere).
 - `baixa_em` está em `CamposDeFormulario.CAMPOS_DO_SISTEMA`: coluna nova de `Internacao` que não vem do formulário precisa estar lá.
-- Rascunho automático (`rascunhos.py`) ainda não cobre o relatório de alta; o texto só é guardado ao salvar.
+- O relatório de alta tem o salvamento automático dos outros formulários (`rascunhos.TIPOS["alta"]`): uma cópia privada, no servidor, a cada pausa na digitação.
+  Gravar de verdade (qualquer botão da barra) a encerra; a tela já abre com ela, com o botão de descartar. Em *Rascunhos* aparece como "Relatório de alta".

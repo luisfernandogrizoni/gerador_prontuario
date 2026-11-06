@@ -559,12 +559,12 @@ o navegador trava, a aba fecha sem querer, a rede do escritório cai ou o login 
 - **Como funciona.** A cada pausa de 2,5 s na digitação (no máximo 20 s digitando direto, e ao trocar de aba ou fechar), a página manda uma cópia do formulário
   para o servidor. A cópia é um **rascunho**: nunca vira registro sozinha, não valida nem aparece nas listas, nas fichas, nos relatórios ou nos impressos; só o botão
   *Salvar* grava no prontuário, como sempre. Abre-se o rascunho por **Rascunhos** (no menu, com o número quando há algum), por `?rascunho=`, ou direto: nas telas de um
-  registro (editar, acolhimento, ficha de saúde...) a tela já abre com o rascunho da pessoa, com um aviso e o botão *Descartar rascunho* para voltar ao que está gravado;
+  registro (editar, acolhimento, relatório de alta, ficha de saúde...) a tela já abre com o rascunho da pessoa, com um aviso e o botão *Descartar rascunho* para voltar ao que está gravado;
   se o registro foi alterado por outra pessoa depois de o rascunho começar, o aviso diz que gravar passa por cima.
 - **Onde fica (decisão): no servidor, não no navegador.** Dado de saúde não fica solto no computador de quem digitou, entra no backup e obedece às regras de acesso do
   resto. Tabela `rascunhos`, uma linha por formulário em andamento.
-- **Quem vê: só quem digitou.** Toda consulta é pelo login da pessoa; o token de outra pessoa não encontra nada. Nos formulários sigilosos (acolhimento social, ficha de
-  saúde, registros de enfermagem, evolução) vale também a permissão de hoje: quem perdeu o acesso não vê o nome nem o conteúdo e só pode descartar. O administrador **não**
+- **Quem vê: só quem digitou.** Toda consulta é pelo login da pessoa; o token de outra pessoa não encontra nada. Nos formulários sigilosos (acolhimento social, relatório de alta,
+  ficha de saúde, registros de enfermagem, evolução) vale também a permissão de hoje: quem perdeu o acesso não vê o nome nem o conteúdo e só pode descartar. O administrador **não**
   lê rascunho de outra pessoa.
 - **Quanto dura: 30 dias sem mexer** (`DIAS_DE_VALIDADE`); depois some sozinho (a limpeza roda de hora em hora quando alguém guarda ou lista rascunhos). Gravar de verdade
   troca o rascunho por uma **lápide sem dados**, que dura 2 dias para uma cópia atrasada não ressuscitá-lo. Apagar um registro de vez (`exclusao.apagar`) leva os

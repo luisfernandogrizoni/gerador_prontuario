@@ -1,7 +1,7 @@
 """
 Salvamento automático e rascunhos.
 
-Um formulário longo (triagem, prontuário, acolhimento social, ficha de saúde, registro de enfermagem, evolução) leva minutos para ser
+Um formulário longo (triagem, prontuário, acolhimento social, relatório de alta, ficha de saúde, registro de enfermagem, evolução) leva minutos para ser
 preenchido. Uma queda de energia, uma aba fechada sem querer, um navegador travado, a rede que cai ou o login que vence no meio da digitação
 custavam o trabalho todo. Agora a página (static/rascunho.js) manda uma cópia do que foi digitado a cada pausa na digitação, e essa cópia é
 o **rascunho**. O rascunho nunca vira registro sozinho: só a gravação de verdade (o botão Salvar, que valida) escreve no prontuário.
@@ -11,7 +11,7 @@ Onde fica e quem vê:
   * **No servidor, não no navegador**: dado de saúde não fica solto no computador de quem digitou, entra no backup e obedece às mesmas regras
     de acesso do resto. Tabela `rascunhos` (modelos.Rascunho), uma linha por formulário em andamento.
   * **Só de quem digitou.** Toda consulta é por `usuario_id` da pessoa logada; um token que não é dela não encontra nada. Para os formulários
-    sigilosos (acolhimento social, ficha de saúde...) vale também a permissão de hoje: quem perdeu o acesso não vê nem continua o rascunho.
+    sigilosos (acolhimento social, relatório de alta, ficha de saúde...) vale também a permissão de hoje: quem perdeu o acesso não vê nem continua o rascunho.
   * **Dura 30 dias sem mexer** (DIAS_DE_VALIDADE) e some sozinho; apagar um registro de vez leva os rascunhos dele (exclusao.apagar).
   * **Sem senha**: campo de senha, o token CSRF e o botão apertado nunca vão (static/rascunho.js e CAMPOS_FORA). Cadastros (funcionários,
     níveis...) não têm rascunho.
@@ -72,6 +72,7 @@ TIPOS = {
     "triagem": Tipo("Triagem", lambda u: permissoes.pode("triagem", usuario=u), novo=True),
     "prontuario": Tipo("Prontuário", lambda u: permissoes.pode("internacao", usuario=u), novo=True),
     "acolhimento": Tipo("Acolhimento social", cadastros.pode_servico_social),
+    "alta": Tipo("Relatório de alta", cadastros.pode_servico_social),
     "saude": Tipo("Ficha de saúde (anamnese)", cadastros.pode_escrever_saude),
     "enfermagem": Tipo("Registro de enfermagem", cadastros.pode_assinar_saude),
     "evolucao": Tipo("Evolução multiprofissional", cadastros.pode_evoluir),
@@ -266,7 +267,8 @@ def quando_legivel(momento, agora=None):
 
 def _alterado_depois(rascunho, internacao):
     """O registro foi mudado (por quem for) depois que este rascunho começou? Então gravar o rascunho passa por cima dessa mudança."""
-    registro = {"triagem": internacao, "prontuario": internacao, "acolhimento": internacao.relatorio_social, "saude": internacao.ficha_saude}.get(rascunho.tipo)
+    registro = {"triagem": internacao, "prontuario": internacao, "acolhimento": internacao.relatorio_social, "alta": internacao.relatorio_alta,
+                "saude": internacao.ficha_saude}.get(rascunho.tipo)
     em = getattr(registro, "atualizado_em", None)
     return bool(em and em > rascunho.criado_em)
 
@@ -303,7 +305,8 @@ def endereco(tipo, internacao_id, token=None):
         if internacao_id:
             return url_for("editar_internacao", id=internacao_id)
         return url_for("nova_triagem" if tipo == "triagem" else "formulario", rascunho=token)
-    rota = {"acolhimento": "relatorio_social", "saude": "ficha_saude", "enfermagem": "saude_enfermagem", "evolucao": "saude_evolucao"}.get(tipo)
+    rota = {"acolhimento": "relatorio_social", "alta": "relatorio_de_alta", "saude": "ficha_saude", "enfermagem": "saude_enfermagem",
+            "evolucao": "saude_evolucao"}.get(tipo)
     return url_for(rota, id=internacao_id) if rota and internacao_id else ""
 
 
@@ -318,8 +321,10 @@ def listar(usuario):
         retomavel = tipo is not None and tipo.pode(usuario) and (r.internacao_id is None or internacao is not None)
         if retomavel and internacao is not None and r.tipo in ("triagem", "prontuario"):
             retomavel = (r.tipo == "triagem") == internacao.e_triagem        # o registro mudou de triagem para internação depois
+        if retomavel and internacao is not None and r.tipo == "alta":
+            retomavel = internacao.status == "inativo"                       # o relatório de alta é de quem tem baixa: se voltou a ficar ativo, a tela não abre
         url = endereco(r.tipo, r.internacao_id, r.token) if retomavel else ""
-        sigiloso = r.tipo in ("acolhimento", "saude", "enfermagem", "evolucao")
+        sigiloso = r.tipo in ("acolhimento", "alta", "saude", "enfermagem", "evolucao")
         itens.append({"token": r.token, "rotulo": tipo.rotulo if tipo else r.tipo, "titulo": (r.titulo if retomavel or not sigiloso else "") or "(sem nome)",
                       "quando": quando_legivel(r.atualizado_em), "url": url, "de_registro": r.internacao_id is not None,
                       "motivo": "" if retomavel else "Você não tem mais acesso a esta tela, ou o registro foi excluído ou mudou."})
