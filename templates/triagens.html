@@ -207,10 +207,13 @@
   }
 
   function seletorStatus(item) {
-    if (!PODE.triagem) return selo(item.status_txt, item.status);        // sem permissão para mudar a situação: só mostra
+    // quem só admite (a enfermeira, do polo Saúde) escolhe entre a situação de agora e "Admitido"; quem mexe nas triagens escolhe qualquer situação
+    const soAdmite = !PODE.triagem && PODE.admitir && (item.status === "em_admissao" || item.status === "lista_espera");
+    if (!PODE.triagem && !soAdmite) return selo(item.status_txt, item.status);        // sem permissão para mudar a situação: só mostra
     const sel = document.createElement("select");
     sel.className = "seletor " + item.status;
-    for (const [valor, rotulo] of OPCOES) sel.add(new Option(rotulo, valor, false, valor === item.status));
+    const opcoes = soAdmite ? [[item.status, item.status_txt], ["ativo", "Admitido → internos"]] : OPCOES;
+    for (const [valor, rotulo] of opcoes) sel.add(new Option(rotulo, valor, false, valor === item.status));
     sel.addEventListener("change", async () => {
       let dados = { status: sel.value };
       if (sel.value === "ativo") {

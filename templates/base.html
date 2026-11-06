@@ -397,6 +397,11 @@
     .aviso-rascunho .texto { flex: 1 1 320px; }
     .aviso-rascunho .atencao { display: block; margin-top: 4px; color: var(--atencao); font-weight: 600; }
     .aviso-rascunho form { margin: 0; }
+    .topo .usuario .sino { position: relative; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; color: var(--suave); text-decoration: none; }
+    .topo .usuario .sino:hover { background: #f2f4f7; color: var(--vermelho); }
+    .topo .usuario .sino .icone { width: 19px; height: 19px; }
+    .topo .usuario .sino .contagem { position: absolute; top: -3px; right: -5px; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--perigo-suave); color: var(--perigo);
+                                     border: 1px solid var(--perigo-borda); font-size: .68rem; font-weight: 700; line-height: 16px; text-align: center; }
     .topo .item .contagem { min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--info-suave); color: var(--info); border: 1px solid var(--info-borda);
                             font-size: .74rem; line-height: 18px; text-align: center; }
     body:has(.barra-salvar) .mensagens { bottom: 84px; }
@@ -554,6 +559,7 @@
       <symbol id="i-pontos" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
       <symbol id="i-cadeado" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
       <symbol id="i-fechar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+      <symbol id="i-sino" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
       <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
     </defs>
   </svg>
@@ -579,6 +585,10 @@
       </div>
       {% endif %}
       <span class="usuario">
+        {% if not restricao_da_conta and mostra_o_sino() %}{% set nao_lidas = notificacoes_nao_lidas() %}
+        <a class="sino" href="{{ url_for('lista_notificacoes') }}" title="Notificações{{ ' · ' ~ nao_lidas ~ (' não lidas' if nao_lidas != 1 else ' não lida') if nao_lidas }}"
+           aria-label="Notificações{{ ': ' ~ nao_lidas ~ (' não lidas' if nao_lidas != 1 else ' não lida') if nao_lidas }}"><svg class="icone"><use href="#i-sino"/></svg>{% if nao_lidas %}<span class="contagem">{{ nao_lidas }}</span>{% endif %}</a>
+        {% endif %}
         <a class="eu" href="{{ url_for('seguranca') }}" title="Minha segurança">
           <span class="inicial">{{ usuario_atual.nome[:1] }}</span><span class="nome">{{ usuario_atual.nome }}</span></a>
         <form method="post" action="{{ url_for('sair') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button>Sair</button></form>

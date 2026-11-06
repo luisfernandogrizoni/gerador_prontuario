@@ -1,5 +1,5 @@
 """
-Histórico de versões dos relatórios sigilosos: o acolhimento social (servico_social.py) e a ficha de saúde, a anamnese (ficha_saude.py).
+Histórico de versões dos relatórios sigilosos: o acolhimento social (servico_social.py), a ficha de saúde, a anamnese (ficha_saude.py), e o relatório de alta (relatorio_alta.py).
 
 Não há adendos. Depois de finalizado, o relatório continua sendo de quem o escreve (a assistente social, a enfermeira): ele o altera direto, e cada
 alteração fica guardada aqui como uma versão completa, com data, hora e quem alterou. A versão 1 é o relatório como foi finalizado (nos que foram
@@ -14,18 +14,19 @@ from datetime import datetime
 from types import SimpleNamespace
 
 import ficha_saude
+import relatorio_alta
 import servico_social
 from modelos import VersaoRelatorio
 
-SOCIAL, SAUDE = "social", "saude"
-TIPOS = {SOCIAL: "Acolhimento social", SAUDE: "Ficha de saúde"}
+SOCIAL, SAUDE, ALTA = "social", "saude", "alta"
+TIPOS = {SOCIAL: "Acolhimento social", SAUDE: "Ficha de saúde", ALTA: "Relatório de alta"}
 FINALIZADO, ALTERADO, ADENDO = "finalizado", "alterado", "adendo"
 EVENTOS = {FINALIZADO: "Finalizado", ALTERADO: "Alterado", ADENDO: "Adendo (de antes do histórico)"}
 LIMITE_DO_ROTULO = 60
 
 
 def _campos(tipo):
-    return servico_social.CAMPOS if tipo == SOCIAL else ficha_saude.CAMPOS
+    return {SOCIAL: servico_social.CAMPOS, SAUDE: ficha_saude.CAMPOS, ALTA: relatorio_alta.CAMPOS}[tipo]
 
 
 def rotulo_do_campo(tipo, chave):

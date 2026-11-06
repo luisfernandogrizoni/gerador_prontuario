@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% from "_voltar.html" import linha_voltar with context %}
+{#
+  As notificações da própria pessoa (notificacoes.py): as mais novas primeiro, as não lidas em destaque. Abrir a ficha de um acolhido marca como lidas as dela.
+  Variáveis: itens (as Notificacao), nao_lidas (quantas).
+#}
+
+{% block titulo %}Notificações{% endblock %}
+
+{% block estilo %}
+  .lista-notificacoes { list-style: none; margin: 0; padding: 0; background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio); box-shadow: var(--sombra); overflow: hidden; }
+  .lista-notificacoes li { display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; padding: 13px 18px; border-bottom: 1px solid #f0f2f5; }
+  .lista-notificacoes li:last-child { border-bottom: 0; }
+  .lista-notificacoes li.nova { background: var(--info-suave); }
+  .lista-notificacoes .texto { flex: 1 1 320px; min-width: 0; overflow-wrap: anywhere; }
+  .lista-notificacoes .texto small { display: block; margin-top: 2px; color: var(--suave); }
+  .lista-notificacoes .tipo { flex: none; }
+  .vazio-notificacoes { padding: 26px 20px; color: var(--suave); }
+  .barra-notificacoes { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 14px; }
+  .barra-notificacoes form { margin: 0; }
+{% endblock %}
+
+{% block conteudo %}
+<main class="largo">
+  {{ linha_voltar(url_for('home')) }}
+  <div class="pagina-topo">
+    <div class="titulo">
+      <h1>Notificações</h1>
+      <p class="ajuda">O que aconteceu nas fichas e você precisa saber. Abrir a ficha marca como lida.</p>
+    </div>
+  </div>
+
+  {% if nao_lidas %}
+  <div class="barra-notificacoes">
+    <form method="post" action="{{ url_for('marcar_notificacoes_lidas') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="botao secundario">Marcar todas como lidas ({{ nao_lidas }})</button></form>
+  </div>
+  {% endif %}
+
+  {% if itens %}
+  <ul class="lista-notificacoes">
+    {% for n in itens %}
+    <li class="{{ 'nova' if not n.lida_em }}">
+      <span class="tipo selo {{ 'desistiu' if n.tipo == 'baixa' else 'ativo' }}">{{ tipos.get(n.tipo, n.tipo) }}</span>
+      <span class="texto">{{ n.texto }}<small>{{ n.criado_em.strftime('%d/%m/%Y às %H:%M') }}{{ ' · lida em ' ~ n.lida_em.strftime('%d/%m/%Y às %H:%M') if n.lida_em else ' · não lida' }}</small></span>
+      <a class="botao pequeno secundario" href="{{ url_for('ficha', id=n.internacao_id) }}">Abrir ficha</a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+    <div class="vazio-notificacoes">Nenhuma notificação por enquanto.</div>
+  {% endif %}
+</main>
+{% endblock %}

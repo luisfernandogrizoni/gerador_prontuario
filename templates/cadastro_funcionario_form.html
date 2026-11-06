@@ -61,11 +61,13 @@
       {{ legenda('Equipe e relatórios sigilosos', 'coracao') }}
       <div class="grade">
         {% if pode_acessos %}
-          {{ f.escolha('profissao', 'Função na equipe', profissoes, 'c3', vazio='Nenhuma') }}
+          {{ f.escolha('polo', 'Polo de trabalho', polos, 'c2', vazio='Não definido') }}
+          {{ f.escolha('profissao', 'Função na equipe', profissoes, 'c2', vazio='Nenhuma') }}
         {% else %}
-        <label class="c3">Função na equipe<input value="{{ funcao_atual }}" readonly></label>
+        <label class="c2">Polo de trabalho<input value="{{ polo_atual }}" readonly></label>
+        <label class="c2">Função na equipe<input value="{{ funcao_atual }}" readonly></label>
         {% endif %}
-        {{ f.entrada('registro_profissional', 'Registro profissional', 'c3', attrs={'maxlength': 30, 'placeholder': 'o do conselho da função (CRESS, COREN...)'}) }}
+        {{ f.entrada('registro_profissional', 'Registro profissional', 'c2', attrs={'maxlength': 30, 'placeholder': 'o do conselho da função (CRESS, COREN...)'}) }}
       </div>
       <div class="caixas">
         {% if pode_acessos %}

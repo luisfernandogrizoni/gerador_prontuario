@@ -467,6 +467,11 @@ def _fecho(relatorio):
     return [situacao, Paragrafo(["_" * 38], "centro", antes=44, unido_ao_proximo=True), *legenda, Paragrafo(["Carimbo/Assinatura"], "centro")]
 
 
+# o relatório de alta (relatorio_alta.py) usa a mesma linha "rótulo: valor" e o mesmo fecho com a assinatura
+linha_de_dado = _linha
+fecho_da_assinatura = _fecho
+
+
 def _cabecalho_da_secao(numero, secao, do_acolhido, do_responsavel):
     """O título da seção e, nas duas primeiras, os dados que o cadastro já tem (não são digitados de novo)."""
     if numero == 1:
