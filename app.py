@@ -1051,11 +1051,12 @@ def relatorio_social(id):
 # ------------------------------------------------------- relatório de alta
 # O texto livre da assistente social quando a pessoa recebe baixa (relatorio_alta.py). Sigiloso, como o acolhimento social: escrevem a assistente social e o
 # administrador; quem recebeu a permissão de ler os sigilosos lê depois de finalizado; os outros só veem na ficha se foi feito.
-def _tela_alta(internacao, form, erros, status=200):
+def _tela_alta(internacao, form, erros, status=200, rascunho=None):
     relatorio = internacao.relatorio_alta
     valores = {"texto": form.get("texto") or ""} if form is not None else relatorio_alta.valores(relatorio)
     return render_template("relatorio_alta_form.html", i=internacao, v=valores, erros=erros, relatorio=relatorio,
                            basicos=relatorio_alta.dados_basicos(internacao, relatorios.hoje_no_brasil()),
+                           rascunho=rascunhos.da_tela(g.usuario, "alta", internacao=internacao, rascunho=rascunho, form=None if rascunho else form),
                            alteracao=versoes.ultima_alteracao(internacao, versoes.ALTA)), status
 
 
@@ -1085,6 +1086,7 @@ def relatorio_de_alta(id):
                                                   assinatura=cadastros_.assinatura_do_usuario(g.get("usuario")))
         if erros:
             return _tela_alta(internacao, request.form, erros, 400)
+        rascunhos.concluir(g.usuario, request.form.get("rascunho"), "alta", id)
         if finalizado:
             if versoes.quantas(internacao, versoes.ALTA) > antes:
                 auditoria.registrar("alta.alterar", "internacao", id, internacao.pessoa_id, versoes.descricao_da_ultima(internacao, versoes.ALTA))
@@ -1102,7 +1104,8 @@ def relatorio_de_alta(id):
             return redirect(url_for("ver_impressos", id=id, itens="relatorio-alta", imprimir=1))
         flash("Rascunho salvo.")
         return redirect(url_for("relatorio_de_alta", id=id))
-    return _tela_alta(internacao, None, {})
+    rascunho = rascunhos.do_registro(g.usuario, "alta", id)
+    return _tela_alta(internacao, rascunhos.formulario(rascunho) if rascunho else None, {}, rascunho=rascunho)
 
 
 @app.get("/internacoes/<int:id>/rejeicao")

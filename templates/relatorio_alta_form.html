@@ -1,11 +1,12 @@
 {% extends "base.html" %}
 {% from "_voltar.html" import linha_voltar with context %}
 {% from "_cartao.html" import legenda %}
+{% from "_rascunho.html" import campo_rascunho, aviso_rascunho with context %}
 {#
   O relatório de alta, escrito direto no sistema (relatorio_alta.py): um texto livre, sem perguntas fixas. O documento sai no timbre, com os dados básicos do
   acolhido e a assinatura da assistente social (nome e CRESS).
   Variáveis: i (internação), v ({texto}), erros, relatorio (o já gravado, ou None), basicos ([(rótulo, valor)] que vêm do cadastro), alteracao (a última alteração
-  depois de finalizado, ou None).
+  depois de finalizado, ou None), rascunho (o salvamento automático: rascunhos.Tela).
 #}
 
 {% set titulo = 'Relatório de alta' %}
@@ -44,6 +45,7 @@
     {% endif %}
   </div>
   <p class="ajuda">{{ i.pessoa.nome }} · {{ i.status_txt }}</p>
+  {{ aviso_rascunho(rascunho) }}
 
   <section class="cadastro-resumo">
     <h3>Do cadastro do acolhido (sai no documento)</h3>
@@ -53,6 +55,7 @@
 
   <div>      {# (sem .form-grade: ele reserva a coluna do índice de seções, que não existe com uma seção só) #}
   <form method="post" id="form-relatorio" data-indice><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {{ campo_rascunho(rascunho) }}
     {% if erros %}<div class="caixa-erros"><strong>{{ erros['_'] if erros.get('_') else 'Confira o campo marcado em vermelho.' }}</strong></div>{% endif %}
     <fieldset class="tom-azul">
       {{ legenda('Relatório', 'documento') }}
@@ -85,4 +88,5 @@
     if (!confirm("Finalizar o relatório de alta de " + {{ i.pessoa.nome | tojson }} + "?")) e.preventDefault();
   });
 </script>
+<script src="{{ url_for('static', filename='rascunho.js') }}"></script>
 {% endblock %}
