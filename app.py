@@ -111,6 +111,7 @@ import busca_de_internos
 import notificacoes
 import painel
 import permissoes
+import conferencia
 import rascunhos
 import relatorio_alta
 import relatorios
@@ -244,8 +245,15 @@ def _quantos_rascunhos():
     return g.quantos_rascunhos
 
 
+def _quantos_a_conferir():
+    """Quantos registros importados ainda esperam a conferência (o selo do menu), contados uma vez por requisição e só se a tela perguntar."""
+    if "quantos_a_conferir" not in g:
+        g.quantos_a_conferir = conferencia.quantos_a_conferir()
+    return g.quantos_a_conferir
+
+
 # pode('triagem') nos templates esconde o que a pessoa não pode usar; permissoes_js() leva o mesmo ao JavaScript das listas
-app.context_processor(lambda: {"quantos_rascunhos": _quantos_rascunhos, "usuario_atual": g.get("usuario"), "e_administrador": _e_administrador(),
+app.context_processor(lambda: {"quantos_rascunhos": _quantos_rascunhos, "quantos_a_conferir": _quantos_a_conferir, "usuario_atual": g.get("usuario"), "e_administrador": _e_administrador(),
                                "pode_servico_social": _pode_servico_social(), "pode_ler_social": _SobDemanda(_pode_ler_social),
                                "pode_escrever_saude": _SobDemanda(_pode_escrever_saude), "pode_assinar_saude": _SobDemanda(_pode_assinar_saude),
                                "pode_ler_saude": _SobDemanda(_pode_ler_saude), "pode_evoluir": _SobDemanda(_pode_evoluir),
@@ -706,6 +714,7 @@ def gerar():
     if erros:
         pessoa = db.session.get(Pessoa, request.form.get("pessoa_id", type=int) or 0)
         return render_template("formulario.html", d=request.form, erros=erros, pessoa=pessoa, anterior=None, editando=existente,
+                               conferir=conferencia.filtros_de(request.form, "c_"), faltas=conferencia.faltas(existente) if existente and existente.a_conferir else [],
                                rascunho=rascunhos.da_tela(g.usuario, "prontuario", alvo=request.form.get("internacao_id", type=int), form=request.form),
                                **servicos.opcoes_formulario(request.form.get("convenio", ""))), 400
     rascunhos.concluir(g.usuario, request.form.get("rascunho"), "prontuario", request.form.get("internacao_id", type=int))
@@ -714,9 +723,49 @@ def gerar():
         notificacoes.avisar_prontuario_novo(internacao, g.usuario)            # prontuário novo: se foi o Escritório, a enfermeira fica sabendo
     if era_ativo and internacao.status == "inativo":
         notificacoes.avisar_baixa(internacao, g.usuario)                      # a baixa veio pelo formulário do prontuário
+    if internacao.a_conferir and request.form.get("acao") in ("proximo", "conferido"):
+        return _seguir_conferindo(internacao, request.form.get("acao") == "conferido")
     # Post/Redirect/Get: a lista destaca a linha e, se foi "Salvar e baixar", baixa o .docx
     baixar = 1 if request.form.get("acao") == "baixar" and permissoes.pode("documentos") else None
     return redirect(url_for("lista_internos", novo=internacao.id, baixar=baixar))
+
+
+# ===================================================================== conferência dos importados (conferencia.py)
+def _seguir_conferindo(internacao, marcar):
+    """Depois de salvar um registro importado: (se foi o botão 'Conferido') marca como conferido e abre o próximo da fila, com os mesmos filtros."""
+    filtros = conferencia.filtros_de(request.form, "c_")
+    if marcar:
+        conferencia.marcar(internacao, _nome_do_usuario(), True)
+        auditoria.registrar("conferido.marcar", "internacao", internacao.id, internacao.pessoa_id, "ao salvar o prontuário")
+    feito = f"{internacao.pessoa.nome}: salvo{' e marcado como conferido' if marcar else ''}."
+    proximo = conferencia.proxima(internacao, filtros)
+    if proximo is None:
+        flash(feito + " Não há mais ninguém na fila.")
+        return redirect(url_for("lista_para_conferir", **conferencia.como_argumentos(filtros)))
+    flash(f"{feito} Agora: {proximo.pessoa.nome}.")
+    return redirect(url_for("editar_internacao", id=proximo.id, conferir=1, **conferencia.como_argumentos(filtros)))
+
+
+@app.get("/conferir")
+def lista_para_conferir():
+    filtros = conferencia.filtros_de(request.args)
+    return render_template("conferir.html", f=filtros, r=conferencia.consultar(filtros, request.args.get("pagina", type=int) or 1), faltas=conferencia.FALTAS,
+                           situacoes=conferencia.SITUACOES, origens=conferencia.origens(), progresso=conferencia.progresso(), args_dos_filtros=conferencia.como_argumentos(filtros))
+
+
+@app.post("/internacoes/<int:id>/conferido")
+def marcar_conferido(id):
+    internacao = _buscar(Internacao, id)
+    if not internacao.importado:
+        flash("Só se confere um registro importado de pastas e planilhas antigas.")
+        return redirect(url_for("ficha", id=id))
+    desfazer = request.form.get("desfazer") == "1"
+    conferencia.marcar(internacao, _nome_do_usuario(), not desfazer)
+    auditoria.registrar("conferido.desfazer" if desfazer else "conferido.marcar", "internacao", id, internacao.pessoa_id, "")
+    flash(f"{internacao.pessoa.nome}: conferência reaberta." if desfazer else f"{internacao.pessoa.nome}: marcado como conferido com o prontuário físico.")
+    if request.form.get("voltar") == "lista":
+        return redirect(url_for("lista_para_conferir"))
+    return redirect(url_for("ficha", id=id))
 
 
 # ===================================================================== ficha
@@ -806,6 +855,7 @@ def editar_internacao(id):
         dados = rascunhos.formulario(rascunho)
         dados["internacao_id"], dados["pessoa_id"] = str(internacao.id), str(internacao.pessoa_id)
     return render_template(modelo, d=dados, erros={}, pessoa=internacao.pessoa, anterior=None, editando=internacao,
+                           conferir=conferencia.filtros_de(request.args), faltas=conferencia.faltas(internacao) if internacao.a_conferir else [],
                            rascunho=rascunhos.da_tela(g.usuario, tipo, internacao=internacao, rascunho=rascunho),
                            **servicos.opcoes_formulario(dados.get("convenio") or internacao.convenio))
 

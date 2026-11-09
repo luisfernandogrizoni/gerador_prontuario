@@ -172,9 +172,15 @@
     </div>
   </header>
 
-  {% if i.importado %}
-  <div class="caixa-info" role="note"><strong>Registro importado</strong> ({{ i.origem_txt }}). São dados parciais: confira e complete o que faltar (datas, convênio, CPF).
-    {% if pode('internacao') %}<a href="{{ url_for('editar_internacao', id=i.id) }}">Editar</a>{% endif %}</div>
+  {% if i.a_conferir %}
+  <div class="caixa-info" role="note"><strong>Registro importado</strong> ({{ i.origem_txt }}). São dados parciais: confira com o prontuário físico e complete o que faltar (datas, convênio, CPF).
+    {% if pode('internacao') %}<span style="display: inline-flex; gap: 8px; flex-wrap: wrap; margin-left: 8px; vertical-align: middle;">
+      <a class="botao pequeno" href="{{ url_for('editar_internacao', id=i.id, conferir=1) }}">Conferir agora</a>
+      <form method="post" action="{{ url_for('marcar_conferido', id=i.id) }}" style="margin: 0;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="botao pequeno secundario" type="submit">Marcar como conferido</button></form>
+    </span>{% endif %}</div>
+  {% elif i.conferido %}
+  <div class="caixa-info" role="note">Registro importado ({{ i.origem_txt }}), <strong>conferido com o prontuário físico</strong> por {{ i.conferido_por or '—' }} em {{ i.conferido_em.strftime('%d/%m/%Y') }}.
+    {% if pode('internacao') %}<form method="post" action="{{ url_for('marcar_conferido', id=i.id) }}" style="display: inline; margin: 0 0 0 8px;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="desfazer" value="1"><button class="botao pequeno secundario" type="submit">Reabrir conferência</button></form>{% endif %}</div>
   {% endif %}
 
   <div class="ficha-grade">

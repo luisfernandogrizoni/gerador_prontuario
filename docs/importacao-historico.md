@@ -1,13 +1,17 @@
 # Importar registros históricos (ex-residentes de pastas e planilhas antigas)
 
 Pedido do usuário em 2026-11-09: "colocar essa galera toda no sistema". Um levantamento da pasta `Internos` (OneDrive) e da `Lista de Internos.xlsx` contra o banco do
-servidor achou 436 pessoas, das quais 57 já estavam no sistema e **379 não**. Quase todas são ex-residentes antigos: 124 têm dados na planilha (datas, motivo, convênio,
-cidade, CPF) e 255 só têm o nome da pasta e o ano da pasta de saída. Os arquivos das pastas são, na maioria, Word antigo (só 187 são PDF), então **os documentos não
-entram**: entra só o cadastro. Este texto descreve o que o sistema ganhou para isso.
+servidor achou 434 pessoas, das quais 57 já estavam no sistema e **377 não** (a conta primeiro dizia 436 e 379: duas pastas-contêiner, "SAIU 2021" e "SAIU EM 2021 E 2022",
+tinham sido contadas como pessoas). Quase todas são ex-residentes antigos: 124 têm dados na planilha (datas, motivo, convênio, cidade, CPF) e o resto só tem o nome da pasta e o
+ano da pasta de saída. Os arquivos das pastas são, na maioria, Word antigo (só 187 são PDF), então **os documentos não entram**. Mas os 2.494 formulários Word do prontuário
+(ficha de primeiro contato, contrato terapêutico, informativo socioeconômico...) foram lidos e trouxeram, para quem faltava, CPF válido (151), nascimento (191) e data de entrada
+(219) que a planilha não tinha; isso entrou na lista de importação. Este texto descreve o que o sistema ganhou para isso e a tela **Para conferir**, em que a equipe completa
+cada registro com o prontuário de papel.
 
 ## Decisões
 
-- **Só o cadastro**: nome, CPF, nascimento, cidade, convênio, entrada, saída e motivo, quando existirem. Os documentos continuam nas pastas.
+- **Só o cadastro**: nome, CPF, nascimento, cidade, convênio, entrada, saída e motivo, quando existirem. Os documentos continuam nas pastas. O que o Word trouxe além disso (RG,
+  endereço, telefone, estado civil, escolaridade, religião, profissão, mãe, responsável, cartão SUS) está só na planilha de conferência: o script ainda não o importa.
 - **Nada é inventado**: quem não tem datas entra sem datas (inativo), com a marca "importado" e a origem ("Ex-Residentes / Saíram em 2024"), e o quadro de avisos não cobra a data.
 - **Uma internação por pessoa** nas pastas repetidas; se a lista trouxer duas entradas diferentes para a mesma pessoa, entram duas internações (há dado).
 - **O banco real nunca é alterado sem você pedir**: o script só simula por padrão, e gravar exige `--gravar`, backup e a palavra SIM.
@@ -20,8 +24,24 @@ entram**: entra só o cadastro. Este texto descreve o que o sistema ganhou para 
 - **Formulário do prontuário**: num registro importado a *data de internação* e o *convênio* deixam de ser obrigatórios (sem isso nem um CPF errado se corrigiria nele; o convênio
   em branco aparece como "A definir"). Ao salvar, um registro importado **continua inativo** mesmo sem término nem motivo (antes, sem eles, viraria ativo). Registro comum não muda.
 - **Ficha**: faixa azul "Registro importado (origem). São dados parciais: confira e complete o que faltar".
-- **Auditoria**: ação `importacao.lote` (importou ou desfez um lote).
+- **Auditoria**: ação `importacao.lote` (importou ou desfez um lote); `conferido.marcar` e `conferido.desfazer` (veja a tela Para conferir).
 - `requirements.txt` ganhou `openpyxl` (ler a lista em Excel).
+
+## A tela "Para conferir" (`conferencia.py`, `/conferir`)
+
+Depois de importar, quem está com a pasta de papel na mão completa cada registro. O item **Para conferir** do menu (com o número dos que faltam) aparece para quem pode editar prontuários
+(Escritório, enfermeira e administrador) e some quando não há importados.
+
+- **A fila** são os importados ainda não conferidos (`Internacao.origem` preenchida e `conferido_em` vazio), do mais recente para o mais antigo: pela data de saída ou de entrada; sem
+  data, pelo ano que a pasta de origem diz; "anos anteriores" por último; dentro do ano, por nome. Há um contador ("142 de 377 conferidos") e uma barra de progresso.
+- **Filtros**: nome, pasta de origem, "o que falta" (CPF, nascimento, data de entrada, data de saída, motivo, convênio, endereço, nome da mãe, responsável) e a situação (a conferir,
+  já conferidos, todos). "O que falta" é só um guia: o papel pode simplesmente não ter a informação, então **conferir é um ato explícito**, nunca automático.
+- **Formulário de conferência**: *Conferir* abre o formulário de prontuário do registro, com uma faixa que diz o que está em branco e dois botões a mais: **Salvar e ir para o próximo**
+  e **Conferido: salvar e ir para o próximo** (grava, marca como conferido e abre o seguinte da fila, com os mesmos filtros, que viajam em campos escondidos `c_q`, `c_origem`, `c_falta`).
+  Sem mais ninguém na fila, volta à lista dizendo isso. O botão Salvar comum nunca marca nada como conferido.
+- **Ficha**: a faixa do importado ganha *Conferir agora* e *Marcar como conferido*; depois de conferido, a faixa diz quem conferiu e quando e oferece *Reabrir conferência*.
+- **Dados**: `Internacao.conferido_em` e `conferido_por` (colunas novas, criadas sozinhas na subida; estão em `CAMPOS_DO_SISTEMA`). Marcar e reabrir entram na trilha de auditoria.
+- **Permissões**: `lista_para_conferir` e `marcar_conferido` usam a permissão `internacao` (e, por isso, o polo: a psicóloga e a médica não veem a tela).
 
 ## A lista
 
