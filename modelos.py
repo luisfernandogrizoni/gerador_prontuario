@@ -67,7 +67,7 @@ class CamposDeFormulario:
     """Comportamento comum: copiar formulário <-> colunas, convertendo pelo tipo."""
 
     CAMPOS_DO_SISTEMA = {"id", "pessoa_id", "internacao_id", "status", "criado_em", "atualizado_em",
-                         "envelope", "envelope_recebido_em", "excluido_em", "excluido_por", "exames_impressos_para", "baixa_em"}
+                         "envelope", "envelope_recebido_em", "excluido_em", "excluido_por", "exames_impressos_para", "baixa_em", "origem"}
     # como cada campo de texto é escrito (validacao.FORMAS): FULANO DE TAL -> Fulano de Tal. O que não está aqui fica como foi digitado.
     FORMAS = {}
 
@@ -215,6 +215,9 @@ class Internacao(CamposDeFormulario, db.Model):
     # --- quando a baixa foi dada no sistema: é daqui que se cobra o relatório de alta da assistente social. Vazio nas baixas de antes deste
     # recurso (e nas internações que já entraram inativas): elas não geram a cobrança.
     baixa_em: Mapped[datetime | None] = mapped_column(DateTime)
+    # --- de onde veio o registro quando não foi digitado no sistema (importar_historico.py): "<origem> | lote AAAAMMDD-HHMMSS". Vazio = digitado aqui.
+    # Um registro importado de pasta antiga pode estar sem datas (só se sabe o ano da pasta): o quadro de avisos não cobra a data e ele se edita sem ela.
+    origem: Mapped[str] = mapped_column(String(160), default="")
 
     # --- responsável (pode mudar de uma internação para outra)
     resp_nome: Mapped[str] = mapped_column(String(200), default="")
@@ -279,6 +282,20 @@ class Internacao(CamposDeFormulario, db.Model):
     @property
     def e_triagem(self):
         return self.status in STATUS_TRIAGEM
+
+    @property
+    def importado(self):
+        """Veio de uma importação (pastas e planilhas antigas), não foi digitado no sistema."""
+        return bool(self.origem)
+
+    @property
+    def origem_txt(self):
+        """De onde veio, sem o número do lote: "Ex-Residentes / Saíram em 2024"."""
+        return (self.origem or "").split(" | lote ")[0]
+
+    @property
+    def lote_da_importacao(self):
+        return (self.origem or "").partition(" | lote ")[2]
 
     @property
     def status_txt(self):
