@@ -723,7 +723,7 @@ def gerar():
         notificacoes.avisar_prontuario_novo(internacao, g.usuario)            # prontuário novo: se foi o Escritório, a enfermeira fica sabendo
     if era_ativo and internacao.status == "inativo":
         notificacoes.avisar_baixa(internacao, g.usuario)                      # a baixa veio pelo formulário do prontuário
-    if internacao.a_conferir and request.form.get("acao") in ("proximo", "conferido"):
+    if internacao.a_conferir and request.form.get("acao") in ("proximo", "conferido") and permissoes.pode("conferir"):
         return _seguir_conferindo(internacao, request.form.get("acao") == "conferido")
     # Post/Redirect/Get: a lista destaca a linha e, se foi "Salvar e baixar", baixa o .docx
     baixar = 1 if request.form.get("acao") == "baixar" and permissoes.pode("documentos") else None

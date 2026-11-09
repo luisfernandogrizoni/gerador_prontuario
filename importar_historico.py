@@ -12,10 +12,14 @@ Outras opções: --relatorio ARQ.csv (onde guardar o relatório), --usuario NOME
 A LISTA é uma planilha (.xlsx) ou CSV com UMA LINHA POR INTERNAÇÃO e estas colunas (a ordem não importa; só Nome é obrigatória):
 
     Nome | CPF | Nascimento | Cidade | Estado | Convênio | Entrada | Saída | Motivo | Origem | Forçar
+    RG | Endereço | Número | Bairro | Mãe | Responsável | Parentesco | CPF do responsável | RG do responsável        (estas nove são opcionais)
 
   * Linhas com o mesmo CPF (ou, sem CPF, o mesmo nome) são UMA pessoa com várias internações.
   * Datas: dd/mm/aaaa, aaaa-mm-dd ou data do Excel. Vazio, "-" e "Não informado" valem como "sem data": nada é inventado.
-  * CPF que não confere pelo dígito verificador entra em branco (e vai para o relatório como aviso).
+  * CPF que não confere pelo dígito verificador entra em branco (e vai para o relatório como aviso). O CPF do responsável segue a mesma regra.
+  * RG e RG do responsável: só dígitos (e um X no fim), de 5 a 13; fora disso entra em branco, com aviso. Pontos e traços são tirados.
+  * Endereço: a rua. O número vem na coluna Número ou, se ela estiver vazia, do fim do endereço ("Rua das Flores, 123." vira rua "Rua das Flores" e número "123").
+  * RG, Endereço, Número, Bairro e Mãe são da PESSOA (vale o primeiro valor das linhas dela); Responsável, Parentesco, CPF e RG do responsável são de CADA INTERNAÇÃO.
   * Convênio: Particular, CAPS AD, Prefeitura Tarumã (ou os nomes do Cadastros). Não reconhecido ou vazio fica em branco ("A definir").
   * Motivo: Conclusão, Desistência ou Desligamento. "Exclusão" vira Desligamento. Outros (Falecimento, Não informado) ficam em branco.
   * Origem: de onde veio (por exemplo "Ex-Residentes / Saíram em 2024"); aparece na ficha como "Registro importado".
@@ -43,7 +47,7 @@ import auditoria
 import backup
 import exclusao
 from modelos import Internacao, Pessoa, db
-from validacao import cpf_valido, escrever_bem, fmt_cpf, so_digitos
+from validacao import cpf_valido, escrever_bem, fmt_cpf, limpar_rg, rg_valido, so_digitos
 
 RAIZ = Path(__file__).resolve().parent
 ORIGEM_PADRAO = "Lista de importação"
@@ -56,7 +60,10 @@ CONVENIOS = {"particular": "Particular", "caps ad": "CAPS AD", "capsad": "CAPS A
              "prefeitura taruma": "Prefeitura Tarumã", "social": "Particular"}        # "Social" é Particular com contribuição R$ 0,00 (a categoria sai do valor)
 SEM_DADO = {"", "-", "—", "nao informado", "n/i", "ni", "indefinido", "nao consta"}
 CABECALHOS = {"nome": "nome", "cpf": "cpf", "nascimento": "nascimento", "data de nascimento": "nascimento", "cidade": "cidade", "estado": "estado", "uf": "estado",
-              "convenio": "convenio", "entrada": "entrada", "saida": "saida", "motivo": "motivo", "origem": "origem", "forcar": "forcar"}
+              "convenio": "convenio", "entrada": "entrada", "saida": "saida", "motivo": "motivo", "origem": "origem", "forcar": "forcar",
+              "rg": "rg", "endereco": "endereco", "numero": "numero", "bairro": "bairro", "mae": "mae", "nome da mae": "mae", "responsavel": "responsavel",
+              "nome do responsavel": "responsavel", "parentesco": "parentesco", "cpf do responsavel": "resp_cpf", "cpf responsavel": "resp_cpf",
+              "rg do responsavel": "resp_rg", "rg responsavel": "resp_rg"}
 
 
 # ------------------------------------------------------------------ texto e datas
@@ -94,7 +101,7 @@ def ler_data_da_lista(v):
         return None, f"data que não existe: \"{t}\""
 
 
-def ler_cpf(v):
+def ler_cpf(v, rotulo="CPF"):
     """(cpf só com dígitos ou '', aviso). O Excel apaga zeros à esquerda: completa com zeros se o dígito conferir."""
     if isinstance(v, float) and v.is_integer():          # célula numérica do Excel (12345678909.0): sem o ".0", senão o dígito a mais estraga o CPF
         v = int(v)
@@ -105,7 +112,39 @@ def ler_cpf(v):
         d = d.zfill(11)
     if len(d) == 11 and cpf_valido(d):
         return d, None
-    return "", f"CPF {v} não confere (dígito verificador): entrou sem CPF"
+    return "", f"{rotulo} {v} não confere (dígito verificador): entrou sem {rotulo}"
+
+
+def ler_rg(v, rotulo="RG"):
+    """(rg só com dígitos e X, aviso). Fora do formato do sistema (5 a 13 dígitos e, no fim, um X) entra em branco."""
+    if isinstance(v, float) and v.is_integer():          # célula numérica do Excel
+        v = int(v)
+    bruto = "" if v is None else str(v).strip()
+    if norm(bruto) in SEM_DADO:
+        return "", None
+    rg = limpar_rg(bruto)
+    if rg and rg_valido(rg):
+        return rg, None
+    return "", f"{rotulo} \"{bruto}\" fora do formato (5 a 13 dígitos e, no fim, um X): entrou sem {rotulo}"
+
+
+def texto_livre(v, forma):
+    """Texto da lista na forma do sistema (nome, local, frase); vazio, '-' e 'Não informado' viram em branco."""
+    t = "" if v is None else str(v).strip()
+    return "" if norm(t) in SEM_DADO else escrever_bem(forma, re.sub(r"\s+", " ", t))
+
+
+def separar_numero(endereco, numero):
+    """(rua, número). O número vem da coluna Número ou, se ela estiver vazia, do fim do endereço ('Rua das Flores, 123.')."""
+    if isinstance(numero, float) and numero.is_integer():
+        numero = int(numero)
+    endereco = "" if norm(str(endereco or "")) in SEM_DADO else re.sub(r"\s+", " ", str(endereco)).strip(" ,.;-")
+    numero = "" if norm(str(numero or "")) in SEM_DADO else re.sub(r"\s+", " ", str(numero)).strip(" ,.;")
+    if not numero:
+        m = re.fullmatch(r"(?P<rua>.+?)[\s,]+(?:n[ºo°]?\.?\s*)?(?P<num>\d{1,6}\s?[A-Za-z]?)", endereco, flags=re.I)
+        if m and len(m.group("rua")) >= 3 and not m.group("rua").isdigit():
+            endereco, numero = m.group("rua").strip(" ,.;-"), m.group("num").replace(" ", "")
+    return endereco, numero
 
 
 # ------------------------------------------------------------------ a lista
@@ -123,6 +162,15 @@ class Linha:
     motivo: str = ""
     origem: str = ""
     forcar: bool = False
+    rg: str = ""
+    endereco: str = ""
+    numero: str = ""
+    bairro: str = ""
+    mae: str = ""
+    resp_nome: str = ""
+    parentesco: str = ""
+    resp_cpf: str = ""
+    resp_rg: str = ""
     avisos: list = field(default_factory=list)
     erros: list = field(default_factory=list)
     resultado: str = ""            # criar | pular | recusar
@@ -194,6 +242,22 @@ def ler_lista(caminho, cat, hoje=None):
         L.cidade = escrever_bem("local", str(v.get("cidade") or "").strip())
         uf = str(v.get("estado") or "").strip().upper()
         L.estado = uf if re.fullmatch(r"[A-Z]{2}", uf) else ""
+        # RG, endereço, mãe e responsável (os da pessoa e os da internação)
+        L.rg, aviso = ler_rg(v.get("rg"))
+        if aviso:
+            L.avisos.append(aviso)
+        rua, numero = separar_numero(v.get("endereco"), v.get("numero"))
+        L.endereco, L.numero = escrever_bem("local", rua), numero[:20]
+        L.bairro = texto_livre(v.get("bairro"), "local")
+        L.mae = texto_livre(v.get("mae"), "nome")
+        L.resp_nome = texto_livre(v.get("responsavel"), "nome")
+        L.parentesco = texto_livre(v.get("parentesco"), "frase")
+        L.resp_cpf, aviso = ler_cpf(v.get("resp_cpf"), "CPF do responsável")
+        if aviso:
+            L.avisos.append(aviso)
+        L.resp_rg, aviso = ler_rg(v.get("resp_rg"), "RG do responsável")
+        if aviso:
+            L.avisos.append(aviso)
         # convênio
         bruto = str(v.get("convenio") or "").strip()
         if norm(bruto) not in SEM_DADO:
@@ -279,7 +343,7 @@ def decidir(linhas, por_cpf, por_nome):
                 L.avisos.append("há outra linha com este mesmo nome e com CPF: confira se não é a mesma pessoa (entrou como pessoa separada)")
         # campos da pessoa: o primeiro valor que aparecer; divergência vira aviso
         dados = {}
-        for campo in ("cpf", "nascimento", "cidade", "estado"):
+        for campo in ("cpf", "nascimento", "cidade", "estado", "rg", "endereco", "numero", "bairro", "mae"):
             valores = [getattr(L, campo) for L in ls if getattr(L, campo)]
             dados[campo] = valores[0] if valores else ("" if campo != "nascimento" else None)
             if len(set(valores)) > 1:
@@ -301,13 +365,15 @@ def gravar(criar, lote):
             db.session.add(pessoa)
             d = g["dados"]
             pessoa.preencher({"nome": g["nome"], "cpf": d["cpf"], "nascimento": d["nascimento"].isoformat() if d["nascimento"] else "",
-                              "cidade": d["cidade"], "estado": d["estado"]})
+                              "cidade": d["cidade"], "estado": d["estado"], "rg": d["rg"], "endereco": d["endereco"], "numero": d["numero"], "bairro": d["bairro"],
+                              "mae": d["mae"]})
             n_pessoas += 1
             for L in g["linhas"]:
                 internacao = Internacao(pessoa=pessoa, status="inativo")
                 db.session.add(internacao)
                 iso = lambda x: x.isoformat() if x else ""
-                internacao.preencher({"inicio": iso(L.entrada), "data_documento": iso(L.entrada), "termino": iso(L.saida), "motivo": L.motivo, "convenio": L.convenio})
+                internacao.preencher({"inicio": iso(L.entrada), "data_documento": iso(L.entrada), "termino": iso(L.saida), "motivo": L.motivo, "convenio": L.convenio,
+                                       "resp_nome": L.resp_nome, "parentesco": L.parentesco, "resp_cpf": L.resp_cpf, "resp_rg": L.resp_rg})
                 internacao.status = "inativo"
                 internacao.origem = f"{L.origem} | lote {lote}"
                 n_internacoes += 1
@@ -363,6 +429,8 @@ def resumo(linhas, criar):
     print(f"  linhas com aviso (entram mesmo assim): {sum(1 for L in criadas if L.avisos)}")
     sem_data = sum(1 for L in criadas if not L.entrada and not L.saida)
     print(f"  entram sem nenhuma data: {sem_data}")
+    com = lambda campo: sum(1 for g in criar if g["dados"][campo])
+    print(f"  pessoas que entram com RG: {com('rg')} · endereço: {com('endereco')} · nome da mãe: {com('mae')} · internações com responsável: {sum(1 for L in criadas if L.resp_nome)}")
     for titulo, grupo in (("PULADAS", puladas), ("COM ERRO", recusadas)):
         if grupo:
             print(f"\n{titulo} (as primeiras 15; o resto está no relatório):")
