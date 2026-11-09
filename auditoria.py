@@ -97,6 +97,8 @@ ACOES = {
     "registro.restaurar": ("alteracao", "Restaurou um registro da lixeira"),
     "registro.apagar": ("alteracao", "Apagou um registro do banco, sem volta"),
     "importacao.lote": ("alteracao", "Importou registros históricos de uma lista de pastas e planilhas antigas (importar_historico.py), ou desfez um lote"),
+    "conferido.marcar": ("alteracao", "Marcou um registro importado como conferido com o prontuário físico"),
+    "conferido.desfazer": ("alteracao", "Reabriu a conferência de um registro importado"),
     "acolhimento.salvar": ("alteracao", "Salvou o rascunho do acolhimento social"),
     "acolhimento.finalizar": ("alteracao", "Finalizou o acolhimento social"),
     "acolhimento.alterar": ("alteracao", "Alterou o acolhimento social já finalizado (ficou no histórico de versões)"),
@@ -235,7 +237,7 @@ EXPLICITAS = {
     "gerar", "lancar_parcela", "excluir_parcela", "excluir_registro", "restaurar_registro", "apagar_registro",
     "novo_convenio", "editar_convenio", "novo_funcionario", "novo_nivel", "editar_nivel", "mover_nivel", "salvar_permissoes",
     "pagina_auditoria", "exportar_auditoria", "login_codigo", "esqueci_senha", "redefinir_senha", "enviar_codigo_email", "confirmar_email",
-    "ativar_autenticador", "desativar_autenticador", "marcar_revisao", "descartar_rascunho",
+    "ativar_autenticador", "desativar_autenticador", "marcar_revisao", "descartar_rascunho", "marcar_conferido",
     "enviar_anexo", "remover_anexo", "restaurar_anexo", "apagar_anexo",
 }
 
@@ -252,6 +254,7 @@ NAO_REGISTRA = {
     "seguranca": "a página da própria pessoa (as ações dela são registradas quando acontecem)",
     "salvar_rascunho": "a cópia automática do que a pessoa digita (a cada pausa): só dela, e vira registro quando ela grava, que aí é registrado; só o descarte entra na trilha",
     "lista_rascunhos": "a lista dos rascunhos da própria pessoa (o que ela mesma digitou)",
+    "lista_para_conferir": "a fila de trabalho dos registros importados (os dados completos de cada um são registrados quando a ficha abre)",
     "lista_notificacoes": "a lista dos avisos da própria pessoa (os dados do acolhido que ela abre dali são registrados quando a ficha abre)",
     "marcar_notificacoes_lidas": "a pessoa marca os próprios avisos como lidos: não mexe em nenhum registro de acolhido",
 }

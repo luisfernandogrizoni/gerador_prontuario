@@ -67,7 +67,7 @@ class CamposDeFormulario:
     """Comportamento comum: copiar formulário <-> colunas, convertendo pelo tipo."""
 
     CAMPOS_DO_SISTEMA = {"id", "pessoa_id", "internacao_id", "status", "criado_em", "atualizado_em",
-                         "envelope", "envelope_recebido_em", "excluido_em", "excluido_por", "exames_impressos_para", "baixa_em", "origem"}
+                         "envelope", "envelope_recebido_em", "excluido_em", "excluido_por", "exames_impressos_para", "baixa_em", "origem", "conferido_em", "conferido_por"}
     # como cada campo de texto é escrito (validacao.FORMAS): FULANO DE TAL -> Fulano de Tal. O que não está aqui fica como foi digitado.
     FORMAS = {}
 
@@ -218,6 +218,9 @@ class Internacao(CamposDeFormulario, db.Model):
     # --- de onde veio o registro quando não foi digitado no sistema (importar_historico.py): "<origem> | lote AAAAMMDD-HHMMSS". Vazio = digitado aqui.
     # Um registro importado de pasta antiga pode estar sem datas (só se sabe o ano da pasta): o quadro de avisos não cobra a data e ele se edita sem ela.
     origem: Mapped[str] = mapped_column(String(160), default="")
+    # --- a conferência do registro importado com o prontuário físico (conferencia.py, tela "Para conferir"): quando e por quem. Vazio = ainda a conferir.
+    conferido_em: Mapped[datetime | None] = mapped_column(DateTime)
+    conferido_por: Mapped[str] = mapped_column(String(50), default="")
 
     # --- responsável (pode mudar de uma internação para outra)
     resp_nome: Mapped[str] = mapped_column(String(200), default="")
@@ -296,6 +299,15 @@ class Internacao(CamposDeFormulario, db.Model):
     @property
     def lote_da_importacao(self):
         return (self.origem or "").partition(" | lote ")[2]
+
+    @property
+    def a_conferir(self):
+        """Importado e ainda não conferido com o prontuário físico."""
+        return self.importado and self.conferido_em is None
+
+    @property
+    def conferido(self):
+        return self.importado and self.conferido_em is not None
 
     @property
     def status_txt(self):

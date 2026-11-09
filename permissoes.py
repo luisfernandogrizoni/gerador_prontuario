@@ -271,6 +271,7 @@ REGRAS = {
 
     "nova_triagem": "triagem", "salvar_triagem": "triagem", "mudar_status": _quem_muda_status,
     "formulario": "internacao", "gerar": "internacao", "editar_internacao": _quem_edita,
+    "lista_para_conferir": "internacao", "marcar_conferido": "internacao",             # a conferência dos importados com o prontuário físico (conferencia.py)
     "baixa_interno": "baixa", "registrar_envelope": "envelope",
     "ver_anexo": "documentos", "baixar_anexo": "documentos", "enviar_anexo": "anexar", "remover_anexo": "anexar",
     "restaurar_anexo": "lixeira", "apagar_anexo": "lixeira",

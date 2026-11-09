@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% from "_voltar.html" import linha_voltar with context %}
+{#
+  "Para conferir" (conferencia.py): os registros importados de pastas e planilhas antigas, para completar com o prontuário físico e marcar como conferidos.
+  Variáveis: f (filtros), r ({itens, total, pagina, paginas}), faltas ([(chave, rótulo)]), situacoes, origens, progresso ((importados, conferidos)).
+#}
+{% set importados, conferidos = progresso %}
+{% set percentual = (100 * conferidos / importados) | round | int if importados else 0 %}
+
+{% block titulo %}Para conferir{% endblock %}
+
+{% block estilo %}
+  .andamento { margin-bottom: 16px; padding: 14px 18px; background: #fff; border: 1px solid var(--borda); border-radius: var(--r-lg); box-shadow: var(--sombra); }
+  .andamento .numeros { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+  .andamento .numeros strong { font-size: 1.25rem; }
+  .andamento .numeros span { color: var(--suave); font-size: .9rem; }
+  .barra { height: 10px; border-radius: 999px; background: var(--neutro-suave); overflow: hidden; }
+  .barra > span { display: block; height: 100%; background: var(--verde, #3f9d5a); border-radius: 999px; }
+  .filtros { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px 14px; align-items: end; margin-bottom: 14px; padding: 14px 16px;
+             background: #fff; border: 1px solid var(--borda); border-radius: var(--r-lg); box-shadow: var(--sombra); }
+  .filtros label { display: flex; flex-direction: column; gap: 4px; font-size: var(--t-rotulo); font-weight: 600; color: var(--neutro); }
+  .filtros input, .filtros select { min-height: 42px; }
+  .filtros .acoes-filtro { display: flex; gap: 8px; flex-wrap: wrap; grid-column: 1 / -1; }
+  .total { color: var(--suave); font-size: .88rem; margin: 0 0 10px; }
+  .lista td.datas { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .lista td small { display: block; color: var(--suave); font-size: .78rem; margin-top: 1px; }
+  .falta { display: inline-block; padding: 2px 9px; margin: 0 4px 4px 0; border-radius: 999px; font-size: .74rem; font-weight: 600; background: var(--atencao-suave);
+           color: var(--atencao); border: 1px solid var(--atencao-borda); }
+  .completo { color: var(--suave); font-size: .86rem; }
+  .conferido { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: .74rem; font-weight: 700; background: var(--verde-claro); color: #17501f; border: 1px solid var(--verde-borda); }
+  .lista .acoes-linha { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+  .lista .acoes-linha form { margin: 0; }
+  .paginacao { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  .paginacao .de-ate { color: var(--suave); font-size: .86rem; margin-right: auto; }
+{% endblock %}
+
+{% block conteudo %}
+<main class="largo">
+  {{ linha_voltar(url_for('home')) }}
+  <div class="pagina-topo">
+    <div class="titulo">
+      <h1>Para conferir</h1>
+      <p class="ajuda">Registros importados de pastas e planilhas antigas: dados parciais. Com o prontuário de papel na mão, abra a pessoa, complete o que o papel mostra e marque como <strong>conferido</strong>.</p>
+    </div>
+  </div>
+
+  {% with msgs = get_flashed_messages() %}
+    {% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
+  {% endwith %}
+
+  <div class="andamento">
+    <div class="numeros"><strong>{{ conferidos }} de {{ importados }}</strong> <span>conferidos · {{ percentual }}%{% if importados - conferidos %} · faltam {{ importados - conferidos }}{% endif %}</span></div>
+    <div class="barra" role="img" aria-label="{{ percentual }}% conferidos"><span style="width: {{ percentual }}%"></span></div>
+  </div>
+
+  <form class="filtros" method="get" action="{{ url_for('lista_para_conferir') }}">
+    <label>Nome<input type="search" name="q" value="{{ f.q }}" maxlength="80" autocomplete="off" placeholder="parte do nome"></label>
+    <label>Pasta de origem
+      <select name="origem"><option value="">Todas</option>{% for o in origens %}<option value="{{ o }}"{{ ' selected' if o == f.origem }}>{{ o }}</option>{% endfor %}</select></label>
+    <label>O que falta
+      <select name="falta"><option value="">Qualquer coisa</option>{% for chave, rotulo in faltas %}<option value="{{ chave }}"{{ ' selected' if chave == f.falta }}>{{ rotulo[:1] | upper }}{{ rotulo[1:] }}</option>{% endfor %}</select></label>
+    <label>Mostrar
+      <select name="situacao">{% for chave, rotulo in situacoes %}<option value="{{ chave }}"{{ ' selected' if chave == f.situacao }}>{{ rotulo }}</option>{% endfor %}</select></label>
+    <div class="acoes-filtro">
+      <button class="botao" type="submit">Filtrar</button>
+      <a class="botao secundario" href="{{ url_for('lista_para_conferir') }}">Limpar</a>
+    </div>
+  </form>
+
+  <p class="total">{{ r.total }} registro{{ '' if r.total == 1 else 's' }}{% if r.paginas > 1 %} · página {{ r.pagina }} de {{ r.paginas }}{% endif %}</p>
+
+  <div class="moldura">
+    {% if r.itens %}
+    <table class="lista">
+      <thead>
+        <tr>
+          <th class="sem-ordem">Nome</th>
+          <th class="sem-ordem">Pasta de origem</th>
+          <th class="sem-ordem">Entrada / saída</th>
+          <th class="sem-ordem">O que falta</th>
+          <th class="sem-ordem"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in r.itens %}
+        <tr>
+          <td><a href="{{ url_for('ficha', id=l.id) }}">{{ l.nome }}</a></td>
+          <td>{{ l.origem }}</td>
+          <td class="datas">{{ l.entrada | data if l.entrada else '—' }}<small>saída {{ l.saida | data if l.saida else '—' }}{% if l.motivo %} · {{ l.motivo }}{% endif %}</small></td>
+          <td>
+            {% if l.conferido_em %}<span class="conferido">Conferido</span><small>{{ l.conferido_por }} em {{ l.conferido_em.strftime('%d/%m/%Y') }}</small>
+            {% elif l.faltas %}{% for chave, rotulo in l.faltas %}<span class="falta">{{ rotulo }}</span>{% endfor %}
+            {% else %}<span class="completo">nada em branco; confira com o papel</span>{% endif %}
+          </td>
+          <td>
+            <div class="acoes-linha">
+              {% if l.conferido_em %}
+              <form method="post" action="{{ url_for('marcar_conferido', id=l.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="desfazer" value="1"><input type="hidden" name="voltar" value="lista">
+                <button class="botao pequeno secundario" type="submit">Reabrir</button></form>
+              {% else %}
+              <a class="botao pequeno" href="{{ url_for('editar_internacao', id=l.id, conferir=1, **args_dos_filtros) }}">Conferir</a>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="vazio" style="padding: 18px;">{% if importados == 0 %}Ainda não há registros importados.{% elif f.situacao == 'a_conferir' and not (f.q or f.origem or f.falta) %}Nada a conferir: todos os {{ importados }} registros importados já foram conferidos.{% else %}Nenhum registro com esses filtros.{% endif %}</p>
+    {% endif %}
+  </div>
+
+  {% if r.paginas > 1 %}
+  <div class="paginacao">
+    <span class="de-ate">página {{ r.pagina }} de {{ r.paginas }}</span>
+    {% if r.pagina > 1 %}<a class="botao pequeno secundario" href="{{ url_for('lista_para_conferir', pagina=r.pagina - 1, **args_dos_filtros) }}">Anterior</a>{% endif %}
+    {% if r.pagina < r.paginas %}<a class="botao pequeno secundario" href="{{ url_for('lista_para_conferir', pagina=r.pagina + 1, **args_dos_filtros) }}">Próxima</a>{% endif %}
+  </div>
+  {% endif %}
+</main>
+{% endblock %}

@@ -103,6 +103,12 @@ def migrar(db):
         db.session.execute(text("ALTER TABLE internacoes ADD COLUMN origem VARCHAR(160) NOT NULL DEFAULT ''"))
         db.session.commit()
 
+    # 6g) a conferência dos registros importados com o prontuário físico (tela "Para conferir"): quando e por quem (vazio = ainda a conferir)
+    if "conferido_em" not in _colunas(db, "internacoes"):
+        db.session.execute(text("ALTER TABLE internacoes ADD COLUMN conferido_em TIMESTAMP"))
+        db.session.execute(text("ALTER TABLE internacoes ADD COLUMN conferido_por VARCHAR(50) NOT NULL DEFAULT ''"))
+        db.session.commit()
+
     # 6) o relatório de rejeição virou o parecer do acolhimento social: o que já foi escrito passa para lá
     _rejeicoes_para_o_acolhimento(db)
 
