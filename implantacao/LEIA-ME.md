@@ -197,7 +197,7 @@ da ficha do acolhido (só o administrador vê). Os adendos que já existiam pass
 
 **Importar ex-residentes de pastas e planilhas antigas** (só quando houver uma lista pronta): `importar_historico.py` lê a lista, simula, e só grava com `--gravar`,
 depois do backup e de você digitar SIM. Passo a passo, formato da lista e como desfazer um lote em `docs\importacao-historico.md`. O `requirements.txt` ganhou o
-`openpyxl`: a atualização o instala sozinha. Depois de importar, a equipe completa cada registro com o prontuário de papel pela tela **Para conferir** (item do menu, com o número dos
+`openpyxl`: a atualização o instala sozinha. Depois de importar, o administrador completa cada registro com o prontuário de papel pela tela **Para conferir** (item do menu só dele, com o número dos
 que faltam).
 
 ## 5. HTTPS pelo Tailscale: senha criptografada, celular e segundo polo

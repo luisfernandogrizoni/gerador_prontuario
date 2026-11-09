@@ -84,6 +84,7 @@ GRUPOS = (
         Permissao("lixeira", "Restaurar da lixeira e apagar de vez", "O que os outros excluíram", padrao=0, fixa=True),
         Permissao("backup", "Ver a situação do backup e dos pen-drives", "Cadastros > Backup", padrao=0, fixa=True),
         Permissao("auditoria", "Ver a trilha de auditoria", "Cadastros > Auditoria: quem fez o quê e quando", padrao=0, fixa=True),
+        Permissao("conferir", "Conferir os registros importados com o prontuário físico", "A tela Para conferir: completar os dados e marcar como conferido", padrao=0, fixa=True),
     )),
 )
 
@@ -271,7 +272,7 @@ REGRAS = {
 
     "nova_triagem": "triagem", "salvar_triagem": "triagem", "mudar_status": _quem_muda_status,
     "formulario": "internacao", "gerar": "internacao", "editar_internacao": _quem_edita,
-    "lista_para_conferir": "internacao", "marcar_conferido": "internacao",             # a conferência dos importados com o prontuário físico (conferencia.py)
+    "lista_para_conferir": "conferir", "marcar_conferido": "conferir",                 # a conferência dos importados com o prontuário físico (conferencia.py): só o administrador
     "baixa_interno": "baixa", "registrar_envelope": "envelope",
     "ver_anexo": "documentos", "baixar_anexo": "documentos", "enviar_anexo": "anexar", "remover_anexo": "anexar",
     "restaurar_anexo": "lixeira", "apagar_anexo": "lixeira",

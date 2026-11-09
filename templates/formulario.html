@@ -11,7 +11,7 @@
   {{ linha_voltar(url_for('ficha', id=editando.id) if editando else url_for('lista_internos')) }}
   <h1>{{ 'Editar prontuário' if editando else 'Novo prontuário' }}</h1>
   {% with msgs = get_flashed_messages() %}{% if msgs %}<ul class="mensagens">{% for m in msgs %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}{% endwith %}
-  {% if editando and editando.a_conferir %}
+  {% if editando and editando.a_conferir and pode('conferir') %}
   <div class="caixa-info" role="note"><strong>Conferindo com o prontuário físico</strong> ({{ editando.origem_txt }}).
     {% if faltas %}Em branco neste registro: {% for c, rotulo in faltas %}{{ rotulo }}{% if not loop.last %}, {% endif %}{% endfor %}.{% else %}Nada está em branco: confira o que está na tela com o papel.{% endif %}
     Complete o que o papel mostra e use <em>Conferido: salvar e ir para o próximo</em>.</div>
@@ -20,7 +20,7 @@
 
   <div class="form-grade">
   <form method="post" action="{{ url_for('gerar') }}" data-indice><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    {% if editando and editando.a_conferir %}<input type="hidden" name="c_q" value="{{ conferir.q }}"><input type="hidden" name="c_origem" value="{{ conferir.origem }}"><input type="hidden" name="c_falta" value="{{ conferir.falta }}">{% endif %}
+    {% if editando and editando.a_conferir and pode('conferir') %}<input type="hidden" name="c_q" value="{{ conferir.q }}"><input type="hidden" name="c_origem" value="{{ conferir.origem }}"><input type="hidden" name="c_falta" value="{{ conferir.falta }}">{% endif %}
     {{ campo_rascunho(rascunho) }}
     {{ f.topo(url_for('formulario')) }}
     {{ f.identificacao() }}
@@ -59,7 +59,7 @@
     <!-- o 1º botão é o que o Enter aciona: Salvar, sem download -->
     <div class="barra-salvar">
       <button class="botao" type="submit" name="acao" value="salvar">Salvar</button>
-      {% if editando and editando.a_conferir %}<button class="botao secundario" type="submit" name="acao" value="proximo">Salvar e ir para o próximo</button>
+      {% if editando and editando.a_conferir and pode('conferir') %}<button class="botao secundario" type="submit" name="acao" value="proximo">Salvar e ir para o próximo</button>
       <button class="botao" type="submit" name="acao" value="conferido">Conferido: salvar e ir para o próximo</button>{% endif %}
       {% if pode('documentos') %}<button class="botao secundario" type="submit" name="acao" value="baixar">Salvar e baixar prontuário</button>{% endif %}
       <span class="estado-form" hidden>Alterações não salvas</span>

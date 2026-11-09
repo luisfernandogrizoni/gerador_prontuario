@@ -5,13 +5,14 @@ servidor achou 434 pessoas, das quais 57 já estavam no sistema e **377 não** (
 tinham sido contadas como pessoas). Quase todas são ex-residentes antigos: 124 têm dados na planilha (datas, motivo, convênio, cidade, CPF) e o resto só tem o nome da pasta e o
 ano da pasta de saída. Os arquivos das pastas são, na maioria, Word antigo (só 187 são PDF), então **os documentos não entram**. Mas os 2.494 formulários Word do prontuário
 (ficha de primeiro contato, contrato terapêutico, informativo socioeconômico...) foram lidos e trouxeram, para quem faltava, CPF válido (151), nascimento (191) e data de entrada
-(219) que a planilha não tinha; isso entrou na lista de importação. Este texto descreve o que o sistema ganhou para isso e a tela **Para conferir**, em que a equipe completa
-cada registro com o prontuário de papel.
+(219) que a planilha não tinha; isso entrou na lista de importação, junto com o RG, o endereço, o nome da mãe e o responsável que os mesmos formulários traziam. Este texto descreve o que o sistema ganhou para isso e a
+tela **Para conferir**, em que o administrador completa cada registro com o prontuário de papel.
 
 ## Decisões
 
-- **Só o cadastro**: nome, CPF, nascimento, cidade, convênio, entrada, saída e motivo, quando existirem. Os documentos continuam nas pastas. O que o Word trouxe além disso (RG,
-  endereço, telefone, estado civil, escolaridade, religião, profissão, mãe, responsável, cartão SUS) está só na planilha de conferência: o script ainda não o importa.
+- **Só o cadastro**: nome, CPF, RG, nascimento, endereço, bairro, cidade, nome da mãe, responsável (nome, parentesco, CPF e RG), convênio, entrada, saída e motivo, quando existirem.
+  Os documentos continuam nas pastas. O que o Word trouxe além disso (telefone, estado civil, escolaridade, religião, profissão, cartão SUS, tratamento até, contribuição) fica só na
+  aba "Dados extras do Word" da lista: o script não o lê.
 - **Nada é inventado**: quem não tem datas entra sem datas (inativo), com a marca "importado" e a origem ("Ex-Residentes / Saíram em 2024"), e o quadro de avisos não cobra a data.
 - **Uma internação por pessoa** nas pastas repetidas; se a lista trouxer duas entradas diferentes para a mesma pessoa, entram duas internações (há dado).
 - **O banco real nunca é alterado sem você pedir**: o script só simula por padrão, e gravar exige `--gravar`, backup e a palavra SIM.
@@ -29,8 +30,9 @@ cada registro com o prontuário de papel.
 
 ## A tela "Para conferir" (`conferencia.py`, `/conferir`)
 
-Depois de importar, quem está com a pasta de papel na mão completa cada registro. O item **Para conferir** do menu (com o número dos que faltam) aparece para quem pode editar prontuários
-(Escritório, enfermeira e administrador) e some quando não há importados.
+Depois de importar, o administrador, com a pasta de papel na mão, completa cada registro. O item **Para conferir** do menu (com o número dos que faltam) aparece **só para o
+administrador** (permissão fixa `conferir`, no grupo "Só o administrador" das Permissões: não se configura) e some quando não há importados. Os outros funcionários continuam
+editando o prontuário normalmente, mas não veem a tela, os botões de conferir nem a faixa de conferência: na ficha só vêem que o registro é importado e tem dados parciais.
 
 - **A fila** são os importados ainda não conferidos (`Internacao.origem` preenchida e `conferido_em` vazio), do mais recente para o mais antigo: pela data de saída ou de entrada; sem
   data, pelo ano que a pasta de origem diz; "anos anteriores" por último; dentro do ano, por nome. Há um contador ("142 de 377 conferidos") e uma barra de progresso.
@@ -41,12 +43,13 @@ Depois de importar, quem está com a pasta de papel na mão completa cada regist
   Sem mais ninguém na fila, volta à lista dizendo isso. O botão Salvar comum nunca marca nada como conferido.
 - **Ficha**: a faixa do importado ganha *Conferir agora* e *Marcar como conferido*; depois de conferido, a faixa diz quem conferiu e quando e oferece *Reabrir conferência*.
 - **Dados**: `Internacao.conferido_em` e `conferido_por` (colunas novas, criadas sozinhas na subida; estão em `CAMPOS_DO_SISTEMA`). Marcar e reabrir entram na trilha de auditoria.
-- **Permissões**: `lista_para_conferir` e `marcar_conferido` usam a permissão `internacao` (e, por isso, o polo: a psicóloga e a médica não veem a tela).
+- **Permissões**: `lista_para_conferir` e `marcar_conferido` usam a permissão fixa `conferir`. Um `acao=proximo` ou `acao=conferido` forjado por quem não é administrador é ignorado: o prontuário salva normalmente.
 
 ## A lista
 
 Planilha `.xlsx` (aba `Importar`, ou a primeira) ou CSV (Excel em português: ponto e vírgula, cp1252 ou UTF-8), **uma linha por internação**, com estas colunas (a ordem não
-importa; só *Nome* é obrigatória): `Nome | CPF | Nascimento | Cidade | Estado | Convênio | Entrada | Saída | Motivo | Origem | Forçar`.
+importa; só *Nome* é obrigatória): `Nome | CPF | Nascimento | Cidade | Estado | Convênio | Entrada | Saída | Motivo | Origem | Forçar` e, opcionais,
+`RG | Endereço | Número | Bairro | Mãe | Responsável | Parentesco | CPF do responsável | RG do responsável`. Colunas que o script não conhece (como `Conferir`) são ignoradas.
 
 - Linhas com o mesmo CPF (ou, sem CPF, o mesmo nome) são **uma pessoa** com várias internações.
 - Datas: `dd/mm/aaaa`, `aaaa-mm-dd` ou data do Excel. Vazio, `-` e `Não informado` = sem data.
@@ -54,6 +57,12 @@ importa; só *Nome* é obrigatória): `Nome | CPF | Nascimento | Cidade | Estado
 - Convênio: `Particular`, `CAPS AD`, `Prefeitura Tarumã` (ou os nomes do Cadastros; `Social` vira Particular com contribuição R$ 0,00, que é a categoria Social). Desconhecido = em branco.
 - Motivo: `Conclusão`, `Desistência`, `Desligamento`; `Exclusão` vira Desligamento (aviso). `Falecimento` e `Não informado` ficam em branco (o sistema não tem esses motivos).
   As tabelas `MOTIVOS` e `CONVENIOS` no começo de `importar_historico.py` mudam isso.
+- RG e RG do responsável: só dígitos (e um X no fim), de 5 a 13; pontos e traços são tirados; fora disso entra em branco, com aviso. O CPF do responsável segue a regra do CPF.
+- Endereço é a rua. O número vem da coluna `Número` ou, se ela estiver vazia, do fim do endereço (`Rua das Flores, 123.` vira rua `Rua das Flores`, número `123`). Nome, mãe, bairro e
+  endereço seguem a escrita padrão do sistema (`MARIA DA SILVA` vira `Maria da Silva`); "Não informado" vira em branco.
+- **Da pessoa** (vale o primeiro valor das linhas dela; diferença entre as linhas vira aviso): CPF, nascimento, cidade, estado, RG, endereço, número, bairro e mãe. **De cada internação**:
+  responsável, parentesco, CPF e RG do responsável.
+- Quem já está no sistema não é alterado, nem pelos dados novos da lista (a linha é pulada).
 - `Forçar = sim`: cria mesmo que já exista alguém com o mesmo **nome** no sistema (só para quem for outra pessoa). Não vale contra quem já foi importado antes.
 
 ## Como rodar (no servidor, PowerShell)
