@@ -98,6 +98,11 @@ def migrar(db):
         db.session.commit()
     _permissoes_dos_polos(db)
 
+    # 6f) registros importados de pastas e planilhas antigas (importar_historico.py): de onde vieram e em que lote (vazio = digitado no sistema)
+    if "origem" not in _colunas(db, "internacoes"):
+        db.session.execute(text("ALTER TABLE internacoes ADD COLUMN origem VARCHAR(160) NOT NULL DEFAULT ''"))
+        db.session.commit()
+
     # 6) o relatório de rejeição virou o parecer do acolhimento social: o que já foi escrito passa para lá
     _rejeicoes_para_o_acolhimento(db)
 

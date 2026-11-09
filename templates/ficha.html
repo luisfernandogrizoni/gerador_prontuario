@@ -172,6 +172,11 @@
     </div>
   </header>
 
+  {% if i.importado %}
+  <div class="caixa-info" role="note"><strong>Registro importado</strong> ({{ i.origem_txt }}). São dados parciais: confira e complete o que faltar (datas, convênio, CPF).
+    {% if pode('internacao') %}<a href="{{ url_for('editar_internacao', id=i.id) }}">Editar</a>{% endif %}</div>
+  {% endif %}
+
   <div class="ficha-grade">
     <div class="coluna-principal">
       {% call cartao('Dados pessoais', 'usuario', 'azul') %}

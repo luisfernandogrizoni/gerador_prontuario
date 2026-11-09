@@ -23,7 +23,7 @@
     <fieldset class="tom-rosa">
       {{ legenda('Internação', 'casa') }}
       <div class="grade">
-        {{ f.entrada('inicio', 'Internado em (data efetiva)', 'c2', 'date', obrig=true) }}
+        {{ f.entrada('inicio', 'Internado em (data efetiva)', 'c2', 'date', obrig=not (editando and editando.importado)) }}
         {{ f.entrada('hora_internacao', 'Horário', 'c1', 'time') }}
         {{ f.entrada('tratamento_ate', 'Tratamento mantido até', 'c3', 'date') }}
         {{ f.entrada('data_documento', 'Data dos documentos (Assis, …)', 'c2', 'date') }}

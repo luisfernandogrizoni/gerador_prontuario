@@ -705,7 +705,7 @@ def gerar():
         None, {"termino": "Quem dá baixa é a enfermeira (ou o administrador): peça a ela. Deixe o término e o motivo em branco para salvar o resto."})
     if erros:
         pessoa = db.session.get(Pessoa, request.form.get("pessoa_id", type=int) or 0)
-        return render_template("formulario.html", d=request.form, erros=erros, pessoa=pessoa, anterior=None,
+        return render_template("formulario.html", d=request.form, erros=erros, pessoa=pessoa, anterior=None, editando=existente,
                                rascunho=rascunhos.da_tela(g.usuario, "prontuario", alvo=request.form.get("internacao_id", type=int), form=request.form),
                                **servicos.opcoes_formulario(request.form.get("convenio", ""))), 400
     rascunhos.concluir(g.usuario, request.form.get("rascunho"), "prontuario", request.form.get("internacao_id", type=int))

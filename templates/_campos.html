@@ -131,7 +131,7 @@
 <fieldset class="tom-amarelo">
   {{ legenda('Convênio e contribuição voluntária', 'moeda') }}
   <div class="grade">
-    {{ escolha('convenio', 'Convênio', convenios + ([a_definir] if com_a_definir else []), 'c2', obrig=true) }}
+    {{ escolha('convenio', 'Convênio', convenios + ([a_definir] if com_a_definir else []), 'c2', obrig=not (editando is defined and editando and editando.importado)) }}
     <label class="c2{{ ' com-erro' if erros.get('contribuicao_valor') }}">Valor (R$)
       <input type="number" step="0.01" min="0" name="contribuicao_valor" id="f-contribuicao_valor"
              value="{{ d.get('contribuicao_valor', '') }}">

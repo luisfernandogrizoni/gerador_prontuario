@@ -96,6 +96,7 @@ ACOES = {
     "registro.excluir": ("alteracao", "Excluiu um registro (foi para a lixeira)"),
     "registro.restaurar": ("alteracao", "Restaurou um registro da lixeira"),
     "registro.apagar": ("alteracao", "Apagou um registro do banco, sem volta"),
+    "importacao.lote": ("alteracao", "Importou registros históricos de uma lista de pastas e planilhas antigas (importar_historico.py), ou desfez um lote"),
     "acolhimento.salvar": ("alteracao", "Salvou o rascunho do acolhimento social"),
     "acolhimento.finalizar": ("alteracao", "Finalizou o acolhimento social"),
     "acolhimento.alterar": ("alteracao", "Alterou o acolhimento social já finalizado (ficou no histórico de versões)"),

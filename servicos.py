@@ -56,14 +56,16 @@ def _validar_responsavel(form):
     return erros
 
 
-def validar_prontuario(form, pessoa_id=None):
+def validar_prontuario(form, pessoa_id=None, importado=False):
+    """`importado`: o registro veio de uma importação (importar_historico.py) e pode estar sem a data de internação e sem o convênio: sem isso
+    nem um CPF errado se corrigiria nele."""
     erros = _validar_pessoa(form, pessoa_id) | _validar_responsavel(form)
     inicio, termino = ler_data(form.get("inicio")), ler_data(form.get("termino"))
-    if not inicio:
+    if not inicio and not importado:
         erros["inicio"] = "A data em que foi efetivamente internado é obrigatória."
     if termino and inicio and termino < inicio:
         erros["termino"] = "O término não pode ser antes do início."
-    if not catalogo.atual().existe(form.get("convenio")):
+    if not catalogo.atual().existe(form.get("convenio")) and not (importado and not form.get("convenio")):        # (importado sem convênio: fica "A definir")
         erros["convenio"] = "Escolha o convênio."
     return erros
 
@@ -95,7 +97,8 @@ def _pessoa_e_internacao(form):
 
 def salvar_prontuario(form):
     pessoa, internacao = _pessoa_e_internacao(form)
-    erros = validar_prontuario(form, pessoa.id if pessoa else None)
+    importado = internacao is not None and internacao.importado
+    erros = validar_prontuario(form, pessoa.id if pessoa else None, importado)
     if erros:
         return None, erros
 
@@ -110,8 +113,9 @@ def salvar_prontuario(form):
     internacao.preencher(form)
     if not internacao.data_documento:
         internacao.data_documento = internacao.inicio
-    # prontuário salvo = internação: encerrada se tiver término ou motivo
-    internacao.status = "inativo" if (internacao.termino or internacao.motivo) else "ativo"
+    # prontuário salvo = internação: encerrada se tiver término ou motivo (ou se veio importado como já encerrada, mesmo sem as datas)
+    ja_encerrada = importado and internacao.status == "inativo"
+    internacao.status = "inativo" if (internacao.termino or internacao.motivo or ja_encerrada) else "ativo"
     if internacao.status == "ativo":
         _limpar_envelope(internacao)          # voltou a ser interno: não há envelope para esperar
         internacao.baixa_em = None            # e a baixa que havia (se havia) não vale mais

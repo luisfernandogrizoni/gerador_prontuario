@@ -195,6 +195,10 @@ psicóloga, a gerente técnica). Sem isso, só o administrador abre esses relat�
 Os relatórios não têm mais adendos: depois de finalizados, a assistente social e a enfermeira os alteram direto, e cada alteração fica no *Histórico de versões*
 da ficha do acolhido (só o administrador vê). Os adendos que já existiam passam sozinhos para esse histórico na subida: nada se perde.
 
+**Importar ex-residentes de pastas e planilhas antigas** (só quando houver uma lista pronta): `importar_historico.py` lê a lista, simula, e só grava com `--gravar`,
+depois do backup e de você digitar SIM. Passo a passo, formato da lista e como desfazer um lote em `docs\importacao-historico.md`. O `requirements.txt` ganhou o
+`openpyxl`: a atualização o instala sozinha.
+
 ## 5. HTTPS pelo Tailscale: senha criptografada, celular e segundo polo
 
 Hoje o endereço é `http://IP:8000`: a senha e as fichas viajam **sem criptografia** pela rede do escritório. O **Tailscale** é uma rede

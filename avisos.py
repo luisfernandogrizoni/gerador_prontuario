@@ -111,7 +111,7 @@ def gerar_avisos(pode_servico_social=False, da_conta=(), de_manutencao=(), pode_
             avisos.append(Aviso("Interno ativo sem data de internação",
                                 f"{nome}: preencher a data de internação.",
                                 _ficha(i), f"seminicio:{i.id}"))
-        if i.status == "inativo" and not i.termino:
+        if i.status == "inativo" and not i.termino and not i.importado:         # (o importado de pasta antiga só tem o ano da pasta: não se cobra)
             avisos.append(Aviso("Inativo sem data de saída",
                                 f"{nome}: saída por {i.motivo or 'motivo não informado'}, sem data.",
                                 _ficha(i), f"semtermino:{i.id}"))
