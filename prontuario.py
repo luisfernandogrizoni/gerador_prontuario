@@ -271,6 +271,11 @@ ALTURAS_FICHA = [376, 376, 376, 89, 285, 376, 376, 393, 614, 376, 376, 376, 376,
 # telefone e a palavra "Contato" quebravam ("Contat/o"). A grade ganha três divisões novas (em twips, contados da borda esquerda), só para essa linha: as outras linhas continuam com as divisões
 # de sempre (cada uma só ganha colunas a mais por baixo das mesmas bordas). Rótulos ficam com ~1.200 e telefones com ~2.100 (nenhum telefone de 15 caracteres quebra).
 CORTES_DOS_CONTATOS = (1220, 4520, 7819)
+# Outros rótulos que no modelo antigo cabiam por 10 a 40 twips e quebravam na prévia da tela por arredondamento ("Nu/m", "Escolaridad/e"; Responsável e Data de Nascimento estavam na mesma beira).
+# Cada borda abaixo anda um pouco, em TODAS as linhas que a têm (as bordas que eram alinhadas continuam alinhadas): a coluna dos rótulos de 1.720 passa a 1.900 (Escolaridade e Responsável ganham
+# ~11%), a de "Data de Nascimento" de 2.547 a 2.680 e o começo do "Num" de 8.067 a 7.950 (o rótulo vai de 750 a ~870).
+AJUSTES_DAS_BORDAS = {1720: 1900, 2547: 2680, 8067: 7950}
+CORTES_DA_FICHA = CORTES_DOS_CONTATOS + tuple(AJUSTES_DAS_BORDAS.values())
 
 
 def _com_cortes(grade, cortes):
@@ -279,12 +284,15 @@ def _com_cortes(grade, cortes):
     return [b - a for a, b in zip([0] + fins[:-1], fins)], fins
 
 
-def _reespaciar(linha, grade, fins):
-    """A linha (células com span na `grade` antiga) com os spans na grade nova: as bordas das células não mudam, só quantas colunas finas elas cobrem."""
+def _reespaciar(linha, grade, fins, ajustes=None):
+    """A linha (células com span na `grade` antiga) com os spans na grade nova: as bordas das células ficam onde estavam (ou vão para onde `ajustes` manda: {borda antiga: borda nova}),
+    só muda quantas colunas finas cada célula cobre."""
+    ajustes = ajustes or {}
     saida, coluna, inicio = [], 0, 0
     for celula in linha:
         fim = inicio + sum(grade[coluna:coluna + celula.span])
-        saida.append(Celula(celula.texto, sum(1 for f in fins if inicio < f <= fim), celula.negrito))
+        de, ate = ajustes.get(inicio, inicio), ajustes.get(fim, fim)
+        saida.append(Celula(celula.texto, sum(1 for f in fins if de < f <= ate), celula.negrito))
         coluna, inicio = coluna + celula.span, fim
     return saida
 
@@ -303,7 +311,7 @@ def _ficha_de_controle(c):
     v = lambda texto, span=1: Celula(texto, span)                    # valor
     estado_civil = "        ".join(f"({marca(c['estado_civil'], opcao)}) {opcao}"
                                    for opcao in ("Casado", "Solteiro", "Divorciado", "Outros")) + f" {c['estado_civil_outro']}"
-    grade, fins = _com_cortes(GRADE_FICHA, CORTES_DOS_CONTATOS)
+    grade, fins = _com_cortes(GRADE_FICHA, CORTES_DA_FICHA)
     linhas = [
         [r("Nome", 2), v(c["nome"], 14)],
         [r("Endereço", 2), v(c["endereco"], 12), r("Num"), v(c["numero"])],
@@ -322,7 +330,7 @@ def _ficha_de_controle(c):
         [r("RG"), v(c["resp_rg"], 6), r("CPF", 2), v(c["resp_cpf"], 7)],
     ]
     contatos = [(r("Contato"), 1220), (v(c["contato1"]), 3316), (r("Contato"), 4520), (v(c["contato2"]), 6619), (r("Contato"), 7819), (v(c["contato3"]), sum(GRADE_FICHA))]
-    linhas = [_celulas_ate(fins, contatos) if linha is None else _reespaciar(linha, GRADE_FICHA, fins) for linha in linhas]
+    linhas = [_celulas_ate(fins, contatos) if linha is None else _reespaciar(linha, GRADE_FICHA, fins, AJUSTES_DAS_BORDAS) for linha in linhas]
     return Formulario(grade, linhas, ALTURAS_FICHA)
 
 
