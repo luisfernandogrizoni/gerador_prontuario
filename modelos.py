@@ -162,6 +162,18 @@ class Pessoa(CamposDeFormulario, db.Model):
             setattr(self, campo, fmt_telefone(getattr(self, campo)))
 
     @property
+    def passagens(self):
+        """As internações de verdade da pessoa (ativo ou inativo; triagem, lista de espera, desistência antes de entrar e rejeitado não são passagem), da
+        mais antiga para a mais nova: pela data de início (ou, na falta dela, a de saída). Quem não tem data nenhuma (registro importado de uma pasta
+        antiga) conta como a mais antiga; entre iguais vale a ordem de cadastro. Daqui saem o "passagem 2 de 3" do prontuário e a capa do envelope."""
+        return sorted((i for i in self.internacoes if i.status in STATUS_INTERNACAO), key=lambda i: (i.inicio or i.termino or date.min, i.id))
+
+    @property
+    def registros(self):
+        """TODOS os registros da pessoa (as passagens e as triagens), do mais antigo para o mais novo: é a linha do tempo do prontuário."""
+        return sorted(self.internacoes, key=lambda i: (i.inicio or i.termino or i.internacao_agendada or i.primeiro_contato or date.min, i.id))
+
+    @property
     def ultima_internacao(self):
         """A mais recente pela data (internação, ou 1º contato se for só triagem)."""
         if not self.internacoes:
@@ -285,6 +297,31 @@ class Internacao(CamposDeFormulario, db.Model):
     @property
     def e_triagem(self):
         return self.status in STATUS_TRIAGEM
+
+    @property
+    def periodo_txt(self):
+        """O período da internação em palavras: '05/02/2019 a 12/08/2019', 'desde 10/03/2026' (quem está ativo), '05/02/2019 (sem data de saída)',
+        '(sem data de entrada) a 12/08/2019' ou 'sem datas'. Falta uma das datas (registro importado de uma pasta antiga): diz qual."""
+        if self.inicio and self.termino:
+            return f"{fmt_data(self.inicio)} a {fmt_data(self.termino)}"
+        if self.inicio:
+            return f"desde {fmt_data(self.inicio)}" if self.status == "ativo" else f"{fmt_data(self.inicio)} (sem data de saída)"
+        if self.termino:
+            return f"(sem data de entrada) a {fmt_data(self.termino)}"
+        return "sem datas"
+
+    @property
+    def numero_da_passagem(self):
+        """Qual passagem da pessoa é esta (1ª, 2ª...), na ordem de Pessoa.passagens; None se não é uma internação de verdade (é triagem)."""
+        return next((n for n, o in enumerate(self.pessoa.passagens, 1) if o.id == self.id), None)
+
+    @property
+    def passagens_anteriores(self):
+        """As outras internações da mesma pessoa que vieram ANTES desta, da mais antiga para a mais nova (a capa do envelope lista as datas). Só as que
+        têm alguma data, de início ou de saída: sem nenhuma não há o que mostrar. "Antes" é pela ordem de Pessoa.passagens (data de início, ou a de saída
+        na falta dela; quem não tem data nenhuma conta como a mais antiga)."""
+        minha = (self.inicio or self.termino or date.min, self.id)
+        return [o for o in self.pessoa.passagens if o.id != self.id and (o.inicio or o.termino) and (o.inicio or o.termino, o.id) < minha]
 
     @property
     def importado(self):

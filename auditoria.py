@@ -31,6 +31,7 @@ from sqlalchemy import distinct, func
 
 import exclusao
 from modelos import Evento, Funcionario, Internacao, Pessoa, db
+from validacao import normalizar_nome
 
 log = logging.getLogger(__name__)
 
@@ -233,7 +234,7 @@ LEITURAS = {
 
 # registradas no ponto exato em que a ação deu certo (app.py, autenticacao.py, permissoes.py)
 EXPLICITAS = {
-    "login", "sair", "alterar_senha", "aviso_ciente", "unificar_pessoas", "salvar_triagem", "mudar_status", "baixa_interno", "registrar_envelope",
+    "login", "sair", "alterar_senha", "aviso_ciente", "unificar_pessoas", "salvar_triagem", "mudar_status", "internar_da_triagem", "baixa_interno", "registrar_envelope",
     "gerar", "lancar_parcela", "excluir_parcela", "excluir_registro", "restaurar_registro", "apagar_registro",
     "novo_convenio", "editar_convenio", "novo_funcionario", "novo_nivel", "editar_nivel", "mover_nivel", "salvar_permissoes",
     "pagina_auditoria", "exportar_auditoria", "login_codigo", "esqueci_senha", "redefinir_senha", "enviar_codigo_email", "confirmar_email",
@@ -251,6 +252,7 @@ NAO_REGISTRA = {
     "cadastros": "redireciona para a lista de convênios",
     "lista_convenios": "convênios não são dado pessoal",
     "relatorio_de_rejeicao": "redireciona para o acolhimento social, que é registrado",
+    "prontuario_da_pessoa": "redireciona para a ficha da passagem mais recente da pessoa, que é registrada",
     "seguranca": "a página da própria pessoa (as ações dela são registradas quando acontecem)",
     "salvar_rascunho": "a cópia automática do que a pessoa digita (a cada pausa): só dela, e vira registro quando ela grava, que aí é registrado; só o descarte entra na trilha",
     "lista_rascunhos": "a lista dos rascunhos da própria pessoa (o que ela mesma digitou)",
@@ -307,8 +309,21 @@ def filtros_da_requisicao(args):
 
 
 def _pessoas_do_nome(texto):
+    """Os cadastros (inclusive os excluídos: a trilha guarda o que se fez com eles) cujo nome tem TODAS as palavras buscadas, em qualquer ordem,
+    sem acento e sem diferença de maiúsculas ("luis" acha "Luís" e "LUÍS"). Feito em Python, como a busca da lista de internos: o `ilike` do banco
+    diferencia o acento (nos dois bancos) e as maiúsculas acentuadas (no SQLite), e trata % e _ como curingas."""
+    palavras = normalizar_nome(texto).split()
+    if not palavras:
+        return []
     with exclusao.vendo_tudo():
-        achadas = db.session.execute(db.select(Pessoa.id).filter(Pessoa.nome.ilike(f"%{texto}%")).limit(500)).scalars().all()
+        cadastros = db.session.execute(db.select(Pessoa.id, Pessoa.nome)).all()
+    achadas = []
+    for id_, nome in cadastros:
+        do_nome = normalizar_nome(nome)
+        if all(p in do_nome for p in palavras):
+            achadas.append(id_)
+            if len(achadas) >= 500:
+                break
     return achadas
 
 

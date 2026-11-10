@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "_voltar.html" import linha_voltar with context %}
+{% from "_cartao.html" import cartao, dados %}
+{#
+  A pergunta de quem pede uma "nova internação" de uma pessoa que ainda tem triagem em andamento (app.py: formulario / internar_da_triagem):
+  internar a partir da triagem (o registro sai da lista de triagens e entra na de internos) ou criar uma internação à parte.
+  Variáveis: t (a triagem), pessoa, d (o que está nos campos), erros, convenios.
+#}
+{% block titulo %}Internar {{ pessoa.nome }}{% endblock %}
+
+{% block estilo %}
+  .escolha { max-width: 760px; }
+  .opcao { padding: 18px 20px; margin: 0 0 16px; background: #fff; border: 1px solid var(--borda); border-radius: var(--r-lg); box-shadow: var(--sombra); }
+  .opcao.recomendada { border-color: var(--info-borda); background: linear-gradient(115deg, var(--info-suave), #fff 70%); }
+  .opcao h2 { margin: 0 0 6px; font-size: 1.05rem; }
+  .opcao p { margin: 0 0 12px; color: var(--neutro); }
+  .opcao .grade { margin-bottom: 14px; }
+  .opcao .erro { color: var(--vermelho); margin: 0 0 12px; }
+{% endblock %}
+
+{% block conteudo %}
+<main class="largo escolha">
+  {{ linha_voltar(url_for('ficha', id=t.id)) }}
+  <h1>{{ pessoa.nome }} já tem uma triagem em andamento</h1>
+  <p>Para não ficar um registro duplicado (a triagem parada na lista de triagens e a internação na dos internos, como se fossem duas pessoas), escolha como seguir.</p>
+
+  {% call cartao('A triagem em andamento', 'prancheta', 'azul') %}
+    {{ dados([('Situação', t.status_txt),
+              ('1º contato', [t.primeiro_contato | data, t.hora_primeiro_contato | hora] | select | join(' ')),
+              ('Triagem', [t.data_triagem | data, t.hora_triagem | hora] | select | join(' ')),
+              ('Internação marcada', [t.internacao_agendada | data, t.hora_agendada | hora] | select | join(' ')),
+              ('Convênio', t.convenio if t.convenio and t.convenio != 'A definir' else '')]) }}
+    <p><a href="{{ url_for('ficha', id=t.id) }}">Ver a ficha da triagem</a></p>
+  {% endcall %}
+
+  {% if pode('admitir') %}
+  <form class="opcao recomendada" method="post" action="{{ url_for('internar_da_triagem', id=t.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <h2>Internar a partir desta triagem</h2>
+    <p>Mesma coisa que escolher <em>Admitido → internos</em> na lista de triagens: a triagem sai de lá e passa para a lista de internos, com os dados que já tem. Depois você completa o prontuário.</p>
+    <div class="grade">
+      <label class="c3">Internado em *<input type="date" name="inicio" value="{{ d.get('inicio', '') }}" required></label>
+      <label class="c3">Horário<input type="time" name="hora_internacao" value="{{ d.get('hora_internacao', '') }}"></label>
+      <label class="c3">Convênio *
+        <select name="convenio" required>
+          <option value="">—</option>
+          {% for valor, rotulo in convenios %}<option value="{{ valor }}"{{ ' selected' if (d.get('convenio') or t.convenio) == valor }}>{{ rotulo }}</option>{% endfor %}
+        </select></label>
+      <label class="c3">Valor (R$)<input type="number" step="0.01" min="0" name="contribuicao_valor" value="{{ d.get('contribuicao_valor', '') }}"></label>
+    </div>
+    {% for campo in ('inicio', 'convenio') %}{% if erros.get(campo) %}<p class="erro" role="alert">{{ erros[campo] }}</p>{% endif %}{% endfor %}
+    <button class="botao">Internar e completar o prontuário</button>
+  </form>
+  {% else %}
+  <div class="caixa-info" role="note">Quem admite (o Escritório ou a enfermagem) transforma a triagem em internação na <a href="{{ url_for('lista_triagens') }}">lista de triagens</a>, escolhendo <em>Admitido → internos</em>.</div>
+  {% endif %}
+
+  <div class="opcao">
+    <h2>Criar uma internação à parte</h2>
+    <p>Só se esta for outra internação, sem relação com a triagem acima. A triagem continua na lista de triagens.</p>
+    <a class="botao secundario" href="{{ url_for('formulario', pessoa=pessoa.id, a_parte=1) }}">Criar internação à parte</a>
+  </div>
+</main>
+{% endblock %}

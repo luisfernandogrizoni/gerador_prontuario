@@ -12,6 +12,9 @@ situação: a triagem leva exames e enxoval; a internação leva o prontuário, 
 do envelope, mais o Serviço Social quando o acolhimento social já foi finalizado (em rascunho ele só serviria para
 preencher à mão).
 
+A capa do envelope traz o término quando ele já está no sistema e, para quem já foi internado antes, as datas das passagens anteriores
+(Internacao.passagens_anteriores); quem só tem uma internação leva a capa de sempre, com o término em branco para escrever na baixa.
+
 O acolhimento social é sigiloso (cadastros.pode_servico_social): quem é do Serviço Social ou administrador leva o
 relatório completo; os outros levam só a folha-resumo (classificação e conclusão) e não vêem o relatório nem na barra.
 
@@ -101,7 +104,8 @@ def _blocos(chave, internacao, hoje, saude=False):
         return fichas.ficha_multiprofissional(pessoa.nome, f"{idade} anos" if idade is not None else "",
                                               ficha_saude.conteudo(internacao) if saude else None)
     if chave == "capa":
-        return fichas.capa_do_envelope(pessoa.nome, fmt_data(internacao.inicio), _convenio_sus(internacao), pessoa.cidade)
+        return fichas.capa_do_envelope(pessoa.nome, fmt_data(internacao.inicio), _convenio_sus(internacao), pessoa.cidade,
+                                       termino_fmt=fmt_data(internacao.termino), anteriores=[i.periodo_txt for i in internacao.passagens_anteriores])
     if chave == "resumo-social":
         return [Pagina(), *servico_social.blocos_resumo(internacao, internacao.relatorio_social, hoje)]
     if chave == "relatorio-alta":

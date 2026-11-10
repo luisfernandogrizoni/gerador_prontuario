@@ -697,10 +697,43 @@ def formulario():
         dados = rascunhos.formulario(rascunho)
         pessoa = db.session.get(Pessoa, dados.get("pessoa_id", type=int) or 0)
     else:
-        dados, pessoa = _dados_para_novo(request.args.get("pessoa", type=int))
+        pessoa_id = request.args.get("pessoa", type=int)
+        if pessoa_id and not request.args.get("a_parte"):
+            triagem = servicos.triagem_em_aberto(_buscar(Pessoa, pessoa_id))
+            if triagem is not None:             # já tem triagem em andamento: pergunta se a internação sai dela, em vez de criar um segundo registro
+                return _perguntar_internar_da_triagem(triagem)
+        dados, pessoa = _dados_para_novo(pessoa_id)
     anterior = pessoa.ultima_internacao if pessoa else None
     return render_template("formulario.html", d=dados, erros={}, pessoa=pessoa, anterior=anterior, rascunho=rascunhos.da_tela(g.usuario, "prontuario", rascunho=rascunho),
                            **servicos.opcoes_formulario())
+
+
+def _perguntar_internar_da_triagem(triagem, erros=None, form=None):
+    """A página que pergunta, a quem pediu uma nova internação de quem tem triagem em andamento, se é para internar a partir dela (a triagem sai da lista de
+    triagens e entra na de internos) ou criar uma internação à parte. O que vale como sugestão: a data marcada na triagem, se já chegou; senão, hoje."""
+    hoje = relatorios.hoje_no_brasil()
+    agendada = triagem.internacao_agendada
+    padrao = {"inicio": (agendada if agendada and agendada <= hoje else hoje).isoformat(), "hora_internacao": "", "convenio": "", "contribuicao_valor": ""}
+    return render_template("internar_da_triagem.html", t=triagem, pessoa=triagem.pessoa, erros=erros or {}, d=form if form is not None else padrao,
+                           **servicos.opcoes_formulario(triagem.convenio)), 400 if erros else 200
+
+
+@app.post("/triagens/<int:id>/internar")
+def internar_da_triagem(id):
+    """Internar a pessoa a partir da triagem dela: é a mesma admissão da lista de triagens ('Admitido → internos'), só que pedida de dentro da nova
+    internação. O registro da triagem vira o da internação (sai da lista de triagens e entra na de internos); não nasce um segundo."""
+    triagem = _buscar(Internacao, id)
+    if triagem.status not in servicos.TRIAGEM_EM_ABERTO:
+        flash("Esta triagem já não está em andamento: não há o que internar a partir dela.")
+        return redirect(url_for("ficha", id=id))
+    erros = servicos.mudar_status(triagem, {"status": "ativo", "inicio": request.form.get("inicio"), "hora_internacao": request.form.get("hora_internacao"),
+                                            "convenio": request.form.get("convenio"), "contribuicao_valor": request.form.get("contribuicao_valor")})
+    if erros:
+        return _perguntar_internar_da_triagem(triagem, erros, request.form)
+    auditoria.registrar("status.mudar", "internacao", id, triagem.pessoa_id, "para ativo (internação pedida a partir da triagem)")
+    notificacoes.avisar_prontuario_novo(triagem, g.usuario, admitido=True)       # o Escritório admitiu: a enfermeira fica sabendo
+    flash(f"{triagem.pessoa.nome} foi admitido(a): saiu da lista de triagens e entrou na de internos. Complete o prontuário.")
+    return redirect(url_for("editar_internacao", id=id) if permissoes.pode("internacao") else url_for("ficha", id=id))
 
 
 @app.post("/prontuario/salvar")
@@ -785,7 +818,48 @@ def ficha(id):
                            permanencia=_duracao(permanencia) if permanencia is not None and permanencia >= 0 else "",
                            avatar=avatar_da_pessoa(p.nome),
                            escaneados=anexos.do_registro(internacao, com_removidos=_e_administrador()), titulos_de_anexo=anexos.TITULOS_SUGERIDOS,
-                           limite_do_anexo=anexos.LIMITE_DO_ARQUIVO)
+                           limite_do_anexo=anexos.LIMITE_DO_ARQUIVO,
+                           registros=_registros_da_pessoa(p, internacao, hoje), n_passagens=len(p.passagens))
+
+
+@app.get("/pessoas/<int:id>/prontuario")
+def prontuario_da_pessoa(id):
+    """O prontuário da PESSOA, aberto na passagem mais recente (ou, se ainda não houve internação, no registro mais recente). É o mesmo que a ficha: o
+    endereço de cada passagem é /internacoes/<id>, e a página mostra todas as passagens da pessoa."""
+    pessoa = _buscar(Pessoa, id)
+    registros = pessoa.passagens or pessoa.registros
+    if not registros:
+        abort(404)
+    return redirect(url_for("ficha", id=registros[-1].id))
+
+
+def _periodo_do_registro(o):
+    """O período de um registro, em palavras, para a faixa de passagens e a linha do tempo do prontuário."""
+    if o.e_triagem:
+        if o.internacao_agendada and o.status in servicos.TRIAGEM_EM_ABERTO:
+            return f"internação marcada para {fmt_data(o.internacao_agendada)}"
+        return f"1º contato em {fmt_data(o.primeiro_contato)}" if o.primeiro_contato else "sem datas"
+    return o.periodo_txt
+
+
+def _registros_da_pessoa(pessoa, atual, hoje):
+    """Todos os registros da pessoa (as passagens, que são internações de verdade, e as triagens), do mais antigo para o mais novo: o que a faixa de
+    passagens e a linha do tempo da ficha mostram. Só entra o que a ficha de cada registro já mostra a quem a abre: em que pé estão os relatórios (o
+    conteúdo continua sigiloso, nas próprias telas) e quantos documentos escaneados há (só para quem vê documentos)."""
+    ve_documentos = permissoes.pode("documentos")
+    registros = []
+    for o in pessoa.registros:
+        n = o.numero_da_passagem
+        fim = o.termino or (hoje if o.status == "ativo" else None)
+        dias = (fim - o.inicio).days if n and o.inicio and fim and fim >= o.inicio else None
+        registros.append({"o": o, "atual": o.id == atual.id, "numero": n, "rotulo": f"Passagem {n}" if n else "Triagem",
+                          "periodo": _periodo_do_registro(o), "duracao": _duracao(dias) if dias is not None else "",
+                          "social": servico_social.estado(o.relatorio_social),
+                          "saude": ficha_saude.estado(o.ficha_saude) if n else None,
+                          "alta": relatorio_alta.estado(o.relatorio_alta) if o.status == "inativo" else None,
+                          "anexos": len(anexos.do_registro(o)) if ve_documentos else None,
+                          "papel": o.envelope if o.status == "inativo" else None})
+    return registros
 
 
 def _duracao(dias):

@@ -2,9 +2,39 @@
 {% from "_acoes_documento.html" import acoes_documento %}
 {% from "_voltar.html" import linha_voltar with context %}
 {% from "_cartao.html" import cartao, dados %}
+{#
+  O prontuário da pessoa (a ficha de cada passagem): faixa de identidade, faixa de passagens, abas e linha do tempo. Os painéis estão todos na página; o
+  script do fim mostra um de cada vez (sem script, aparece tudo, em ordem). Cada âncora antiga (#acolhimento, #saude, #alta, #parcelas, #escaneados,
+  #envelope) abre a aba onde o cartão está.
+#}
+{% macro selo_estado(estado, feminino=False) -%}
+  {%- if estado == 'finalizado' %}<span class="selo ativo">{{ 'Finalizada' if feminino else 'Finalizado' }}</span>
+  {%- elif estado == 'rascunho' %}<span class="selo lista_espera">Em andamento</span>
+  {%- else %}<span class="selo">{{ 'Não iniciada' if feminino else 'Não iniciado' }}</span>{% endif -%}
+{%- endmacro %}
+{% macro selo_papel(situacao) -%}
+  {%- if situacao == 'recebido' %}<span class="selo ativo">No escritório</span>
+  {%- elif situacao == 'pendente' %}<span class="selo lista_espera">Na casa de acolhida</span>
+  {%- else %}<span class="selo">Sem registro</span>{% endif -%}
+{%- endmacro %}
+{# nas outras passagens da pessoa, o estado de um relatório (chave: social, saude ou alta; ancora: onde o cartão está na ficha daquela passagem) #}
+{% macro tabela_de_passagens(registros, chave, ancora, feminino=False) -%}
+  {%- set outras = [] -%}
+  {%- for r in registros if not r.atual and r[chave] is not none %}{% set _ = outras.append(r) %}{% endfor -%}
+  {%- if outras %}
+  <div class="tabela-rolavel"><table class="simples">
+    <thead><tr><th>Passagem</th><th>Período</th><th>Situação</th><th></th></tr></thead>
+    <tbody>{% for r in outras | reverse %}
+      <tr><td>{{ r.rotulo }}</td><td>{{ r.periodo }}</td><td>{{ selo_estado(r[chave], feminino) }}</td>
+          <td class="num"><a class="botao pequeno secundario" href="{{ url_for('ficha', id=r.o.id) }}#{{ ancora }}">Abrir</a></td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {%- else %}<p class="nao-informado">Nenhuma outra passagem.</p>{% endif %}
+{%- endmacro %}
 {% set p = i.pessoa %}
 {# cor do cabeçalho de identidade, pela situação #}
-{% set tom = {'ativo': 'verde', 'em_admissao': 'azul', 'lista_espera': 'amarelo', 'desistiu': 'rosa', 'rejeitado': 'neutro', 'inativo': 'neutro'}[i.status] | default('neutro') %}
+{% set tons = {'ativo': 'verde', 'em_admissao': 'azul', 'lista_espera': 'amarelo', 'desistiu': 'rosa', 'rejeitado': 'neutro', 'inativo': 'neutro'} %}
+{% set tom = tons[i.status] | default('neutro') %}
 
 {% block titulo %}{{ p.nome }}{% endblock %}
 
@@ -124,6 +154,56 @@
     .simples.larga { min-width: 0; }
     form.nova-parcela, form.novo-anexo, .acoes-anexo { display: none; }
   }
+  /* ---- alertas no cabeçalho, faixa de passagens e abas (o prontuário da pessoa) ---- */
+  .alertas { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 8px; margin: 10px 0 0; padding: 0; }
+  .alerta { display: inline-flex; align-items: center; padding: 3px 11px; border-radius: 999px; font-size: .8rem; font-weight: 600; text-decoration: none;
+            color: var(--a-cor); background: var(--a-fundo); border: 1px solid var(--a-borda); }
+  .alerta:hover { filter: brightness(.96); }
+  .alerta.amarelo { --a-cor: #7a5200; --a-fundo: #fff6dd; --a-borda: #f1d98f; }
+  .alerta.vermelho { --a-cor: #b3261e; --a-fundo: #fdecea; --a-borda: #f3b9b4; }
+  .alerta.azul { --a-cor: #1d4f9c; --a-fundo: #e8f0fc; --a-borda: #b9d0f3; }
+  .faixa-passagens { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: thin; padding: 2px 2px 12px; margin: 0 0 4px; }
+  .faixa-passagens a { flex: 0 0 auto; display: grid; gap: 3px; justify-items: start; min-width: 168px; padding: 9px 13px; background: #fff; color: inherit; text-decoration: none;
+                       border: 1px solid var(--borda); border-radius: 13px; }
+  .faixa-passagens a:hover { border-color: #b9c4d6; }
+  .faixa-passagens a[aria-current="true"] { border-color: #1d4f9c; background: #eef4ff; box-shadow: 0 0 0 2px #dbe7fb; }
+  .faixa-passagens .rotulo { font-weight: 700; font-size: .92rem; }
+  .faixa-passagens small { color: var(--suave); }
+  .abas-prontuario { position: sticky; top: var(--topo-h, 60px); z-index: 20; display: flex; align-items: center; gap: 2px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; margin: 0 0 var(--e4);
+                     background: rgba(255,255,255,.95); backdrop-filter: blur(10px); border-bottom: 1px solid var(--borda); }
+  .abas-prontuario a.aba { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; padding: 12px 14px; font-weight: 600; font-size: .92rem; color: var(--suave);
+                           text-decoration: none; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+  .abas-prontuario a.aba:hover { color: #1f2937; }
+  .abas-prontuario a.aba[aria-current="true"] { color: #1d4f9c; border-bottom-color: #1d4f9c; }
+  .abas-prontuario .contagem { min-width: 20px; padding: 0 6px; border-radius: 999px; background: #eef1f5; color: var(--suave); font-size: .75rem; line-height: 20px; text-align: center; }
+  .abas-prontuario .mini-id { display: none; margin-left: auto; padding: 0 4px 0 14px; font-size: .85rem; font-weight: 600; color: var(--suave); white-space: nowrap; }
+  .abas-prontuario.rolou .mini-id { display: block; }
+  .painel-aba { scroll-margin-top: calc(var(--topo-h, 60px) + 56px); }
+  .painel-aba[hidden] { display: none; }
+  .situacao-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .situacao-lista a { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px; border-radius: 10px; color: inherit; text-decoration: none; }
+  .situacao-lista a:hover { background: #f5f7fa; }
+  /* linha do tempo das passagens (da mais recente para a mais antiga) */
+  .linha-passagens { list-style: none; margin: 0; padding: 0; position: relative; }
+  .linha-passagens > li { position: relative; padding: 0 0 18px 30px; }
+  .linha-passagens > li::before { content: ""; position: absolute; left: 6px; top: 20px; width: 11px; height: 11px; border-radius: 50%; background: #c3cad6; box-shadow: 0 0 0 4px #eef1f5; }
+  .linha-passagens > li.atual::before { background: #1d4f9c; box-shadow: 0 0 0 4px #dbe7fb; }
+  .linha-passagens > li::after { content: ""; position: absolute; left: 11px; top: 34px; bottom: -4px; width: 1px; background: var(--borda); }
+  .linha-passagens > li:last-child::after { display: none; }
+  .item-passagem { padding: 16px 18px; background: #fff; border: 1px solid var(--borda); border-radius: var(--r-lg); box-shadow: var(--sombra); }
+  .linha-passagens > li.atual .item-passagem { border-color: #b9d0f3; }
+  .item-passagem header { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; margin-bottom: 4px; }
+  .item-passagem h3 { margin: 0; font-size: 1.02rem; }
+  .item-passagem .periodo { margin: 0 0 10px; color: var(--neutro); }
+  .item-passagem .trilha { list-style: none; margin: 12px 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 22px; }
+  .item-passagem .trilha li { display: inline-flex; align-items: center; gap: 8px; font-size: .88rem; color: var(--suave); }
+  .item-passagem .trilha strong { color: #1f2937; }
+  @media (max-width: 640px) { .faixa-passagens a { min-width: 148px; } .abas-prontuario a.aba { padding: 11px 11px; } .linha-passagens > li { padding-left: 24px; } }
+  @media print {
+    .painel-aba[hidden] { display: block !important; }
+    .abas-prontuario, .faixa-passagens, .alertas { display: none !important; }
+    .item-passagem { box-shadow: none; }
+  }
 {% endblock %}
 
 {% block conteudo %}
@@ -149,8 +229,16 @@
         {% endif %}
         {% if i.status == 'ativo' and previsao %}<span class="fato"><svg class="icone"><use href="#i-relogio"/></svg>Previsão de saída {{ previsao | data }}</span>{% endif %}
         {% if i.resp_nome %}<span class="fato"><svg class="icone"><use href="#i-usuario"/></svg>{{ i.resp_nome }}{{ ' (' ~ i.parentesco ~ ')' if i.parentesco }}</span>{% endif %}
+        {% if p.cpf %}<span class="fato">CPF {{ p.cpf | cpf }}</span>{% endif %}
       </p>
-      <p class="ids">Cadastro nº {{ p.id }} · registro nº {{ i.id }}</p>
+      <p class="ids"><strong>Prontuário nº {{ p.id }}</strong> · {% if i.numero_da_passagem %}passagem {{ i.numero_da_passagem }} de {{ n_passagens }}{% else %}triagem{% endif %} · registro nº {{ i.id }}</p>
+      {% set alertas = [] %}
+      {% if i.status == 'inativo' and i.envelope == 'pendente' %}{% set _ = alertas.append(('Prontuário em papel na casa de acolhida' ~ (' · saiu ' ~ envelope_tempo if envelope_tempo else ''), 'vermelho' if envelope_atrasado else 'amarelo', 'arquivos')) %}{% endif %}
+      {% if acolhimento.estado != 'finalizado' and i.status in ('em_admissao', 'lista_espera', 'ativo') %}{% set _ = alertas.append(('Acolhimento social ' ~ ('em andamento' if acolhimento.estado == 'rascunho' else 'não iniciado'), 'amarelo', 'social')) %}{% endif %}
+      {% if alta is not none and alta.estado != 'finalizado' %}{% set _ = alertas.append(('Relatório de alta ' ~ ('em andamento' if alta.estado == 'rascunho' else 'não escrito'), 'amarelo', 'alta')) %}{% endif %}
+      {% if saude is not none and i.status == 'ativo' and saude.estado != 'finalizado' and (pode_ler_saude or pode_escrever_saude) %}{% set _ = alertas.append(('Ficha de saúde ' ~ ('em andamento' if saude.estado == 'rascunho' else 'não iniciada'), 'amarelo', 'saude')) %}{% endif %}
+      {% if i.a_conferir and pode('conferir') %}{% set _ = alertas.append(('Registro importado a conferir', 'azul', 'resumo')) %}{% endif %}
+      {% if alertas %}<ul class="alertas" aria-label="Pontos de atenção">{% for texto, cor, aba in alertas %}<li><a class="alerta {{ cor }}" href="#aba-{{ aba }}">{{ texto }}</a></li>{% endfor %}</ul>{% endif %}
     </div>
     {# cada botão aparece só para quem o nível de acesso permite (permissoes.py) #}
     <div class="acoes">
@@ -183,6 +271,32 @@
     {% if pode('conferir') %}<form method="post" action="{{ url_for('marcar_conferido', id=i.id) }}" style="display: inline; margin: 0 0 0 8px;"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="desfazer" value="1"><button class="botao pequeno secundario" type="submit">Reabrir conferência</button></form>{% endif %}</div>
   {% endif %}
 
+
+  {% if registros | length > 1 %}
+  <nav class="faixa-passagens" aria-label="Passagens desta pessoa">
+    {% for r in registros %}
+    <a href="{{ url_for('ficha', id=r.o.id) }}"{{ ' aria-current="true"' | safe if r.atual }} data-passagem>
+      <span class="rotulo">{{ r.rotulo }}{{ ' · atual' if r.numero and r.numero == n_passagens and r.o.status == 'ativo' }}</span>
+      <small>{{ r.periodo }}</small>
+      <span class="selo {{ r.o.status }}">{{ r.o.status_txt }}</span>
+    </a>
+    {% endfor %}
+  </nav>
+  {% endif %}
+
+  {% set ha_arquivos = pode('documentos') or i.status == 'inativo' %}
+  <nav class="abas-prontuario" id="abas" aria-label="Seções do prontuário">
+    <a class="aba" href="#aba-resumo" data-aba="resumo">Resumo</a>
+    <a class="aba" href="#aba-passagens" data-aba="passagens">Passagens<span class="contagem">{{ registros | length }}</span></a>
+    <a class="aba" href="#aba-social" data-aba="social">Serviço Social</a>
+    {% if saude is not none %}<a class="aba" href="#aba-saude" data-aba="saude">Saúde</a>{% endif %}
+    {% if alta is not none %}<a class="aba" href="#aba-alta" data-aba="alta">Alta</a>{% endif %}
+    {% if ha_arquivos %}<a class="aba" href="#aba-arquivos" data-aba="arquivos">Documentos</a>{% endif %}
+    <a class="aba" href="#aba-financeiro" data-aba="financeiro">Financeiro</a>
+    <span class="mini-id" aria-hidden="true">{{ p.nome }} · prontuário nº {{ p.id }}</span>
+  </nav>
+
+  <div class="painel-aba" id="aba-resumo" data-painel="resumo">
   <div class="ficha-grade">
     <div class="coluna-principal">
       {% call cartao('Dados pessoais', 'usuario', 'azul') %}
@@ -212,67 +326,67 @@
         {{ dados([('Nome', (i.resp_nome ~ (' (' ~ i.parentesco ~ ')' if i.parentesco else '')) if i.resp_nome else ''),
                   ('CPF', i.resp_cpf | cpf), ('RG', i.resp_rg | rg)]) }}
       {% endcall %}
-
-      {% call cartao('Parcelas', 'moeda', 'amarelo', id='parcelas') %}
-        {% if i.parcelas %}
-          <div class="tabela-rolavel">
-          <table class="simples">
-            <thead><tr><th>Nº</th><th>Data</th><th>Valor</th><th></th></tr></thead>
-            <tbody>
-              {% for parc in i.parcelas %}
-              <tr>
-                <td>{{ parc.numero }}ª</td>
-                <td>{{ parc.data | data }}</td>
-                <td class="num">{{ parc.valor | reais if parc.valor is not none else '—' }}</td>
-                <td>{% if pode('financeiro') %}<form method="post" action="{{ url_for('excluir_parcela', id=parc.id) }}"
-                          data-confirmar="Excluir a {{ parc.numero }}ª parcela?"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                      <button class="botao pequeno secundario">Excluir</button></form>{% endif %}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-          </div>
-        {% else %}
-          <p class="nao-informado">Nenhuma parcela lançada.</p>
-        {% endif %}
-        {% if pode('financeiro') %}
-        <form class="nova-parcela" method="post" action="{{ url_for('lancar_parcela', id=i.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <label>Nº<input type="number" name="numero" min="1"
-                 value="{{ (i.parcelas | map(attribute='numero') | max) + 1 if i.parcelas else 1 }}"></label>
-          <label>Data *<input type="date" name="data" required></label>
-          <label>Valor (R$)<input type="number" step="0.01" min="0" name="valor"
-                 value="{{ '%.2f' % i.contribuicao_valor if i.contribuicao_valor else '' }}"></label>
-          <button class="botao suave">Lançar parcela</button>
-        </form>
-        {% endif %}
-      {% endcall %}
-
-      {% set outras = p.internacoes | rejectattr('id', 'equalto', i.id) | list %}
-      {% if outras %}
-      {% call cartao('Outros registros desta pessoa', 'calendario', 'neutro') %}
-        <div class="tabela-rolavel">
-        <table class="simples larga">
-          <thead><tr><th>Registro</th><th>Situação</th><th>1º contato</th><th>Agendada</th><th>Internado em</th><th>Saída</th><th>Responsável</th></tr></thead>
-          <tbody>
-            {% for o in outras %}
-            <tr>
-              <td><a href="{{ url_for('ficha', id=o.id) }}">nº {{ o.id }}</a></td>
-              <td><span class="selo {{ o.status }}">{{ o.status_txt }}</span></td>
-              <td>{{ o.primeiro_contato | data }}</td>
-              <td>{{ o.internacao_agendada | data }}</td>
-              <td>{{ o.inicio | data }}</td>
-              <td>{{ o.termino | data }}</td>
-              <td>{{ o.resp_nome }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        </div>
-      {% endcall %}
-      {% endif %}
     </div>
-
     <aside class="coluna-lateral">
+      {% call cartao('Situação desta passagem', 'prancheta', 'turquesa', id='situacao') %}
+        <ul class="situacao-lista">
+          <li><a href="#aba-social"><span>Acolhimento social</span>{{ selo_estado(acolhimento.estado) }}</a></li>
+          {% if saude is not none %}<li><a href="#aba-saude"><span>Ficha de saúde</span>{{ selo_estado(saude.estado, True) }}</a></li>{% endif %}
+          {% if alta is not none %}<li><a href="#aba-alta"><span>Relatório de alta</span>{{ selo_estado(alta.estado) }}</a></li>{% endif %}
+          {% if i.status == 'inativo' %}<li><a href="#aba-arquivos"><span>Prontuário em papel</span>{{ selo_papel(i.envelope) }}</a></li>{% endif %}
+          {% if pode('documentos') %}<li><a href="#aba-arquivos"><span>Documentos escaneados</span><strong>{{ escaneados | rejectattr('excluido_em') | list | length }}</strong></a></li>{% endif %}
+          <li><a href="#aba-financeiro"><span>Parcelas lançadas</span><strong>{{ i.parcelas | length }}</strong></a></li>
+        </ul>
+      {% endcall %}
+
+      {% call cartao('Triagem' if i.e_triagem else 'Internação', 'calendario', 'azul') %}
+        {% set etapas = [('1º contato', [i.primeiro_contato | data, i.hora_primeiro_contato | hora] | select | join(' ')),
+                         ('Triagem', ([i.data_triagem | data, i.hora_triagem | hora] | select | join(' ')) ~ (' · ' ~ i.modalidade if i.modalidade and i.data_triagem else '')),
+                         ('Internação agendada', [i.internacao_agendada | data, i.hora_agendada | hora] | select | join(' ')),
+                         ('Internado em (efetiva)', [i.inicio | data, i.hora_internacao | hora] | select | join(' ')),
+                         ('Saída', ((i.termino | data) ~ (' · ' ~ i.motivo if i.motivo else '')) if i.termino else '')] | selectattr(1) | list %}
+        {% if etapas %}
+          <ol class="etapas">{% for rotulo, valor in etapas %}<li><span>{{ rotulo }}</span><strong>{{ valor }}</strong></li>{% endfor %}</ol>
+        {% endif %}
+        {{ dados([('Categoria', i.categoria), ('Contribuição', (i.contribuicao_valor | reais) ~ (' — ' ~ i.contribuicao_condicoes if i.contribuicao_condicoes else ''))]) }}
+      {% endcall %}
+    </aside>
+  </div>
+  </div>
+  <div class="painel-aba" id="aba-passagens" data-painel="passagens">
+    {% call cartao('Todas as passagens desta pessoa', 'calendario', 'azul', id='passagens') %}
+      <p>{% if n_passagens %}{{ p.nome }} tem <strong>{{ n_passagens }}</strong> {{ 'passagem' if n_passagens == 1 else 'passagens' }} pela casa{% if registros | length > n_passagens %}, fora as triagens abaixo{% endif %}. Abra uma para ver o prontuário dela.{% else %}Ainda não houve internação: só a triagem abaixo.{% endif %}</p>
+      <ol class="linha-passagens">
+        {% for r in registros | reverse %}{% set o = r.o %}
+        <li{{ ' class="atual"' | safe if r.atual }}>
+          <article class="item-passagem">
+            <header>
+              <h3>{{ r.rotulo }}</h3>
+              <span class="selo {{ o.status }}">{{ o.status_txt }}</span>
+              {% if r.atual %}<span class="chip">Aberta agora</span>{% endif %}
+              {% if o.importado %}<span class="chip">Importado{{ ' · a conferir' if o.a_conferir and pode('conferir') }}</span>{% endif %}
+            </header>
+            <p class="periodo"><svg class="icone"><use href="#i-calendario"/></svg> {{ r.periodo }}{{ ' · ' ~ r.duracao if r.duracao }}</p>
+            {{ dados([('Categoria', o.categoria if r.numero else ''), ('Motivo da saída', o.motivo),
+                      ('Responsável', (o.resp_nome ~ (' (' ~ o.parentesco ~ ')' if o.parentesco else '')) if o.resp_nome else '')]) }}
+            <ul class="trilha">
+              <li><span>Acolhimento social</span>{{ selo_estado(r.social) }}</li>
+              {% if r.saude is not none %}<li><span>Ficha de saúde</span>{{ selo_estado(r.saude, True) }}</li>{% endif %}
+              {% if r.alta is not none %}<li><span>Relatório de alta</span>{{ selo_estado(r.alta) }}</li>{% endif %}
+              {% if r.anexos is not none %}<li><span>Documentos escaneados</span><strong>{{ r.anexos }}</strong></li>{% endif %}
+              {% if r.papel is not none %}<li><span>Prontuário em papel</span>{{ selo_papel(r.papel) }}</li>{% endif %}
+            </ul>
+            {% if r.atual %}<a class="botao pequeno secundario" href="#aba-resumo">Ver o resumo desta passagem</a>
+            {% else %}<a class="botao pequeno" href="{{ url_for('ficha', id=o.id) }}#aba-resumo">Abrir esta passagem</a>{% endif %}
+          </article>
+        </li>
+        {% endfor %}
+      </ol>
+    {% endcall %}
+  </div>
+  <div class="painel-aba" id="aba-social" data-painel="social">
+  <div class="ficha-grade">
+    <div class="coluna-principal">
       {% call cartao('Acolhimento social', 'coracao', 'rosa', id='acolhimento') %}
         <div class="envelope">
           <div class="situacao">
@@ -300,33 +414,18 @@
           {{ acoes_documento(url_for('ver_impressos', id=i.id, itens=item), url_for('baixar_impressos', id=i.id, itens=item), 'espaco') }}
         {% endif %}
       {% endcall %}
-
-      {% if alta is not none %}
-      {% call cartao('Relatório de alta', 'documento', 'roxo', id='alta') %}
-        <div class="envelope">
-          <div class="situacao">
-            {% if alta.estado == 'finalizado' %}
-              <span class="selo ativo">Finalizado</span>
-              <span>{{ alta.em.strftime('%d/%m/%Y às %H:%M') }}{{ ' · ' ~ alta.por if pode_ler_social and alta.por }}</span>
-            {% elif alta.estado == 'rascunho' %}
-              <span class="selo lista_espera">Em andamento</span>
-              <span>salvo em {{ alta.em.strftime('%d/%m/%Y às %H:%M') }}{{ ' · ' ~ alta.por if pode_ler_social and alta.por }}</span>
-            {% else %}
-              <span class="selo{{ ' lista_espera' if i.baixa_em }}">Não escrito</span>
-            {% endif %}
-          </div>
-          {% if pode_servico_social %}
-            <a class="botao {{ 'secundario' if alta.estado == 'finalizado' else 'suave' }}" href="{{ url_for('relatorio_de_alta', id=i.id) }}">{{ 'Alterar' if alta.estado == 'finalizado' else 'Continuar' if alta.estado == 'rascunho' else 'Escrever o relatório de alta' }}</a>
-          {% endif %}
-          {% if alta.historico %}<a class="botao secundario" href="{{ url_for('historico_do_relatorio', id=i.id, tipo='alta') }}">Histórico de versões</a>{% endif %}
-        </div>
-        {% if alta.estado == 'finalizado' and pode_ler_social and pode('documentos') %}
-          {{ acoes_documento(url_for('ver_impressos', id=i.id, itens='relatorio-alta'), url_for('baixar_impressos', id=i.id, itens='relatorio-alta'), 'espaco') }}
-        {% endif %}
+    </div>
+    <aside class="coluna-lateral">
+      {% call cartao('O acolhimento nas outras passagens', 'coracao', 'rosa') %}
+        {{ tabela_de_passagens(registros, 'social', 'acolhimento') }}
       {% endcall %}
-      {% endif %}
-
-      {% if saude is not none %}
+    </aside>
+  </div>
+  </div>
+{% if saude is not none %}
+  <div class="painel-aba" id="aba-saude" data-painel="saude">
+  <div class="ficha-grade">
+    <div class="coluna-principal">
       {% call cartao('Ficha de saúde', 'prancheta', 'turquesa', id='saude') %}
         <div class="envelope">
           <div class="situacao">
@@ -353,20 +452,54 @@
           {{ acoes_documento(url_for('ver_impressos', id=i.id, itens='multiprofissional'), url_for('baixar_impressos', id=i.id, itens='multiprofissional'), 'espaco') }}
         {% endif %}
       {% endcall %}
-      {% endif %}
-
-      {% call cartao('Triagem' if i.e_triagem else 'Internação', 'calendario', 'azul') %}
-        {% set etapas = [('1º contato', [i.primeiro_contato | data, i.hora_primeiro_contato | hora] | select | join(' ')),
-                         ('Triagem', ([i.data_triagem | data, i.hora_triagem | hora] | select | join(' ')) ~ (' · ' ~ i.modalidade if i.modalidade and i.data_triagem else '')),
-                         ('Internação agendada', [i.internacao_agendada | data, i.hora_agendada | hora] | select | join(' ')),
-                         ('Internado em (efetiva)', [i.inicio | data, i.hora_internacao | hora] | select | join(' ')),
-                         ('Saída', ((i.termino | data) ~ (' · ' ~ i.motivo if i.motivo else '')) if i.termino else '')] | selectattr(1) | list %}
-        {% if etapas %}
-          <ol class="etapas">{% for rotulo, valor in etapas %}<li><span>{{ rotulo }}</span><strong>{{ valor }}</strong></li>{% endfor %}</ol>
-        {% endif %}
-        {{ dados([('Categoria', i.categoria), ('Contribuição', (i.contribuicao_valor | reais) ~ (' — ' ~ i.contribuicao_condicoes if i.contribuicao_condicoes else ''))]) }}
+    </div>
+    <aside class="coluna-lateral">
+      {% call cartao('A ficha de saúde nas outras passagens', 'prancheta', 'turquesa') %}
+        {{ tabela_de_passagens(registros, 'saude', 'saude', True) }}
       {% endcall %}
-
+    </aside>
+  </div>
+  </div>
+{% endif %}
+{% if alta is not none %}
+  <div class="painel-aba" id="aba-alta" data-painel="alta">
+  <div class="ficha-grade">
+    <div class="coluna-principal">
+      {% call cartao('Relatório de alta', 'documento', 'roxo', id='alta') %}
+        <div class="envelope">
+          <div class="situacao">
+            {% if alta.estado == 'finalizado' %}
+              <span class="selo ativo">Finalizado</span>
+              <span>{{ alta.em.strftime('%d/%m/%Y às %H:%M') }}{{ ' · ' ~ alta.por if pode_ler_social and alta.por }}</span>
+            {% elif alta.estado == 'rascunho' %}
+              <span class="selo lista_espera">Em andamento</span>
+              <span>salvo em {{ alta.em.strftime('%d/%m/%Y às %H:%M') }}{{ ' · ' ~ alta.por if pode_ler_social and alta.por }}</span>
+            {% else %}
+              <span class="selo{{ ' lista_espera' if i.baixa_em }}">Não escrito</span>
+            {% endif %}
+          </div>
+          {% if pode_servico_social %}
+            <a class="botao {{ 'secundario' if alta.estado == 'finalizado' else 'suave' }}" href="{{ url_for('relatorio_de_alta', id=i.id) }}">{{ 'Alterar' if alta.estado == 'finalizado' else 'Continuar' if alta.estado == 'rascunho' else 'Escrever o relatório de alta' }}</a>
+          {% endif %}
+          {% if alta.historico %}<a class="botao secundario" href="{{ url_for('historico_do_relatorio', id=i.id, tipo='alta') }}">Histórico de versões</a>{% endif %}
+        </div>
+        {% if alta.estado == 'finalizado' and pode_ler_social and pode('documentos') %}
+          {{ acoes_documento(url_for('ver_impressos', id=i.id, itens='relatorio-alta'), url_for('baixar_impressos', id=i.id, itens='relatorio-alta'), 'espaco') }}
+        {% endif %}
+      {% endcall %}
+    </div>
+    <aside class="coluna-lateral">
+      {% call cartao('O relatório de alta nas outras passagens', 'documento', 'roxo') %}
+        {{ tabela_de_passagens(registros, 'alta', 'alta') }}
+      {% endcall %}
+    </aside>
+  </div>
+  </div>
+{% endif %}
+{% if ha_arquivos %}
+  <div class="painel-aba" id="aba-arquivos" data-painel="arquivos">
+  <div class="ficha-grade">
+    <div class="coluna-principal">
       {% if pode('documentos') %}
       {% call cartao('Documentos escaneados', 'documento', 'neutro', id='escaneados') %}
         {% if escaneados %}
@@ -424,7 +557,8 @@
         {% endif %}
       {% endcall %}
       {% endif %}
-
+    </div>
+    <aside class="coluna-lateral">
       {% if i.status == 'inativo' %}
       {% call cartao('Prontuário em papel', 'envelope', 'verde' if i.envelope == 'recebido' else 'amarelo' if i.envelope == 'pendente' else 'neutro', id='envelope') %}
         <div class="envelope">
@@ -456,7 +590,54 @@
       {% endif %}
     </aside>
   </div>
+  </div>
+{% endif %}
+  <div class="painel-aba" id="aba-financeiro" data-painel="financeiro">
+  <div class="ficha-grade">
+    <div class="coluna-principal">
+      {% call cartao('Parcelas', 'moeda', 'amarelo', id='parcelas') %}
+        {% if i.parcelas %}
+          <div class="tabela-rolavel">
+          <table class="simples">
+            <thead><tr><th>Nº</th><th>Data</th><th>Valor</th><th></th></tr></thead>
+            <tbody>
+              {% for parc in i.parcelas %}
+              <tr>
+                <td>{{ parc.numero }}ª</td>
+                <td>{{ parc.data | data }}</td>
+                <td class="num">{{ parc.valor | reais if parc.valor is not none else '—' }}</td>
+                <td>{% if pode('financeiro') %}<form method="post" action="{{ url_for('excluir_parcela', id=parc.id) }}"
+                          data-confirmar="Excluir a {{ parc.numero }}ª parcela?"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button class="botao pequeno secundario">Excluir</button></form>{% endif %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          </div>
+        {% else %}
+          <p class="nao-informado">Nenhuma parcela lançada.</p>
+        {% endif %}
+        {% if pode('financeiro') %}
+        <form class="nova-parcela" method="post" action="{{ url_for('lancar_parcela', id=i.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <label>Nº<input type="number" name="numero" min="1"
+                 value="{{ (i.parcelas | map(attribute='numero') | max) + 1 if i.parcelas else 1 }}"></label>
+          <label>Data *<input type="date" name="data" required></label>
+          <label>Valor (R$)<input type="number" step="0.01" min="0" name="valor"
+                 value="{{ '%.2f' % i.contribuicao_valor if i.contribuicao_valor else '' }}"></label>
+          <button class="botao suave">Lançar parcela</button>
+        </form>
+        {% endif %}
+      {% endcall %}
+    </div>
+    <aside class="coluna-lateral">
+      {% call cartao('Contribuição', 'moeda', 'amarelo') %}
+        {{ dados([('Categoria', i.categoria), ('Valor', i.contribuicao_valor | reais), ('Condições', i.contribuicao_condicoes)]) }}
+      {% endcall %}
+    </aside>
+  </div>
+  </div>
 </main>
+
 
 {% if pode('documentos') %}
 <dialog id="documentos" class="gaveta" aria-labelledby="titulo-documentos">
@@ -538,6 +719,46 @@
       // o menu "Mais" fecha ao clicar fora ou com Esc
       document.addEventListener("click", function (e) { if (mais.open && !mais.contains(e.target)) mais.open = false; });
       document.addEventListener("keydown", function (e) { if (e.key === "Escape") mais.open = false; });
+    }
+    // ---- as abas do prontuário: os painéis estão todos na página; aqui se mostra um por vez (sem script, aparece tudo)
+    var barra = document.getElementById("abas");
+    if (barra) {
+      var links = [].slice.call(barra.querySelectorAll("a.aba")), paineis = [].slice.call(document.querySelectorAll(".painel-aba"));
+      var nomes = links.map(function (a) { return a.getAttribute("data-aba"); });
+      var guardada = function () { try { return sessionStorage.getItem("aba-do-prontuario"); } catch (e) { return null; } };
+      var guardar = function (nome) { try { sessionStorage.setItem("aba-do-prontuario", nome); } catch (e) { /* sem armazenamento: só não lembra a aba */ } };
+      var daHash = function () {                  // #aba-social, ou a âncora de um cartão (#acolhimento, #parcelas...): a aba onde ele está
+        var alvo = decodeURIComponent(location.hash.slice(1));
+        if (!alvo) return {};
+        if (alvo.indexOf("aba-") === 0) return { aba: alvo.slice(4) };
+        var el = document.getElementById(alvo), painel = el && el.closest(".painel-aba");
+        return painel ? { aba: painel.getAttribute("data-painel"), el: el } : {};
+      };
+      var mostrar = function (nome) {
+        if (nomes.indexOf(nome) < 0) nome = "resumo";
+        paineis.forEach(function (p) { p.hidden = p.getAttribute("data-painel") !== nome; });
+        links.forEach(function (a) { if (a.getAttribute("data-aba") === nome) a.setAttribute("aria-current", "true"); else a.removeAttribute("aria-current"); });
+        [].forEach.call(document.querySelectorAll("a[data-passagem]"), function (a) { a.hash = "#aba-" + nome; });      // trocar de passagem mantém a aba
+        guardar(nome);
+      };
+      var aoTopo = function () {                  // quem rolou a página volta ao começo do painel, logo abaixo das abas
+        var topoH = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--topo-h"), 10) || 60;
+        var y = barra.getBoundingClientRect().top + window.pageYOffset - topoH;
+        if (window.pageYOffset > y) window.scrollTo(0, y);
+      };
+      var abrir = function () {
+        var h = daHash();
+        mostrar(h.aba || guardada() || "resumo");
+        if (h.el) h.el.scrollIntoView(); else if (h.aba) aoTopo();
+      };
+      links.forEach(function (a) {
+        a.addEventListener("click", function (e) { e.preventDefault(); history.pushState(null, "", "#aba-" + a.getAttribute("data-aba")); abrir(); });
+      });
+      window.addEventListener("hashchange", abrir);
+      window.addEventListener("popstate", abrir);
+      abrir();
+      var topo = document.querySelector(".ficha-topo");            // o nome da pessoa fica à vista nas abas quando o cabeçalho sai da tela
+      if (topo && "IntersectionObserver" in window) new IntersectionObserver(function (e) { barra.classList.toggle("rolou", !e[0].isIntersecting); }).observe(topo);
     }
   })();
 </script>
