@@ -10,7 +10,7 @@ Como funciona:
   * **Só PDF de verdade e inteiro**: começa com %PDF-, termina com %%EOF, até LIMITE_DO_ARQUIVO, sem senha e sem script nem arquivo embutido (um PDF de escaneamento
     comum não tem). É uma conferência do que dá para ver sem abrir o PDF, não um antivírus; quem abre é o leitor de PDF do navegador, que roda isolado.
   * **O mesmo arquivo não entra duas vezes** no mesmo registro (a impressão digital acusa).
-  * **Área**: o documento pode ser vinculado a uma área (Saúde, Financeiro, Serviço Social; sem área = geral) e a central de documentos da ficha filtra por ela. Segue o sigilo
+  * **Área**: o documento pode ser vinculado a uma área (Saúde, Financeiro, Serviço Social; sem área = geral) e o cartão "Documentos escaneados" da ficha filtra por ela. Segue o sigilo
     de cada uma (app._pode_ver_area_do_anexo): o do Serviço Social só vai a quem lê o Serviço Social, o de Saúde a quem lê a saúde, o Financeiro a quem tem a
     permissão do financeiro; o geral, a quem tem `documentos`. O administrador vê tudo. Quem não vê uma área também não anexa nela.
   * Quem pode: ver e baixar, quem imprime os documentos do acolhido (permissão `documentos`); anexar e remover, a permissão `anexar`. Remover só esconde (o

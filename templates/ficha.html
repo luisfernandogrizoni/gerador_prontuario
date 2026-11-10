@@ -4,8 +4,8 @@
 {#
   O prontuário da PESSOA, numa página só: a faixa de identidade, os dados da pessoa e, embaixo, cada passagem (internação) ou triagem num bloco que abre e fecha
   (a do endereço aberto sai expandida; as outras, minimizadas). Em cada bloco: a internação, o responsável, o acompanhamento (acolhimento social, ficha de saúde,
-  relatório de alta, prontuário em papel; uma ação principal e um menu "Mais"), o financeiro e a central de documentos (impressos e escaneados juntos, com filtro por
-  área). As âncoras antigas (#acolhimento, #saude, #alta, #parcelas, #escaneados, #envelope) valem para a passagem do endereço aberto e abrem o bloco onde estão.
+  relatório de alta, prontuário em papel; uma ação principal e um menu "Mais"), o financeiro e os documentos, em dois cartões SEPARADOS (os que se imprimem e os
+  escaneados, estes com filtro por área). As âncoras antigas (#acolhimento, #saude, #alta, #parcelas, #escaneados, #envelope) valem para a passagem do endereço aberto e abrem o bloco onde estão.
   Variáveis: i (o registro aberto), passagens (todas, do mais novo para o mais antigo), n_passagens, rotulos_das_areas, areas_de_anexo e as de sempre.
 #}
 {% macro selo_estado(estado, feminino=False) -%}
@@ -105,10 +105,10 @@
   .menu-mais .mini-rotulo { display: block; padding: 6px 12px 0; font-size: .78rem; color: var(--suave); }
   .menu-mais .vincular-area { display: flex; gap: 6px; padding: 4px 8px 6px; }
   .menu-mais .vincular-area button { width: auto; }
-  /* ---- central de documentos ---- */
-  .central { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--borda); scroll-margin-top: calc(var(--topo-h, 60px) + 12px); }
-  .central > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-  .central h3 { margin: 0; font-size: 1rem; }
+  /* ---- documentos da passagem: os que se imprimem e os escaneados, em dois cartões separados ---- */
+  .grade-documentos { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 0 var(--e4); align-items: start; margin-top: 4px; scroll-margin-top: calc(var(--topo-h, 60px) + 12px); }
+  .grade-documentos .cartao-secao { scroll-margin-top: calc(var(--topo-h, 60px) + 12px); }
+  .topo-escaneados { display: flex; justify-content: flex-end; margin: 0 0 10px; }
   .filtro-area { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 10px; }
   .filtro-area button { padding: 4px 12px; border: 1px solid var(--borda); border-radius: 999px; background: #fff; color: var(--neutro); font: inherit; font-size: .84rem; cursor: pointer; }
   .filtro-area button[aria-pressed="true"] { background: #eef4ff; border-color: #1d4f9c; color: #1d4f9c; font-weight: 600; }
@@ -121,7 +121,7 @@
   .lista-docs .sem-caixa { flex: 1 1 220px; min-width: 0; display: flex; align-items: center; gap: 10px; }
   .lista-docs .nome-doc { font-weight: 600; overflow-wrap: anywhere; }
   .lista-docs small { display: block; color: var(--suave); font-weight: 400; }
-  .lista-docs .tipo { font-size: .76rem; color: var(--suave); }
+  .lista-docs .tipo { font-size: .78rem; color: var(--suave); }
   .chip-area { display: inline-block; padding: 1px 9px; border-radius: 999px; background: #eef1f5; color: var(--neutro); font-size: .76rem; font-weight: 600; }
   .chip-area.saude { background: #e3f6f3; color: #0f6b5f; } .chip-area.social { background: #fde8ef; color: #a02351; } .chip-area.financeiro { background: #fff3d6; color: #7a5200; }
   .chip-pdf { width: 34px; height: 34px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 9px; background: var(--vermelho-claro); color: var(--vermelho); font-size: .66rem; font-weight: 800; }
@@ -488,92 +488,103 @@
         </aside>
       </div>
 
-      {# ---------------------------------------------------------------- a central de documentos desta passagem: impressos e escaneados juntos #}
+      {# ---------------------------------------------------------------- os documentos desta passagem, em dois lugares SEPARADOS: os que se IMPRIMEM (o sistema gera) e os ESCANEADOS (o PDF do papel assinado) #}
       {% set ativos_escaneados = r.escaneados | rejectattr('excluido_em') | list %}
       {% if r.documentos or r.escaneados or pode('anexar') %}
-      <section class="central" id="{{ pre }}escaneados" data-central data-ver="{{ url_for('ver_impressos', id=o.id) }}" data-docx="{{ url_for('baixar_impressos', id=o.id) }}">
-        <header>
-          <h3>Documentos desta passagem <span class="contagem" style="margin-left: 6px; padding: 1px 9px; border-radius: 999px; background: #eef1f5; color: var(--suave); font-size: .8rem; font-weight: 600;">{{ r.documentos | length + ativos_escaneados | length }}</span></h3>
-          {% if pode('anexar') %}<button type="button" class="botao suave pequeno" data-anexar="{{ url_for('enviar_anexo', id=o.id) }}"><svg class="icone"><use href="#i-enviar"/></svg>Anexar PDF</button>{% endif %}
-        </header>
-        {% set presentes = (r.documentos | map(attribute='area') | list) + (r.escaneados | map(attribute='area') | list) %}
-        {% if presentes | unique | list | length > 1 %}
-        <div class="filtro-area" role="group" aria-label="Filtrar por área">
-          <button type="button" data-filtro="" aria-pressed="true">Todos</button>
-          {% for chave, rotulo in rotulos_das_areas.items() if chave in presentes %}<button type="button" data-filtro="{{ chave or 'geral' }}" aria-pressed="false">{{ rotulo }}</button>{% endfor %}
-        </div>
+      <div class="grade-documentos">
+        {% if r.documentos %}
+        {% call cartao('Documentos para imprimir', 'impressora', 'azul', id=pre ~ 'impressos') %}
+          <div data-impressos data-ver="{{ url_for('ver_impressos', id=o.id) }}" data-docx="{{ url_for('baixar_impressos', id=o.id) }}">
+            <ul class="lista-docs">
+              {% for d in r.documentos %}
+              <li>
+                {% if d.impresso %}
+                <label class="escolha caixa"><input type="checkbox" data-chave="{{ d.chave }}" aria-label="Escolher {{ d.rotulo }}">
+                  <span class="chip-doc" aria-hidden="true"><svg class="icone"><use href="#i-documento"/></svg></span>
+                  <span><span class="nome-doc">{{ d.rotulo }}</span>{% if d.aviso %}<small class="tipo">{{ d.aviso }}</small>{% endif %}</span></label>
+                {% else %}
+                <div class="sem-caixa"><span class="chip-doc" aria-hidden="true"><svg class="icone"><use href="#i-documento"/></svg></span>
+                  <span class="nome-doc">{{ d.rotulo }}</span></div>
+                {% endif %}
+                {% set ver = url_for('ver_impressos', id=o.id, itens=d.chave) if d.impresso else url_for('ver_declaracao', id=o.id) %}
+                {% set docx = url_for('baixar_impressos', id=o.id, itens=d.chave) if d.impresso else url_for('baixar_declaracao', id=o.id) %}
+                <div class="acoes-doc">
+                  <a class="botao pequeno secundario" href="{{ ver }}">Abrir</a>
+                  <details class="mais"><summary class="botao secundario pequeno" aria-label="Mais ações de {{ d.rotulo }}"><svg class="icone"><use href="#i-pontos"/></svg></summary>
+                    <div class="menu-mais">
+                      <a href="{{ ver }}{{ '&' if '?' in ver else '?' }}imprimir=1" target="_blank" rel="noopener"><svg class="icone"><use href="#i-impressora"/></svg>Imprimir</a>
+                      <a href="{{ docx }}"><svg class="icone"><use href="#i-baixar"/></svg>Baixar Word</a>
+                    </div></details>
+                </div>
+              </li>
+              {% endfor %}
+            </ul>
+            <div class="barra-selecao" data-selecao hidden>
+              <span data-contagem>0 escolhidos</span>
+              <a class="botao" data-imprimir href="#" target="_blank" rel="noopener"><svg class="icone"><use href="#i-impressora"/></svg>Imprimir os escolhidos</a>
+              <a class="botao secundario" data-baixar href="#"><svg class="icone"><use href="#i-baixar"/></svg>Baixar Word</a>
+            </div>
+          </div>
+        {% endcall %}
         {% endif %}
-        {% if r.documentos or r.escaneados %}
-        <ul class="lista-docs">
-          {% for d in r.documentos %}
-          <li data-area="{{ d.area or 'geral' }}">
-            {% if d.impresso %}
-            <label class="escolha caixa"><input type="checkbox" data-chave="{{ d.chave }}" aria-label="Escolher {{ d.rotulo }}">
-              <span class="chip-doc" aria-hidden="true"><svg class="icone"><use href="#i-documento"/></svg></span>
-              <span><span class="nome-doc">{{ d.rotulo }}</span><small class="tipo">Impresso{{ ' · ' ~ d.aviso if d.aviso }}</small></span></label>
-            {% else %}
-            <div class="sem-caixa"><span class="chip-doc" aria-hidden="true"><svg class="icone"><use href="#i-documento"/></svg></span>
-              <span><span class="nome-doc">{{ d.rotulo }}</span><small class="tipo">Impresso</small></span></div>
+
+        {% if r.escaneados or pode('anexar') %}
+        {% call cartao('Documentos escaneados', 'documento', 'neutro', id=pre ~ 'escaneados') %}
+          <div data-escaneados>
+            {% if pode('anexar') %}<div class="topo-escaneados"><button type="button" class="botao suave pequeno" data-anexar="{{ url_for('enviar_anexo', id=o.id) }}"><svg class="icone"><use href="#i-enviar"/></svg>Anexar PDF</button></div>{% endif %}
+            {% set presentes = r.escaneados | map(attribute='area') | list %}
+            {% if presentes | unique | list | length > 1 %}
+            <div class="filtro-area" role="group" aria-label="Filtrar por área">
+              <button type="button" data-filtro="" aria-pressed="true">Todos</button>
+              {% for chave, rotulo in rotulos_das_areas.items() if chave in presentes %}<button type="button" data-filtro="{{ chave or 'geral' }}" aria-pressed="false">{{ rotulo }}</button>{% endfor %}
+            </div>
             {% endif %}
-            <span class="chip-area {{ d.area }}">{{ rotulos_das_areas[d.area] }}</span>
-            {% set ver = url_for('ver_impressos', id=o.id, itens=d.chave) if d.impresso else url_for('ver_declaracao', id=o.id) %}
-            {% set docx = url_for('baixar_impressos', id=o.id, itens=d.chave) if d.impresso else url_for('baixar_declaracao', id=o.id) %}
-            <div class="acoes-doc">
-              <a class="botao pequeno secundario" href="{{ ver }}">Abrir</a>
-              <details class="mais"><summary class="botao secundario pequeno" aria-label="Mais ações de {{ d.rotulo }}"><svg class="icone"><use href="#i-pontos"/></svg></summary>
-                <div class="menu-mais">
-                  <a href="{{ ver }}{{ '&' if '?' in ver else '?' }}imprimir=1" target="_blank" rel="noopener"><svg class="icone"><use href="#i-impressora"/></svg>Imprimir</a>
-                  <a href="{{ docx }}"><svg class="icone"><use href="#i-baixar"/></svg>Baixar Word</a>
-                </div></details>
-            </div>
-          </li>
-          {% endfor %}
-          {% for a in r.escaneados %}
-          <li data-area="{{ a.area or 'geral' }}"{{ ' class="removido"' | safe if a.excluido_em }}>
-            <div class="sem-caixa"><span class="chip-pdf" aria-hidden="true">PDF</span>
-              <span><span class="nome-doc">{{ a.titulo }}</span>
-                <small class="tipo">Escaneado · enviado em {{ a.enviado_em | data }} · {{ a.tamanho | tamanho }}{% if a.enviado_por %} · por {{ a.enviado_por }}{% endif %}</small>
-                {% if a.excluido_em %}<small class="tipo">Removido em {{ a.excluido_em | data }}{% if a.excluido_por %} por {{ a.excluido_por }}{% endif %} (só o administrador vê)</small>{% endif %}</span></div>
-            <span class="chip-area {{ a.area }}">{{ rotulos_das_areas[a.area] }}</span>
-            <div class="acoes-doc">
-              <a class="botao pequeno secundario" href="{{ url_for('ver_anexo', id=o.id, anexo_id=a.id) }}" target="_blank" rel="noopener">Abrir</a>
-              <details class="mais"><summary class="botao secundario pequeno" aria-label="Mais ações de {{ a.titulo }}"><svg class="icone"><use href="#i-pontos"/></svg></summary>
-                <div class="menu-mais">
-                  <a href="{{ url_for('baixar_anexo', id=o.id, anexo_id=a.id) }}"><svg class="icone"><use href="#i-baixar"/></svg>Baixar PDF</a>
-                  {% if not a.excluido_em and pode('anexar') and areas_de_anexo | length > 1 %}
-                  <form method="post" action="{{ url_for('mudar_area_do_anexo', id=o.id, anexo_id=a.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <span class="mini-rotulo">Vincular à área</span>
-                    <div class="vincular-area">
-                      <select name="area" aria-label="Área do documento">{% for chave, rotulo in areas_de_anexo %}<option value="{{ chave }}"{{ ' selected' if chave == a.area }}>{{ rotulo }}</option>{% endfor %}</select>
-                      <button class="botao pequeno secundario">Vincular</button>
-                    </div>
-                  </form>
-                  {% endif %}
-                  {% if not a.excluido_em and pode('anexar') %}
-                  <form method="post" action="{{ url_for('remover_anexo', id=o.id, anexo_id=a.id) }}"
-                        data-confirmar="Remover este documento da ficha? O administrador ainda poderá restaurá-lo."><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button class="item-perigo"><svg class="icone"><use href="#i-lixeira"/></svg>Remover da ficha</button></form>
-                  {% endif %}
-                  {% if a.excluido_em and e_administrador %}
-                  <form method="post" action="{{ url_for('restaurar_anexo', id=o.id, anexo_id=a.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button>Restaurar</button></form>
-                  <form method="post" action="{{ url_for('apagar_anexo', id=o.id, anexo_id=a.id) }}"
-                        data-confirmar="Apagar este documento de vez? O arquivo é apagado do disco e não tem volta."><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button class="item-perigo">Apagar de vez</button></form>
-                  {% endif %}
-                </div></details>
-            </div>
-          </li>
-          {% endfor %}
-        </ul>
-        {% else %}
-          <p class="nao-informado vazio-docs">Nenhum documento ainda.</p>
+            {% if r.escaneados %}
+            <ul class="lista-docs">
+              {% for a in r.escaneados %}
+              <li data-area="{{ a.area or 'geral' }}"{{ ' class="removido"' | safe if a.excluido_em }}>
+                <div class="sem-caixa"><span class="chip-pdf" aria-hidden="true">PDF</span>
+                  <span><span class="nome-doc">{{ a.titulo }}</span>
+                    <small class="tipo">Enviado em {{ a.enviado_em | data }} · {{ a.tamanho | tamanho }}{% if a.enviado_por %} · por {{ a.enviado_por }}{% endif %}</small>
+                    {% if a.excluido_em %}<small class="tipo">Removido em {{ a.excluido_em | data }}{% if a.excluido_por %} por {{ a.excluido_por }}{% endif %} (só o administrador vê)</small>{% endif %}</span></div>
+                <span class="chip-area {{ a.area }}">{{ rotulos_das_areas[a.area] }}</span>
+                <div class="acoes-doc">
+                  <a class="botao pequeno secundario" href="{{ url_for('ver_anexo', id=o.id, anexo_id=a.id) }}" target="_blank" rel="noopener">Abrir</a>
+                  <details class="mais"><summary class="botao secundario pequeno" aria-label="Mais ações de {{ a.titulo }}"><svg class="icone"><use href="#i-pontos"/></svg></summary>
+                    <div class="menu-mais">
+                      <a href="{{ url_for('baixar_anexo', id=o.id, anexo_id=a.id) }}"><svg class="icone"><use href="#i-baixar"/></svg>Baixar PDF</a>
+                      {% if not a.excluido_em and pode('anexar') and areas_de_anexo | length > 1 %}
+                      <form method="post" action="{{ url_for('mudar_area_do_anexo', id=o.id, anexo_id=a.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <span class="mini-rotulo">Vincular à área</span>
+                        <div class="vincular-area">
+                          <select name="area" aria-label="Área do documento">{% for chave, rotulo in areas_de_anexo %}<option value="{{ chave }}"{{ ' selected' if chave == a.area }}>{{ rotulo }}</option>{% endfor %}</select>
+                          <button class="botao pequeno secundario">Vincular</button>
+                        </div>
+                      </form>
+                      {% endif %}
+                      {% if not a.excluido_em and pode('anexar') %}
+                      <form method="post" action="{{ url_for('remover_anexo', id=o.id, anexo_id=a.id) }}"
+                            data-confirmar="Remover este documento da ficha? O administrador ainda poderá restaurá-lo."><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="item-perigo"><svg class="icone"><use href="#i-lixeira"/></svg>Remover da ficha</button></form>
+                      {% endif %}
+                      {% if a.excluido_em and e_administrador %}
+                      <form method="post" action="{{ url_for('restaurar_anexo', id=o.id, anexo_id=a.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button>Restaurar</button></form>
+                      <form method="post" action="{{ url_for('apagar_anexo', id=o.id, anexo_id=a.id) }}"
+                            data-confirmar="Apagar este documento de vez? O arquivo é apagado do disco e não tem volta."><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="item-perigo">Apagar de vez</button></form>
+                      {% endif %}
+                    </div></details>
+                </div>
+              </li>
+              {% endfor %}
+            </ul>
+            {% else %}
+              <p class="nao-informado vazio-docs">Nenhum documento escaneado anexado.</p>
+            {% endif %}
+          </div>
+        {% endcall %}
         {% endif %}
-        <div class="barra-selecao" data-selecao hidden>
-          <span data-contagem>0 escolhidos</span>
-          <a class="botao" data-imprimir href="#" target="_blank" rel="noopener"><svg class="icone"><use href="#i-impressora"/></svg>Imprimir os escolhidos</a>
-          <a class="botao secundario" data-baixar href="#"><svg class="icone"><use href="#i-baixar"/></svg>Baixar Word</a>
-        </div>
-      </section>
+      </div>
       {% endif %}
     </div>
   </details>
@@ -663,30 +674,31 @@
     }
     window.addEventListener("beforeprint", function () { todos("details.passagem, details.bloco-pessoa").forEach(function (d) { d.open = true; }); });
 
-    // ---- a central de documentos: filtro por área e o que se escolhe para imprimir ou baixar de uma vez
-    todos("[data-central]").forEach(function (central) {
-      var botoes = todos("[data-filtro]", central), linhas = todos("li[data-area]", central), marcas = todos("input[data-chave]", central);
-      var barra = central.querySelector("[data-selecao]");
-      var escolhidas = function () { return marcas.filter(function (m) { return m.checked && !m.closest("li").hidden; }).map(function (m) { return m.getAttribute("data-chave"); }); };
+    // ---- documentos para imprimir: o que se escolhe para imprimir ou baixar de uma vez
+    todos("[data-impressos]").forEach(function (area) {
+      var marcas = todos("input[data-chave]", area), barra = area.querySelector("[data-selecao]");
       var atualizar = function () {
-        if (!barra) return;
-        var itens = escolhidas();
+        var itens = marcas.filter(function (m) { return m.checked; }).map(function (m) { return m.getAttribute("data-chave"); });
         barra.hidden = itens.length === 0;
-        central.querySelector("[data-contagem]").textContent = itens.length + (itens.length === 1 ? " escolhido" : " escolhidos");
+        area.querySelector("[data-contagem]").textContent = itens.length + (itens.length === 1 ? " escolhido" : " escolhidos");
         var lista = itens.join(",");
-        barra.querySelector("[data-imprimir]").setAttribute("href", central.getAttribute("data-ver") + "?itens=" + lista + "&imprimir=1");
-        barra.querySelector("[data-baixar]").setAttribute("href", central.getAttribute("data-docx") + "?itens=" + lista);
+        barra.querySelector("[data-imprimir]").setAttribute("href", area.getAttribute("data-ver") + "?itens=" + lista + "&imprimir=1");
+        barra.querySelector("[data-baixar]").setAttribute("href", area.getAttribute("data-docx") + "?itens=" + lista);
       };
       marcas.forEach(function (m) { m.addEventListener("change", atualizar); });
+      atualizar();                                                    // (o navegador devolve as caixinhas marcadas ao voltar à página: a barra acompanha)
+    });
+
+    // ---- documentos escaneados: o filtro por área
+    todos("[data-escaneados]").forEach(function (area) {
+      var botoes = todos("[data-filtro]", area), linhas = todos("li[data-area]", area);
       botoes.forEach(function (b) {
         b.addEventListener("click", function () {
           var filtro = b.getAttribute("data-filtro");
           botoes.forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
           linhas.forEach(function (l) { l.hidden = !!filtro && l.getAttribute("data-area") !== filtro; });
-          atualizar();
         });
       });
-      atualizar();                                                    // (o navegador devolve as caixinhas marcadas ao voltar à página: a barra acompanha)
     });
 
     // ---- anexar um PDF: uma janela só; o botão de cada passagem diz para onde vai
@@ -701,6 +713,12 @@
       var enviar = formulario.querySelector("button:not([type])");
       formulario.addEventListener("submit", function () { enviar.disabled = true; enviar.querySelector("span").textContent = "Enviando…"; });     // um clique só: o PDF pode demorar a subir
     }
+
+    // ---- "Salvar e baixar prontuário": a ficha abre e o download do conjunto da internação começa; o ?baixar=1 sai do endereço (F5 não baixa de novo)
+    {% if baixar and pode('documentos') %}
+    history.replaceState(null, "", location.pathname + location.hash);
+    window.location.href = {{ url_for('baixar_impressos', id=i.id) | tojson }};
+    {% endif %}
 
     // ---- excluir o registro
     var dialogo = document.getElementById("excluir");

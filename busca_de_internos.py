@@ -171,7 +171,7 @@ def _inteiro(valor, padrao=None):
 
 def consultar(args):
     """`args`: q (busca), situacao (ativo | inativo | vazio = todos), categoria, ano (um ano ou 'sem'), ordem (uma chave de ORDENS) e dir (asc | desc),
-    por (25, 50, 100 ou 'todos'), pagina (a partir de 1) e foco (o registro que precisa aparecer: devolve a página em que ele está).
+    por (25, 50, 100 ou 'todos') e pagina (a partir de 1).
     Devolve {itens, total, pagina, paginas, por, de, ate, contagens}; `contagens` é por situação, já com a busca e os outros filtros aplicados."""
     termos = termos_da_busca(args.get("q"))
     situacao = args.get("situacao") if args.get("situacao") in STATUS_INTERNACAO else ""
@@ -202,11 +202,6 @@ def consultar(args):
     total = len(linhas)
     paginas = max(1, math.ceil(total / por))
     pagina = _inteiro(args.get("pagina"), 1)
-    foco = _inteiro(args.get("foco"))
-    if foco is not None:
-        posicao = next((n for n, l in enumerate(linhas) if foco in l.ids), None)
-        if posicao is not None:
-            pagina = posicao // por + 1
     pagina = min(max(pagina, 1), paginas)
     da_pagina = linhas[(pagina - 1) * por: pagina * por]
 

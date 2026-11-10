@@ -115,9 +115,6 @@
 
 <script src="{{ url_for('static', filename='tabela.js') }}"></script>
 <script nonce="{{ csp_nonce() }}">
-  const NOVO = {{ novo | tojson }};            // id da internação recém-gravada (ou null)
-  const BAIXAR = {{ baixar | tojson }};        // 1 = veio de "Salvar e baixar prontuário"
-  const PODE_SOCIAL = {{ pode_servico_social | tojson }};     // lê e escreve o acolhimento social (Serviço Social e administrador)
   const PODE = {{ permissoes_js() | tojson }};     // o que o nível de acesso da pessoa permite (permissoes.py): o resto não aparece
   const filtro = new ControleSegmentado(document.getElementById("filtro"));
   const filtroCategoria = document.getElementById("filtro-categoria");
@@ -151,7 +148,6 @@
   // a busca, os filtros, a ordem e as páginas são feitos no servidor (busca_de_internos.py): o navegador pede só a página que mostra
   const tabela = new TabelaPaginada({
     url: "{{ url_for('api_internos_busca') }}",
-    destacar: NOVO,
     campos: { situacao: filtro, categoria: filtroCategoria, ano: filtroAno },       // o que está escolhido fica na URL: o "voltar" o mantém
     aoCarregar: dados => {              // os números das abas já levam em conta a busca e os outros filtros
       document.getElementById("n-ativos").textContent = dados.contagens.ativo;
@@ -220,40 +216,6 @@
     }
   });
 
-  // ------------------------------------------------------------ depois de salvar um prontuário
-  (async () => {
-    await tabela.carregar({ foco: NOVO });         // com `foco`, o servidor abre a página em que o registro novo está
-    if (!NOVO) return;
-    let item = tabela.itens.find(i => i.id === NOVO);
-    if (!item) {                                   // a busca ou um filtro escondia o registro novo: começa do zero, em "Todos"
-      tabela.limparFiltros({ recarregar: false });
-      filtro.value = "";
-      await tabela.carregar({ foco: NOVO });
-      item = tabela.itens.find(i => i.id === NOVO);
-    }
-    if (!PODE.documentos) {                     // sem permissão para imprimir: só confirma que gravou
-      mostrarAviso([`Prontuário de ${item ? item.nome : "novo interno"} salvo.`]);
-      tabela.limparParametros("novo", "baixar");
-      document.getElementById("linha-" + NOVO)?.scrollIntoView({ block: "center" });
-      return;
-    }
-    const url = `/internacoes/${NOVO}/prontuario`;
-    const conjunto = `/internacoes/${NOVO}/impressos`;      // o prontuário e os outros impressos da internação, num documento só
-    const nome = item ? item.nome : "novo interno";
-    const finalizado = item && item.acolhimento === "finalizado";       // o acolhimento social entra no conjunto quando já foi finalizado
-    const partes = ["prontuário", "manual de orientação", "ficha multiprofissional", "capa do envelope",
-                    ...(finalizado ? [PODE_SOCIAL ? "relatório do Serviço Social" : "resumo do Serviço Social"] : [])];
-    const lista = partes.slice(0, -1).join(", ") + " e " + partes[partes.length - 1];
-    const relatorio = PODE_SOCIAL && !finalizado ? [" · ", link("Preencher o acolhimento social", `/internacoes/${NOVO}/relatorio-social`)] : [];
-    if (BAIXAR) {
-      mostrarAviso([`Prontuário de ${nome} salvo. O download começou (${lista}). `, link("Baixar de novo", conjunto + ".docx"), " · ",
-                    link("Só o prontuário", url), " · ", link("Escolher o que imprimir", conjunto), ...relatorio]);
-      window.location.href = conjunto + ".docx";  // dispara o download sem sair da página
-    } else {
-      mostrarAviso([`Prontuário de ${nome} salvo. `, link("Imprimir o conjunto", conjunto), " · ", link("Baixar o prontuário", url), ...relatorio]);
-    }
-    tabela.limparParametros("novo", "baixar");  // F5 não baixa nem avisa de novo; o resto da URL fica
-    document.getElementById("linha-" + NOVO)?.scrollIntoView({ block: "center" });
-  })();
+  tabela.carregar();
 </script>
 {% endblock %}
