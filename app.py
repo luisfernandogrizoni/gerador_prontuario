@@ -806,20 +806,21 @@ def marcar_conferido(id):
 def ficha(id):
     internacao = _buscar(Internacao, id)
     notificacoes.marcar_lidas(g.usuario, id)              # abrir a ficha é ficar sabendo: as notificações de quem abriu, sobre esta pessoa, ficam lidas
-    dias, atrasado = dias_de_espera(internacao)
     p, hoje = internacao.pessoa, relatorios.hoje_no_brasil()
+    passagens = _passagens_da_pessoa(p, internacao, hoje)
+    aberta = next(x for x in passagens if x["aberta"])
     permanencia = ((hoje if internacao.status == "ativo" else internacao.termino) - internacao.inicio).days \
         if internacao.inicio and (internacao.status == "ativo" or internacao.termino) else None
-    return render_template("ficha.html", i=internacao, envelope_atrasado=atrasado,
-                           envelope_tempo=tempo_decorrido(dias) if dias is not None else "",
-                           acolhimento=_resumo_do_acolhimento(internacao), saude=_resumo_da_saude(internacao), alta=_resumo_da_alta(internacao),
+    return render_template("ficha.html", i=internacao, envelope_atrasado=aberta["envelope_atrasado"], envelope_tempo=aberta["envelope_tempo"],
+                           acolhimento=aberta["acolhimento"], saude=aberta["saude"], alta=aberta["alta"],
                            idade=calcular_idade(p.nascimento, hoje),
                            previsao=previsao_termino(internacao.inicio, internacao.tratamento_ate) if internacao.inicio else None,
                            permanencia=_duracao(permanencia) if permanencia is not None and permanencia >= 0 else "",
                            avatar=avatar_da_pessoa(p.nome),
-                           escaneados=anexos.do_registro(internacao, com_removidos=_e_administrador()), titulos_de_anexo=anexos.TITULOS_SUGERIDOS,
+                           titulos_de_anexo=anexos.TITULOS_SUGERIDOS, rotulos_das_areas=anexos.AREAS,
+                           areas_de_anexo=[(chave, rotulo) for chave, rotulo in anexos.AREAS.items() if _pode_anexar_na_area(chave)],
                            limite_do_anexo=anexos.LIMITE_DO_ARQUIVO,
-                           registros=_registros_da_pessoa(p, internacao, hoje), n_passagens=len(p.passagens))
+                           passagens=passagens, n_passagens=len(p.passagens))
 
 
 @app.get("/pessoas/<int:id>/prontuario")
@@ -834,7 +835,7 @@ def prontuario_da_pessoa(id):
 
 
 def _periodo_do_registro(o):
-    """O período de um registro, em palavras, para a faixa de passagens e a linha do tempo do prontuário."""
+    """O período de um registro, em palavras, para o cabeçalho de cada passagem na ficha."""
     if o.e_triagem:
         if o.internacao_agendada and o.status in servicos.TRIAGEM_EM_ABERTO:
             return f"internação marcada para {fmt_data(o.internacao_agendada)}"
@@ -842,24 +843,36 @@ def _periodo_do_registro(o):
     return o.periodo_txt
 
 
-def _registros_da_pessoa(pessoa, atual, hoje):
-    """Todos os registros da pessoa (as passagens, que são internações de verdade, e as triagens), do mais antigo para o mais novo: o que a faixa de
-    passagens e a linha do tempo da ficha mostram. Só entra o que a ficha de cada registro já mostra a quem a abre: em que pé estão os relatórios (o
-    conteúdo continua sigiloso, nas próprias telas) e quantos documentos escaneados há (só para quem vê documentos)."""
-    ve_documentos = permissoes.pode("documentos")
-    registros = []
-    for o in pessoa.registros:
+def _documentos_da_passagem(o):
+    """Os impressos da central de documentos de UMA passagem: o que quem abre a ficha pode imprimir. Quem tem `documentos` vê todos; quem só lê o Serviço Social
+    ou a saúde vê (e imprime) o que lê. Cada um: {chave, rotulo, area, aviso, impresso}. A declaração (internação ou ex-interno) é outro documento: tem endereço próprio
+    e não se junta aos outros na mesma impressão."""
+    geral = permissoes.pode("documentos")
+    leitores = permissoes.QUEM_LE_O_IMPRESSO
+    lista = [dict(d, impresso=True) for d in impressos.disponiveis(o, _pode_ler_social(), _pode_ler_saude())
+             if geral or (d["chave"] in leitores and leitores[d["chave"]](g.get("usuario")))]
+    if geral and declaracoes.tipo_da_declaracao(o) is not None:
+        lista.append({"chave": "declaracao", "rotulo": "Declaração de internação" if o.status == "ativo" else "Declaração de ex-interno", "area": "", "aviso": "", "impresso": False})
+    return lista
+
+
+def _passagens_da_pessoa(pessoa, atual, hoje):
+    """Todos os registros da pessoa (as passagens, que são internações de verdade, e as triagens), do mais novo para o mais antigo: cada um é um bloco da ficha, que
+    abre e fecha, com tudo o que ele tem. O que o bloco mostra de cada relatório é o que a ficha sempre mostrou a quem a abre (em que pé está; o conteúdo sigiloso
+    fica nas próprias telas). `atual`: o registro do endereço aberto, que sai expandido e leva os ids de sempre (#acolhimento, #parcelas...); os outros levam o
+    número do registro na frente (#p12-acolhimento)."""
+    passagens = []
+    for o in reversed(pessoa.registros):
         n = o.numero_da_passagem
         fim = o.termino or (hoje if o.status == "ativo" else None)
         dias = (fim - o.inicio).days if n and o.inicio and fim and fim >= o.inicio else None
-        registros.append({"o": o, "atual": o.id == atual.id, "numero": n, "rotulo": f"Passagem {n}" if n else "Triagem",
-                          "periodo": _periodo_do_registro(o), "duracao": _duracao(dias) if dias is not None else "",
-                          "social": servico_social.estado(o.relatorio_social),
-                          "saude": ficha_saude.estado(o.ficha_saude) if n else None,
-                          "alta": relatorio_alta.estado(o.relatorio_alta) if o.status == "inativo" else None,
-                          "anexos": len(anexos.do_registro(o)) if ve_documentos else None,
-                          "papel": o.envelope if o.status == "inativo" else None})
-    return registros
+        espera, atrasado = dias_de_espera(o)
+        passagens.append({"o": o, "aberta": o.id == atual.id, "prefixo": "" if o.id == atual.id else f"p{o.id}-", "numero": n,
+                          "rotulo": f"Passagem {n}" if n else "Triagem", "periodo": _periodo_do_registro(o), "duracao": _duracao(dias) if dias is not None else "",
+                          "acolhimento": _resumo_do_acolhimento(o), "saude": _resumo_da_saude(o), "alta": _resumo_da_alta(o),
+                          "envelope_tempo": tempo_decorrido(espera) if espera is not None else "", "envelope_atrasado": atrasado,
+                          "documentos": _documentos_da_passagem(o), "escaneados": _anexos_visiveis(o)})
+    return passagens
 
 
 def _duracao(dias):
@@ -1479,18 +1492,45 @@ def _nome_do_usuario():
 
 
 # ============================================================ documentos escaneados (anexos.py)
+def _pode_ver_area_do_anexo(area):
+    """Quem vê os documentos escaneados de cada área: o sigilo da área manda. Serviço Social: quem lê o Serviço Social; Saúde: quem lê a saúde; Financeiro: quem
+    tem a permissão do financeiro; geral (sem área): quem tem `documentos`. O administrador vê tudo."""
+    if _e_administrador():
+        return True
+    return {"": permissoes.pode("documentos"), "social": _pode_ler_social(), "saude": _pode_ler_saude(), "financeiro": permissoes.pode("financeiro")}.get(area, False)
+
+
+def _pode_anexar_na_area(area):
+    """Anexar pede a permissão `anexar` (conferida na rota); numa área com sigilo, também é preciso poder ver a área (senão a pessoa guardaria o que não consegue abrir)."""
+    return area == "" or _pode_ver_area_do_anexo(area)
+
+
+def _anexos_visiveis(internacao):
+    """Os anexos do registro que quem pede pode ver: os removidos só o administrador, e cada um só se ele vê a área do documento."""
+    return [a for a in anexos.do_registro(internacao, com_removidos=_e_administrador()) if _pode_ver_area_do_anexo(a.area)]
+
+
+def _de_volta_aos_anexos(id):
+    """Depois de mexer num documento escaneado, a ficha volta à central de documentos daquela passagem."""
+    return redirect(url_for("ficha", id=id, _anchor="escaneados"))
+
+
 @app.post("/internacoes/<int:id>/anexos")
 def enviar_anexo(id):
-    """Anexa o PDF do documento físico assinado e escaneado à ficha."""
+    """Anexa o PDF do documento físico assinado e escaneado à ficha, vinculado a uma área (ou geral)."""
     internacao = _buscar(Internacao, id)
+    area = anexos.limpar_area(request.form.get("area"))
+    if not _pode_anexar_na_area(area):
+        flash(f"Você não tem acesso à área {anexos.AREAS[area]}: escolha outra área.")
+        return _de_volta_aos_anexos(id)
     try:
-        anexo = anexos.guardar(internacao, request.files.get("arquivo"), request.form.get("titulo"), _nome_do_usuario())
+        anexo = anexos.guardar(internacao, request.files.get("arquivo"), request.form.get("titulo"), _nome_do_usuario(), area)
     except anexos.ErroDeAnexo as erro:
         flash(str(erro))
-        return redirect(url_for("ficha", id=id, _anchor="escaneados"))
-    auditoria.registrar("anexo.enviar", "internacao", id, internacao.pessoa_id, f"anexo nº {anexo.id}, {anexos.tamanho_legivel(anexo.tamanho)}")
+        return _de_volta_aos_anexos(id)
+    auditoria.registrar("anexo.enviar", "internacao", id, internacao.pessoa_id, f"anexo nº {anexo.id}, {anexos.tamanho_legivel(anexo.tamanho)}, área {anexos.AREAS[anexo.area]}")
     flash("Documento anexado.")
-    return redirect(url_for("ficha", id=id, _anchor="escaneados"))
+    return _de_volta_aos_anexos(id)
 
 
 def _servir_anexo(id, anexo_id, baixar):
@@ -1498,6 +1538,8 @@ def _servir_anexo(id, anexo_id, baixar):
     anexo = anexos.achar(internacao, anexo_id, com_removidos=_e_administrador())          # o removido só o administrador abre
     if anexo is None:
         abort(404)
+    if not _pode_ver_area_do_anexo(anexo.area):                                            # o sigilo da área do documento (Serviço Social, Saúde, Financeiro)
+        abort(403)
     try:
         arquivo = anexos.caminho(anexo)
     except anexos.ErroDeAnexo:
@@ -1529,11 +1571,28 @@ def _anexo_do_registro(id, anexo_id):
 def remover_anexo(id, anexo_id):
     """Esconde o documento da ficha (o arquivo continua guardado; só o administrador restaura ou apaga de vez)."""
     internacao, anexo = _anexo_do_registro(id, anexo_id)
+    if not _pode_ver_area_do_anexo(anexo.area):                    # quem não vê o documento também não o remove
+        abort(403)
     if anexo.excluido_em is None:
         anexos.remover(anexo, _nome_do_usuario())
         auditoria.registrar("anexo.remover", "internacao", id, internacao.pessoa_id, f"anexo nº {anexo.id}")
         flash("Documento removido da ficha. O administrador ainda pode restaurá-lo.")
-    return redirect(url_for("ficha", id=id, _anchor="escaneados"))
+    return _de_volta_aos_anexos(id)
+
+
+@app.post("/internacoes/<int:id>/anexos/<int:anexo_id>/area")
+def mudar_area_do_anexo(id, anexo_id):
+    """Vincula o documento a outra área (Saúde, Financeiro, Serviço Social) ou o deixa sem área. Quem muda precisa ver a área de onde ele sai e a para onde vai."""
+    internacao, anexo = _anexo_do_registro(id, anexo_id)
+    nova = anexos.limpar_area(request.form.get("area"))
+    if anexo.excluido_em is not None or not _pode_ver_area_do_anexo(anexo.area) or not _pode_anexar_na_area(nova):
+        abort(403)
+    if nova != anexo.area:
+        antiga = anexo.area
+        anexos.mudar_area(anexo, nova)
+        auditoria.registrar("anexo.area", "internacao", id, internacao.pessoa_id, f"anexo nº {anexo.id}, de {anexos.AREAS[antiga]} para {anexos.AREAS[nova]}")
+        flash(f"Documento vinculado à área {anexos.AREAS[nova]}.")
+    return _de_volta_aos_anexos(id)
 
 
 @app.post("/internacoes/<int:id>/anexos/<int:anexo_id>/restaurar")

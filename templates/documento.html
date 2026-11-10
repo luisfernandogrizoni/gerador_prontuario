@@ -199,7 +199,7 @@
     <h1>{{ doc.titulo }}</h1>
     <div class="botoes-doc">
       <button type="button" class="botao" data-imprimir><svg class="icone"><use href="#i-impressora"/></svg>Imprimir</button>
-      {% if docx %}<a class="botao secundario" href="{{ docx }}"><svg class="icone"><use href="#i-baixar"/></svg>Baixar .docx</a>{% endif %}
+      {% if docx %}<a class="botao secundario" href="{{ docx }}"><svg class="icone"><use href="#i-baixar"/></svg>Baixar Word</a>{% endif %}
     </div>
   </div>
   {% if barra and (barra.colunas or barra.emissores or barra.itens or barra.detalhar or barra.nomes or barra.informacoes) %}

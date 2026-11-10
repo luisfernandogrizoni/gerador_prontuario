@@ -317,11 +317,11 @@ class Internacao(CamposDeFormulario, db.Model):
 
     @property
     def passagens_anteriores(self):
-        """As outras internações da mesma pessoa que vieram ANTES desta, da mais antiga para a mais nova (a capa do envelope lista as datas). Só as que
-        têm alguma data, de início ou de saída: sem nenhuma não há o que mostrar. "Antes" é pela ordem de Pessoa.passagens (data de início, ou a de saída
-        na falta dela; quem não tem data nenhuma conta como a mais antiga)."""
+        """As outras internações da mesma pessoa que vieram ANTES desta, da mais antiga para a mais nova (a tabela da capa do envelope as lista, com o número de
+        cada uma). "Antes" é pela ordem de Pessoa.passagens: data de início, ou a de saída na falta dela; quem não tem data nenhuma (registro importado de uma
+        pasta antiga) conta como a mais antiga e entra na lista, com as datas em branco, para o número das passagens não ficar com buraco."""
         minha = (self.inicio or self.termino or date.min, self.id)
-        return [o for o in self.pessoa.passagens if o.id != self.id and (o.inicio or o.termino) and (o.inicio or o.termino, o.id) < minha]
+        return [o for o in self.pessoa.passagens if o.id != self.id and (o.inicio or o.termino or date.min, o.id) < minha]
 
     @property
     def importado(self):
@@ -593,6 +593,7 @@ class Anexo(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
     internacao_id: Mapped[int] = mapped_column(ForeignKey("internacoes.id"), index=True)
     titulo: Mapped[str] = mapped_column(String(100), default="")                  # "Prontuário assinado", "Termo de compromisso"...
+    area: Mapped[str] = mapped_column(String(12), default="")                     # a que área o documento está vinculado (anexos.AREAS): "" geral, "saude", "financeiro" ou "social"
     nome_original: Mapped[str] = mapped_column(String(200), default="")           # como o arquivo se chamava no computador de quem enviou (só para mostrar)
     arquivo: Mapped[str] = mapped_column(String(40))                              # o nome no disco: um código sorteado + ".pdf" (nunca o que a pessoa digitou)
     tamanho: Mapped[int] = mapped_column(default=0)                               # bytes

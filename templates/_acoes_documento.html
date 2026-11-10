@@ -1,8 +1,12 @@
-{# Os três botões de um documento: ver no navegador, imprimir direto e baixar o .docx. #}
-{% macro acoes_documento(ver, docx, classe='') -%}
-<div class="acoes-doc {{ classe }}">
-  <a class="botao suave" href="{{ ver }}"><svg class="icone"><use href="#i-documento"/></svg>Visualizar</a>
-  <a class="botao secundario" href="{{ ver }}{{ '&' if '?' in ver else '?' }}imprimir=1" target="_blank" rel="noopener"><svg class="icone"><use href="#i-impressora"/></svg>Imprimir</a>
-  <a class="botao secundario" href="{{ docx }}"><svg class="icone"><use href="#i-baixar"/></svg>Baixar .docx</a>
+{# A ação de um documento: "Abrir" (ver no navegador, com o botão de imprimir) e, no menu "Mais", imprimir direto e baixar o .docx. É o mesmo jeito da central de
+   documentos da ficha (templates/ficha.html): uma ação principal clara e o resto escondido, em vez de três botões iguais. #}
+{% macro acoes_documento(ver, docx) -%}
+<div class="acoes-doc">
+  <a class="botao suave pequeno" href="{{ ver }}">Abrir</a>
+  <details class="mais"><summary class="botao secundario pequeno" aria-label="Mais ações do documento"><svg class="icone"><use href="#i-pontos"/></svg></summary>
+    <div class="menu-mais">
+      <a href="{{ ver }}{{ '&' if '?' in ver else '?' }}imprimir=1" target="_blank" rel="noopener"><svg class="icone"><use href="#i-impressora"/></svg>Imprimir</a>
+      <a href="{{ docx }}"><svg class="icone"><use href="#i-baixar"/></svg>Baixar Word</a>
+    </div></details>
 </div>
 {%- endmacro %}

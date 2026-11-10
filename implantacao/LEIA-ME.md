@@ -335,7 +335,8 @@ mesmo endereço `https://...ts.net`. O sistema é um só, com um banco só: os d
 - **Rascunhos** (salvamento automático): enquanto alguém preenche um formulário longo, o sistema guarda uma cópia a cada pausa na digitação. Se a energia cair ou a
   aba fechar, o que foi digitado está em **Rascunhos** (no menu) e a tela de cada registro já abre com ele. O rascunho é só de quem digitou, não aparece em lista nem
   relatório nenhum, entra no backup e some sozinho depois de 30 dias sem mexer; só o botão *Salvar* grava no prontuário. Detalhes em `docs\plano-de-seguranca.md`.
-- **Documentos escaneados**: na ficha de cada triagem ou prontuário, o cartão "Documentos escaneados" guarda o PDF do documento físico assinado (até 25 MB, vários por registro).
+- **Documentos escaneados**: na ficha, a central de documentos de cada passagem guarda o PDF do documento físico assinado (até 25 MB, vários por registro), vinculado a uma área
+  (Saúde, Financeiro, Serviço Social ou geral): documento de área sigilosa só aparece para quem lê aquela área.
   Os PDFs ficam em `instance\anexos` (não no banco); o backup do dia os copia para a pasta `anexos` da pasta de backup e **os pen-drives levam cada PDF criptografado** (a primeira vez
   pode demorar: a tela Cadastros > Backup mostra "Copiando, faltam N de M"). Quem imprime os
   documentos abre e baixa; anexar e remover é a permissão "Anexar e remover documentos escaneados" (Cadastros > Permissões); apagar de vez, só o administrador. Anexar o escaneamento

@@ -88,6 +88,7 @@ ACOES = {
     "baixa.dar": ("alteracao", "Deu baixa em um interno"),
     "anexo.enviar": ("alteracao", "Anexou um documento escaneado"),
     "anexo.remover": ("alteracao", "Removeu um documento escaneado da ficha"),
+    "anexo.area": ("alteracao", "Mudou a área de um documento escaneado"),
     "anexo.restaurar": ("alteracao", "Restaurou um documento escaneado"),
     "anexo.apagar": ("alteracao", "Apagou de vez um documento escaneado"),
     "envelope.registrar": ("alteracao", "Anotou onde está o prontuário em papel"),
@@ -239,7 +240,7 @@ EXPLICITAS = {
     "novo_convenio", "editar_convenio", "novo_funcionario", "novo_nivel", "editar_nivel", "mover_nivel", "salvar_permissoes",
     "pagina_auditoria", "exportar_auditoria", "login_codigo", "esqueci_senha", "redefinir_senha", "enviar_codigo_email", "confirmar_email",
     "ativar_autenticador", "desativar_autenticador", "marcar_revisao", "descartar_rascunho", "marcar_conferido",
-    "enviar_anexo", "remover_anexo", "restaurar_anexo", "apagar_anexo",
+    "enviar_anexo", "remover_anexo", "mudar_area_do_anexo", "restaurar_anexo", "apagar_anexo",
 }
 
 # o que não se registra, e por quê
