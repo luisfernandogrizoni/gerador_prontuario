@@ -446,7 +446,7 @@ as duas portas no navegador.
 - **Política de conteúdo (CSP)** em toda página: script e estilo só do próprio sistema ou **com o nonce da resposta** (um código novo a cada
   página, que o servidor põe nas próprias tags). Quem conseguir injetar um `<script>` na página não leva nada para rodar (testado no
   Chrome: um script inserido à força é barrado e o relatório chega ao registro do servidor). `connect-src` só o próprio sistema e o ViaCEP
-  (o preenchimento do endereço pelo CEP); `form-action 'self'`, `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`. Sem
+  (o preenchimento do endereço pelo CEP); `form-action 'self'`, `frame-ancestors 'none'` (só a página de impressão com o preview usa `'self'`, para aparecer dentro da aba Imprimir da ficha), `object-src 'none'`, `base-uri 'self'`. Sem
   `unsafe-inline` nem `unsafe-eval` em script e em bloco de estilo (só `style="..."` dentro das tags continua permitido).
   Em vez de tirar todos os scripts e estilos de dentro das páginas (a ideia original), usamos o **nonce**, que dá a mesma proteção sem
   reescrever as telas. Os atributos de evento (`onclick`, `onsubmit`, `onchange`) foram trocados por `data-confirmar`,
@@ -594,7 +594,7 @@ A pedido do usuário: anexar a cada prontuário o PDF do documento físico, assi
 - **O que é aceito.** Só PDF de verdade e inteiro: começa com `%PDF-`, termina com `%%EOF`, até 25 MB, sem senha e sem script (`/JavaScript`, `/JS`), programa a abrir (`/Launch`),
   arquivo embutido (`/EmbeddedFile`) nem mídia rica (`/RichMedia`). Os mesmos bytes não entram duas vezes no mesmo registro (sha256), até 30 documentos por registro. **É uma
   conferência do que dá para ver sem abrir o PDF, não um antivírus**: um PDF que esconda esses marcadores dentro de fluxos comprimidos passa. A defesa de fundo é quem abre: o
-  leitor de PDF do navegador, isolado; o sistema serve com `Content-Type: application/pdf`, `nosniff`, sem cache e nunca dentro de outra página (`X-Frame-Options: DENY`).
+  leitor de PDF do navegador, isolado; o sistema serve com `Content-Type: application/pdf`, `nosniff`, sem cache e nunca dentro de outra página (`X-Frame-Options: DENY`; a única página que o sistema deixa dentro de outra é a de impressão da aba Imprimir da ficha, e só dentro do próprio sistema: `SAMEORIGIN`).
 - **Quem pode.** Ver e baixar: depende da **área** a que o documento foi vinculado (2026-11-10): Serviço Social, só quem lê o Serviço Social; Saúde, só quem lê a saúde; Financeiro, quem tem a
   permissão do financeiro; sem área (geral), a permissão `documentos` (quem já imprime o prontuário); o administrador vê tudo, e quem não vê uma área não anexa nela. Anexar e remover: a permissão nova `anexar` (de fábrica, até o Operador; configurável em
   Cadastros > Permissões). Restaurar e apagar de vez: só o administrador (permissão fixa `lixeira`). **Remover só esconde** (o arquivo continua no disco), como "excluir" nos

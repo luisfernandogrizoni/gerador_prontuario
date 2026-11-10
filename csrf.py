@@ -54,6 +54,11 @@ POLITICA = {
 }
 
 
+# As únicas páginas que podem aparecer dentro de OUTRA página do próprio sistema (a aba "Imprimir" da ficha mostra a página de impressão com o preview).
+# Mesmo assim só dentro do mesmo endereço: nenhum outro site as emoldura. Todas as demais seguem barradas (frame-ancestors 'none' e X-Frame-Options: DENY).
+EMOLDURAVEIS = {"ver_impressos"}
+
+
 def token():
     """O token desta sessão (criado na primeira vez que alguém pede)."""
     valor = session.get("csrf")
@@ -94,6 +99,8 @@ def politica():
     """O texto do cabeçalho Content-Security-Policy desta resposta (com o nonce dela)."""
     n = nonce()
     partes = dict(POLITICA)
+    if request.endpoint in EMOLDURAVEIS:
+        partes["frame-ancestors"] = "'self'"
     partes["script-src"] = f"'self' 'nonce-{n}'"
     partes["style-src"] = f"'self' 'nonce-{n}'"
     return "; ".join(f"{k} {v}" for k, v in partes.items())
