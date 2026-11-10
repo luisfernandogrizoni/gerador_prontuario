@@ -47,6 +47,7 @@ from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import auditoria
+import csrf
 import email_envio
 import senhas_fracas
 from modelos import Funcionario, Usuario, db
@@ -384,7 +385,7 @@ def exigir_login():
 def cabecalhos_de_seguranca(resposta):
     """after_request: nada de cache das páginas e proteção contra rodar dentro de outro site."""
     resposta.headers["X-Content-Type-Options"] = "nosniff"
-    resposta.headers["X-Frame-Options"] = "DENY"
+    resposta.headers["X-Frame-Options"] = "SAMEORIGIN" if request.endpoint in csrf.EMOLDURAVEIS else "DENY"
     resposta.headers["Referrer-Policy"] = "same-origin"
     if current_app.config.get("SESSION_COOKIE_SECURE"):
         # o sistema só se entende por HTTPS (cookie só-HTTPS): o navegador passa a recusar abrir este endereço sem HTTPS por 1 ano

@@ -47,10 +47,12 @@ Um botão **cheio** (primário) por tela, para a ação principal. Os outros sã
 | `.botao.perigo.solido` | Só **dentro da confirmação** (o botão que de fato exclui) |
 | `.botao.pequeno` | Em listas e linhas |
 
+Todo botão é **pílula** (`--r-botao`); o cartão em que ele fica tem só 6 px de canto.
+
 ## Espaço, cantos, texto
 
 - Espaços: `--e1` a `--e6` (4, 8, 12, 16, 24, 32 px). Não inventar valores.
-- Cantos: `--r-sm` 8, `--r-md` 12, `--r-lg` 16 (cartões e seções).
+- Cantos (decisão do usuário, 2026-11-10): **caixas e cartões só levemente arredondados, botões bem arredondados**. `--r-sm` 4, `--r-md` e `--r-lg` 6 (cartões, seções, janelas, avisos, ladrilhos de ícone, listas) e `--raio` 6; `--r-botao` 999 (pílula) para tudo que é botão: `.botao`, itens do menu do topo, controle segmentado, paginador. Não escrever `border-radius` com número solto: usar o token. Campos de formulário (`input`, `select`) e etiquetas (`.chip`) ficaram como estavam.
 - Sombras: `--sombra` (cartão) e `--sombra-alta` (janela, aviso).
 - Texto: título de página `--t-titulo`, de seção `--t-secao`, corpo `--t-corpo`, rótulo `--t-rotulo`. Mínimo de 14 px.
 - Alvos de clique com pelo menos 24 px (no celular, 42 px; `.botao` já cuida disso).
@@ -133,27 +135,37 @@ Um botão **cheio** (primário) por tela, para a ação principal. Os outros sã
 - **Cartões** de seção com ícone pastel: `{% call cartao('Título', 'icone', 'tom') %}` (`templates/_cartao.html`).
   Duas colunas em telas largas (`.ficha-grade`): o principal à esquerda e, à direita, o que se consulta toda hora; no celular a
   coluna lateral vem primeiro. Tela de leitura com duas colunas usa `main.largo`, para ficar alinhada às listas.
-- **O prontuário é da PESSOA e é uma página só** (`templates/ficha.html`, endereço `/internacoes/<id>` ou `/pessoas/<id>/prontuario`): o cabeçalho de identidade ("Prontuário nº N · passagem X de Y"),
-  os dados da pessoa e, embaixo, cada passagem (internação) ou triagem num bloco que **abre e fecha** (`details.passagem`; a do endereço aberto sai expandida e as outras minimizadas;
-  "Expandir todas"). Nada de uma página por passagem nem de abas. Dentro de cada bloco: a internação, o responsável, o **Acompanhamento** (acolhimento social, ficha de saúde,
-  relatório de alta, prontuário em papel), as parcelas e os **documentos** (dois cartões separados: para imprimir e escaneados). As âncoras antigas (`#acolhimento`, `#saude`, `#alta`, `#parcelas`, `#escaneados`, `#envelope`)
-  valem para a passagem do endereço aberto e abrem o bloco onde estão (as outras levam `p<nº>-` na frente).
+- **O prontuário é da PESSOA, numa página só, com ABAS por função** (`templates/ficha.html`, endereço `/internacoes/<id>` ou `/pessoas/<id>/prontuario`): o **cabeçalho de identidade** ("Prontuário nº N ·
+  passagem X de Y") e, embaixo, as abas: **Resumo** (a internação, o responsável e em que pé está cada área, com "Abrir" para a aba dela), **Dados pessoais**, **Serviço Social** (acolhimento e,
+  de quem recebeu baixa, o relatório de alta), **Saúde** (ficha de saúde, registros de enfermagem, evolução; só de quem já foi internado), **Financeiro** (parcelas e contribuição), **Imprimir** e
+  **Escaneados**. Quem tem mais de uma passagem (ou uma triagem) vê, entre o cabeçalho e as abas, a **faixa de passagens**: escolher uma troca o cabeçalho e as abas para os da passagem escolhida,
+  **sem sair da página** (cada passagem é uma "visão" `.visao` já na página; a do endereço aberto sai à mostra e o endereço passa a ser o da escolhida). A aba aberta fica no endereço (`#aba-social`)
+  e é lembrada por pessoa na sessão (salvar um relatório volta à mesma aba). As âncoras antigas (`#acolhimento`, `#saude`, `#alta`, `#parcelas`, `#escaneados`, `#envelope`) valem para a passagem do
+  endereço aberto e abrem a aba onde estão (as outras levam `p<nº>-` na frente). Nada de blocos que abrem e fecham por passagem, nem de uma página por passagem.
+- **A aba Imprimir: a caixa "Documentos para imprimir" AO LADO do preview** (decisão do usuário, 2026-11-10). À esquerda, a caixa com uma caixinha por documento (os do conjunto padrão da passagem vêm
+  marcados), "Abrir" e o menu "⋯" (Imprimir, Baixar Word) em cada linha, a declaração (outro documento, sem caixinha) e a barra "N escolhidos" com **Imprimir os escolhidos** e **Baixar Word**. À direita, o
+  **preview das folhas**: a página de impressão (`/internacoes/<id>/impressos?itens=...&embutido=1`) num `iframe`, carregado só quando a aba abre e **recarregado a cada caixinha marcada ou desmarcada**
+  (sem nenhuma marcada, some e dá lugar a um aviso). **Nada de barra flutuante em cima do preview**: `?embutido=1` mostra só as folhas (sem menu do sistema, "Voltar", título, Imprimir, Baixar Word nem as
+  opções). "Imprimir os escolhidos" abre a página inteira com `imprimir=1` (é o que anota o pedido de exames/enxoval como impresso e registra a impressão na auditoria). Quem não tem a permissão `documentos` e só lê
+  relatórios sigilosos vê, na mesma caixa, só o que lê (o preview pede só esses itens, que abrem sem a permissão). No celular a caixa fica em cima e o preview embaixo.
+  É a **única** página que pode ficar dentro de outra (mesmo endereço: `X-Frame-Options: SAMEORIGIN` e `frame-ancestors 'self'`, em `csrf.EMOLDURAVEIS`); todas as outras seguem em `DENY`.
 - **Uma ação principal por área + menu "Mais"** (`details.mais`, fechado sozinho por `static/base.js`): cada linha do Acompanhamento mostra a situação (selo) e UM botão claro
   (Preencher, Continuar, Alterar); o secundário (histórico de versões, registros de enfermagem, evolução) vai no menu. Nenhum botão de documento mora dentro de uma área.
 - **Sem redundância**: um dado aparece num lugar só. O cabeçalho mostra só o que se deduz; as datas ficam no cartão. A idade
   está no cabeçalho, não no cadastro.
 - **Vazio não ocupa lugar**: `dados([(rótulo, valor), ...])` mostra só o que tem valor e junta o resto numa linha,
   "Não informado: ...".
-- Impressão: botões e menus saem, uma coluna só, cartões sem cortar (os blocos das passagens abrem todos).
+- Impressão da ficha: botões, abas e menus saem, uma coluna só, cartões sem cortar (as abas saem todas, menos a da página de impressão embutida).
 
 ## Documentos: os que se imprimem e os escaneados ficam SEPARADOS
 
-- Em cada passagem da ficha (`templates/ficha.html`) há dois cartões lado a lado (um embaixo do outro no celular), cada um com um propósito: **Documentos para imprimir** (o que o sistema
-  gera: prontuário, capa do envelope, manual, ficha multiprofissional, relatórios do Serviço Social e de alta, pedido de exames, enxoval, declaração) e **Documentos escaneados** (os PDFs do
-  papel assinado). Nunca na mesma lista: quem quer imprimir não vê PDF, e quem procura um PDF não vê impresso.
-- **Para imprimir**: cada linha tem **Abrir** e o menu "Mais" (Imprimir, Baixar Word); caixinhas escolhem vários de uma vez e aparece a barra "N escolhidos" com **Imprimir os escolhidos** e
-  **Baixar Word**. Os botões de documento **não** moram dentro das áreas (Acompanhamento); a página de relatórios usa o mesmo jeito (`templates/_acoes_documento.html`).
-- **Escaneados**: um botão só, **Anexar PDF** (abre uma janela com o arquivo, o título e a **área**), a lista com o chip da área e o **filtro por área** (Todos, Saúde, Social, Financeiro, Geral).
+- Em cada passagem da ficha (`templates/ficha.html`) são **duas abas**, cada uma com um propósito: **Imprimir** (o que o sistema gera: prontuário, capa do envelope, manual, ficha
+  multiprofissional, relatórios do Serviço Social e de alta, pedido de exames, enxoval, declaração) e **Escaneados** (os PDFs do papel assinado). Nunca na mesma lista: quem quer imprimir não vê
+  PDF, e quem procura um PDF não vê impresso.
+- **Imprimir**: a caixa de documentos com as caixinhas ao lado do preview (veja acima); os botões de documento **não** moram dentro das áreas (Serviço Social, Saúde...); a página de relatórios
+  usa o mesmo jeito (`templates/_acoes_documento.html`).
+- **Escaneados**: um botão só, **Anexar PDF** (abre uma janela com o arquivo, o título e a **área**), a lista com o chip da área, a contagem na própria aba e o **filtro por área** (Todos, Saúde,
+  Social, Financeiro, Geral).
 - O que cada pessoa vê dos escaneados segue o sigilo da área (`app._pode_ver_area_do_anexo`): o do Serviço Social só vai a quem lê o Serviço Social, o de Saúde a quem lê a saúde, o Financeiro a quem
   tem a permissão do financeiro, o geral a quem tem `documentos`; o administrador vê tudo. Quem não vê uma área também não anexa nela.
 

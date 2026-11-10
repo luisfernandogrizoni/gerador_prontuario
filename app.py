@@ -807,15 +807,7 @@ def ficha(id):
     notificacoes.marcar_lidas(g.usuario, id)              # abrir a ficha é ficar sabendo: as notificações de quem abriu, sobre esta pessoa, ficam lidas
     p, hoje = internacao.pessoa, relatorios.hoje_no_brasil()
     passagens = _passagens_da_pessoa(p, internacao, hoje)
-    aberta = next(x for x in passagens if x["aberta"])
-    permanencia = ((hoje if internacao.status == "ativo" else internacao.termino) - internacao.inicio).days \
-        if internacao.inicio and (internacao.status == "ativo" or internacao.termino) else None
-    return render_template("ficha.html", i=internacao, envelope_atrasado=aberta["envelope_atrasado"], envelope_tempo=aberta["envelope_tempo"],
-                           acolhimento=aberta["acolhimento"], saude=aberta["saude"], alta=aberta["alta"],
-                           idade=calcular_idade(p.nascimento, hoje),
-                           previsao=previsao_termino(internacao.inicio, internacao.tratamento_ate) if internacao.inicio else None,
-                           permanencia=_duracao(permanencia) if permanencia is not None and permanencia >= 0 else "",
-                           avatar=avatar_da_pessoa(p.nome),
+    return render_template("ficha.html", i=internacao, idade=calcular_idade(p.nascimento, hoje), avatar=avatar_da_pessoa(p.nome),
                            baixar=request.args.get("baixar", type=int), titulos_de_anexo=anexos.TITULOS_SUGERIDOS, rotulos_das_areas=anexos.AREAS,
                            areas_de_anexo=[(chave, rotulo) for chave, rotulo in anexos.AREAS.items() if _pode_anexar_na_area(chave)],
                            limite_do_anexo=anexos.LIMITE_DO_ARQUIVO,
@@ -843,23 +835,24 @@ def _periodo_do_registro(o):
 
 
 def _documentos_da_passagem(o):
-    """Os documentos PARA IMPRIMIR de UMA passagem (o cartão "Documentos para imprimir" da ficha): o que quem abre a ficha pode imprimir. Quem tem `documentos` vê todos; quem só lê o Serviço Social
-    ou a saúde vê (e imprime) o que lê. Cada um: {chave, rotulo, aviso, impresso}. A declaração (internação ou ex-interno) é outro documento: tem endereço próprio
-    e não se junta aos outros na mesma impressão."""
+    """Os documentos PARA IMPRIMIR de UMA passagem (a aba "Imprimir" da ficha): o que quem abre a ficha pode imprimir. Quem tem `documentos` vê todos; quem só lê o Serviço Social
+    ou a saúde vê (e imprime) o que lê. Cada um: {chave, rotulo, aviso, impresso, marcado}. A declaração (internação ou ex-interno) é outro documento: tem endereço próprio
+    e não se junta aos outros na mesma impressão. `marcado`: faz parte do conjunto padrão da passagem, que a aba já mostra no preview (as caixinhas vêm marcadas)."""
     geral = permissoes.pode("documentos")
     leitores = permissoes.QUEM_LE_O_IMPRESSO
-    lista = [dict(d, impresso=True) for d in impressos.disponiveis(o, _pode_ler_social(), _pode_ler_saude())
+    padrao = set(impressos.ler_itens(None, o, _pode_ler_social()))
+    lista = [dict(d, impresso=True, marcado=d["chave"] in padrao) for d in impressos.disponiveis(o, _pode_ler_social(), _pode_ler_saude())
              if geral or (d["chave"] in leitores and leitores[d["chave"]](g.get("usuario")))]
     if geral and declaracoes.tipo_da_declaracao(o) is not None:
-        lista.append({"chave": "declaracao", "rotulo": "Declaração de internação" if o.status == "ativo" else "Declaração de ex-interno", "aviso": "", "impresso": False})
+        lista.append({"chave": "declaracao", "rotulo": "Declaração de internação" if o.status == "ativo" else "Declaração de ex-interno", "aviso": "", "impresso": False, "marcado": False})
     return lista
 
 
 def _passagens_da_pessoa(pessoa, atual, hoje):
-    """Todos os registros da pessoa (as passagens, que são internações de verdade, e as triagens), do mais novo para o mais antigo: cada um é um bloco da ficha, que
-    abre e fecha, com tudo o que ele tem. O que o bloco mostra de cada relatório é o que a ficha sempre mostrou a quem a abre (em que pé está; o conteúdo sigiloso
-    fica nas próprias telas). `atual`: o registro do endereço aberto, que sai expandido e leva os ids de sempre (#acolhimento, #parcelas...); os outros levam o
-    número do registro na frente (#p12-acolhimento)."""
+    """Todos os registros da pessoa (as passagens, que são internações de verdade, e as triagens), do mais novo para o mais antigo: cada um tem a sua visão na ficha
+    (o cabeçalho e as abas, com tudo o que ele tem; a faixa de passagens troca de uma para a outra sem sair da página). O que a visão mostra de cada relatório é o que a
+    ficha sempre mostrou a quem a abre (em que pé está; o conteúdo sigiloso fica nas próprias telas). `atual`: o registro do endereço aberto, que sai à mostra e leva os
+    ids de sempre (#acolhimento, #parcelas...); os outros levam o número do registro na frente (#p12-acolhimento)."""
     passagens = []
     for o in reversed(pessoa.registros):
         n = o.numero_da_passagem
@@ -868,6 +861,7 @@ def _passagens_da_pessoa(pessoa, atual, hoje):
         espera, atrasado = dias_de_espera(o)
         passagens.append({"o": o, "aberta": o.id == atual.id, "prefixo": "" if o.id == atual.id else f"p{o.id}-", "numero": n,
                           "rotulo": f"Passagem {n}" if n else "Triagem", "periodo": _periodo_do_registro(o), "duracao": _duracao(dias) if dias is not None else "",
+                          "previsao": previsao_termino(o.inicio, o.tratamento_ate) if o.inicio else None,
                           "acolhimento": _resumo_do_acolhimento(o), "saude": _resumo_da_saude(o), "alta": _resumo_da_alta(o),
                           "envelope_tempo": tempo_decorrido(espera) if espera is not None else "", "envelope_atrasado": atrasado,
                           "documentos": _documentos_da_passagem(o), "escaneados": _anexos_visiveis(o)})
@@ -1047,10 +1041,11 @@ def _barra(emissor_id, colunas=(), detalhar=None, nomes=None, informacoes=None):
             "informacoes": informacoes}
 
 
-def _mostrar(doc, docx, voltar, avisos=(), barra=None):
+def _mostrar(doc, docx, voltar, avisos=(), barra=None, embutido=False):
+    """`embutido`: a página aparece dentro de outra (a aba "Imprimir" da ficha): sem o menu do sistema, sem o "Voltar" e sem o título."""
     doc.voltar = voltar
     return render_template("documento.html", doc=doc, docx=docx, avisos=avisos, cabecalho=documentos.CABECALHO,
-                           rodape=documentos.RODAPE, barra=barra or {})
+                           rodape=documentos.RODAPE, barra=barra or {}, embutido=embutido)
 
 
 def _baixar(doc):
@@ -1104,9 +1099,10 @@ def ver_impressos(id):
     internacao, itens, doc = _impresso(id)
     if request.args.get("imprimir"):                      # só quem vai imprimir; ver o documento não conta como impresso
         _anotar_impressao(internacao, itens)
-    barra = {"itens": impressos.barra(internacao, itens, lambda novos: url_for("ver_impressos", id=id, itens=",".join(novos)),
+    embutido = bool(request.args.get("embutido"))         # a aba "Imprimir" da ficha mostra esta página dentro dela (o iframe pede ?embutido=1)
+    barra = {"itens": impressos.barra(internacao, itens, lambda novos: url_for("ver_impressos", id=id, itens=",".join(novos), embutido=1 if embutido else None),
                                       _pode_ler_social(), _pode_ler_saude())}
-    return _mostrar(doc, url_for("baixar_impressos", id=id, itens=",".join(itens)), url_for("ficha", id=id), barra=barra)
+    return _mostrar(doc, url_for("baixar_impressos", id=id, itens=",".join(itens)), url_for("ficha", id=id), barra=barra, embutido=embutido)
 
 
 @app.get("/internacoes/<int:id>/impressos.docx")

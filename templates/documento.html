@@ -2,7 +2,8 @@
 {% from "_voltar.html" import voltar with context %}
 {#
   Mostra um Documento (documentos.py) para ver e imprimir no navegador: cada página é uma folha A4 com o timbre.
-  Variáveis: doc (Documento), docx (endereço do download), avisos (alertas só da tela), cabecalho/rodape (timbre).
+  Variáveis: doc (Documento), docx (endereço do download), avisos (alertas só da tela), cabecalho/rodape (timbre), embutido (a página aparece dentro da aba
+  "Imprimir" da ficha, ao lado da caixa que escolhe os documentos: só as folhas, sem o menu do sistema, o "Voltar", o título, os botões nem as opções).
 #}
 
 {% block titulo %}{{ doc.titulo }}{% endblock %}
@@ -36,7 +37,7 @@
   #detalhar-internacoes legend label { font-weight: 700; }
   .anos-detalhe { max-height: 56vh; overflow-y: auto; margin-bottom: 14px; }
   .meses-detalhe { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-  .meses-detalhe label { justify-content: space-between; gap: 4px; padding: 6px 8px; border: 1px solid var(--borda-forte); border-radius: 8px; font-size: .86rem; cursor: pointer; }
+  .meses-detalhe label { justify-content: space-between; gap: 4px; padding: 6px 8px; border: 1px solid var(--borda-forte); border-radius: var(--r-md); font-size: .86rem; cursor: pointer; }
   .meses-detalhe label:has(input:checked) { border-color: var(--vermelho); background: #fdf2f2; }
   .meses-detalhe label:has(input:disabled) { opacity: .45; cursor: default; }
   .meses-detalhe small { color: var(--suave); }
@@ -46,7 +47,7 @@
   #escolher-informacoes label { flex-direction: row; align-items: center; gap: 8px; }
   #escolher-informacoes .botoes { flex-wrap: wrap; }
   .informacoes-detalhe { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-  .informacoes-detalhe label { padding: 7px 10px; border: 1px solid var(--borda-forte); border-radius: 8px; font-size: .88rem; cursor: pointer; }
+  .informacoes-detalhe label { padding: 7px 10px; border: 1px solid var(--borda-forte); border-radius: var(--r-md); font-size: .88rem; cursor: pointer; }
   .informacoes-detalhe label:has(input:checked) { border-color: var(--vermelho); background: #fdf2f2; }
   .informacoes-detalhe input { width: auto; flex: none; margin: 0; }
   #detalhar-internacoes .botoes { flex-wrap: wrap; }
@@ -100,6 +101,10 @@
   .doc-imagem { line-height: 0; }
   .doc-imagem img { height: auto; }
 
+  {% if embutido %}
+  header.topo, .cabecalho-impressao { display: none !important; }
+  main, main.largo { max-width: none; margin: 0; padding: 0; }
+  {% endif %}
   @media (max-width: 760px) {
     .opcoes-doc .grupo, .opcoes-doc form { width: 100%; }
     .opcoes-doc label { flex-direction: column; align-items: stretch; gap: 4px; width: 100%; }
@@ -194,6 +199,7 @@
 
 {% block conteudo %}
 <main class="largo">
+  {% if not embutido %}
   <div class="barra-doc">
     {{ voltar(doc.voltar or url_for('home')) }}
     <h1>{{ doc.titulo }}</h1>
@@ -202,7 +208,8 @@
       {% if docx %}<a class="botao secundario" href="{{ docx }}"><svg class="icone"><use href="#i-baixar"/></svg>Baixar Word</a>{% endif %}
     </div>
   </div>
-  {% if barra and (barra.colunas or barra.emissores or barra.itens or barra.detalhar or barra.nomes or barra.informacoes) %}
+  {% endif %}
+  {% if not embutido and barra and (barra.colunas or barra.emissores or barra.itens or barra.detalhar or barra.nomes or barra.informacoes) %}
   <div class="opcoes-doc">
     {% for grupo in barra.itens or [] %}
     <div class="grupo" role="group" aria-label="{{ grupo.titulo }}">

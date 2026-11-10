@@ -13,6 +13,7 @@ tanto ao enviar o formulário quanto ao baixar de novo pela lista.
 """
 
 import copy
+from itertools import accumulate
 from datetime import date
 
 import catalogo
@@ -266,6 +267,35 @@ LINHA_E_MEIA = 21       # idem, com entrelinha 1,5
 # ficha de controle: a grade fina de 16 colunas e a altura mínima de cada linha, em twips (como no modelo antigo)
 GRADE_FICHA = [1359, 361, 290, 537, 769, 1123, 735, 164, 850, 322, 109, 1004, 119, 325, 750, 1153]
 ALTURAS_FICHA = [376, 376, 376, 89, 285, 376, 376, 393, 614, 376, 376, 376, 376, 376, 376]
+# A linha dos três contatos não cabia na grade do modelo antigo: "(18) 99999-9999" (Arial 12) pede ~2.000 twips e "Contato" (negrito) ~1.130, e as células dali tinham 1.596 e 1.123, então o
+# telefone e a palavra "Contato" quebravam ("Contat/o"). A grade ganha três divisões novas (em twips, contados da borda esquerda), só para essa linha: as outras linhas continuam com as divisões
+# de sempre (cada uma só ganha colunas a mais por baixo das mesmas bordas). Rótulos ficam com ~1.200 e telefones com ~2.100 (nenhum telefone de 15 caracteres quebra).
+CORTES_DOS_CONTATOS = (1220, 4520, 7819)
+
+
+def _com_cortes(grade, cortes):
+    """(grade nova, onde cada coluna nova termina): a grade com as colunas partidas nos `cortes`. Quem já cai numa divisão existente não parte nada."""
+    fins = sorted(set(accumulate(grade)) | set(cortes))
+    return [b - a for a, b in zip([0] + fins[:-1], fins)], fins
+
+
+def _reespaciar(linha, grade, fins):
+    """A linha (células com span na `grade` antiga) com os spans na grade nova: as bordas das células não mudam, só quantas colunas finas elas cobrem."""
+    saida, coluna, inicio = [], 0, 0
+    for celula in linha:
+        fim = inicio + sum(grade[coluna:coluna + celula.span])
+        saida.append(Celula(celula.texto, sum(1 for f in fins if inicio < f <= fim), celula.negrito))
+        coluna, inicio = coluna + celula.span, fim
+    return saida
+
+
+def _celulas_ate(fins, celulas):
+    """Células dadas como (célula, onde ela termina, em twips): os spans saem da grade nova."""
+    saida, inicio = [], 0
+    for celula, ate in celulas:
+        saida.append(Celula(celula.texto, sum(1 for f in fins if inicio < f <= ate), celula.negrito))
+        inicio = ate
+    return saida
 
 
 def _ficha_de_controle(c):
@@ -273,11 +303,12 @@ def _ficha_de_controle(c):
     v = lambda texto, span=1: Celula(texto, span)                    # valor
     estado_civil = "        ".join(f"({marca(c['estado_civil'], opcao)}) {opcao}"
                                    for opcao in ("Casado", "Solteiro", "Divorciado", "Outros")) + f" {c['estado_civil_outro']}"
-    return Formulario(GRADE_FICHA, [
+    grade, fins = _com_cortes(GRADE_FICHA, CORTES_DOS_CONTATOS)
+    linhas = [
         [r("Nome", 2), v(c["nome"], 14)],
         [r("Endereço", 2), v(c["endereco"], 12), r("Num"), v(c["numero"])],
         [r("Bairro", 2), v(c["bairro"], 5), r("Cidade", 3), v(c["cidade"], 6)],
-        [r("Contato ", 2), v(c["contato1"], 3), r("Contato"), v(c["contato2"], 5), r("Contato ", 2), v(c["contato3"], 3)],
+        None,                                                    # os contatos: veja CORTES_DOS_CONTATOS
         [r("Data de Nascimento", 4), v(c["nascimento_fmt"], 8), r("Idade", 3), v(c["idade"])],
         [r("RG"), v(c["rg"], 6), r("CPF", 2), v(c["cpf"], 7)],
         [r("Cartão SUS", 3), v(c["cartao_sus"], 13)],
@@ -289,7 +320,10 @@ def _ficha_de_controle(c):
         [r("Responsável", 2), v(c["resp_nome"], 14)],
         [r("Parentesco", 2), v(c["parentesco"], 14)],
         [r("RG"), v(c["resp_rg"], 6), r("CPF", 2), v(c["resp_cpf"], 7)],
-    ], ALTURAS_FICHA)
+    ]
+    contatos = [(r("Contato"), 1220), (v(c["contato1"]), 3316), (r("Contato"), 4520), (v(c["contato2"]), 6619), (r("Contato"), 7819), (v(c["contato3"]), sum(GRADE_FICHA))]
+    linhas = [_celulas_ate(fins, contatos) if linha is None else _reespaciar(linha, GRADE_FICHA, fins) for linha in linhas]
+    return Formulario(grade, linhas, ALTURAS_FICHA)
 
 
 def _item(numero, partes, recuo, tamanho=None, antes=0, depois=0):
