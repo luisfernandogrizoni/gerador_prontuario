@@ -74,18 +74,33 @@ def enxoval(nome=""):
 
 
 # ======================================================================== capa do envelope
-def capa_do_envelope(nome, inicio_fmt, convenio_sus, cidade):
+PASSAGENS_POR_COLUNA = 6        # quantas linhas de passagens anteriores cabem numa coluna da folha em paisagem; mais que isso vai em 2 colunas (até 12) ou 3 (até 18)
+def capa_do_envelope(nome, inicio_fmt, convenio_sus, cidade, termino_fmt="", anteriores=()):
     """Capa em paisagem, sem timbre, só com a logo. `convenio_sus`: True (Sim), False (Não) ou None (em branco).
-    O motivo e o término ficam em branco: são marcados na baixa, à mão."""
+    O término sai preenchido quando já está no sistema (`termino_fmt`); sem ele fica em branco, para escrever na baixa. O motivo fica sempre em branco:
+    é marcado à mão. `anteriores`: os períodos das passagens anteriores da pessoa, já em texto ("05/02/2019 a 12/08/2019"), da mais antiga para a mais
+    nova; quem só teve esta internação não leva nada a mais, e a capa fica como sempre foi."""
     grande = lambda partes, **kw: Paragrafo(partes, **{"tamanho": 26, "fonte": "Arial", **kw})
     tamanho_do_nome = 26 if len(nome) <= 30 else 22 if len(nome) <= 38 else 18
     x = lambda marcado: "X" if marcado else " "
+    periodo = f"Início: {inicio_fmt}          Término:" + (f" {termino_fmt}" if termino_fmt else "")
+    passagens = []
+    if anteriores:
+        quantas = 1 if len(anteriores) <= PASSAGENS_POR_COLUNA else 2 if len(anteriores) <= 2 * PASSAGENS_POR_COLUNA else 3
+        linha = lambda texto: grande([N(texto)], tamanho=20 if quantas < 3 else 16, recuo=567, depois=2)
+        if quantas == 1:
+            lista = [linha(texto) for texto in anteriores]
+        else:           # muitas passagens: em colunas, para a capa continuar sendo uma folha só
+            por_coluna = -(-len(anteriores) // quantas)
+            lista = [Colunas([[linha(texto) for texto in anteriores[k * por_coluna:(k + 1) * por_coluna]] for k in range(quantas)], espaco=360)]
+        passagens = [grande([N("Passagens anteriores:")], tamanho=20, depois=4), *lista]
     return [Pagina(paisagem=True, timbre=False),
             Imagem("timbre/logo-topo.jpg", 28),
             grande([Texto(f"Nome: {nome}", negrito=True, sublinhado=True)], alinhamento="centro", tamanho=tamanho_do_nome, antes=6, depois=18),
             grande([N(f"Motivo: ( {x(False)} ) Conclusão     ( {x(False)} ) Desistência     ( {x(False)} ) Exclusão")], alinhamento="centro", antes=26, depois=36),
-            grande([N(f"Início: {inicio_fmt}          Término:")], depois=12),
-            grande([N(f"Convênio SUS: ( {x(convenio_sus is True)} ) Sim     ( {x(convenio_sus is False)} ) Não")], depois=12),
+            grande([N(periodo)], depois=12 if not anteriores else 6),
+            *passagens,
+            grande([N(f"Convênio SUS: ( {x(convenio_sus is True)} ) Sim     ( {x(convenio_sus is False)} ) Não")], antes=12 if anteriores else 0, depois=12),
             grande([N(f"CIDADE: {cidade}")], fonte="Calibri")]
 
 

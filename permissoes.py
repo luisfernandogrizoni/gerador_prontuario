@@ -259,7 +259,7 @@ REGRAS = {
     # (a página de entrada, o código e o "esqueci minha senha" são autenticacao.ROTAS_LIVRES)
 
     "home": "ver", "api_pessoas": "ver", "lista_triagens": "ver", "api_triagens": "ver", "lista_internos": "ver",
-    "api_internos": "ver", "api_internos_busca": "ver", "ficha": "ver", "relatorio_social": "ver", "relatorio_de_rejeicao": "ver",
+    "api_internos": "ver", "api_internos_busca": "ver", "ficha": "ver", "prontuario_da_pessoa": "ver", "relatorio_social": "ver", "relatorio_de_rejeicao": "ver",
     "ficha_saude": "ver", "saude_enfermagem": "ver", "saude_evolucao": "ver", "relatorio_de_alta": "ver",
     "historico_do_relatorio": "ver", "ver_versao_do_relatorio": "ver",
     "lista_notificacoes": "ver", "marcar_notificacoes_lidas": "ver",       # só os avisos da própria pessoa
@@ -270,7 +270,7 @@ REGRAS = {
     "pagina_relatorios": "relatorios", "ver_relatorio": "relatorios", "baixar_relatorio": "relatorios",
     "ver_relatorio_anual": "relatorios", "baixar_relatorio_anual": "relatorios",
 
-    "nova_triagem": "triagem", "salvar_triagem": "triagem", "mudar_status": _quem_muda_status,
+    "nova_triagem": "triagem", "salvar_triagem": "triagem", "mudar_status": _quem_muda_status, "internar_da_triagem": "admitir",
     "formulario": "internacao", "gerar": "internacao", "editar_internacao": _quem_edita,
     "lista_para_conferir": "conferir", "marcar_conferido": "conferir",                 # a conferência dos importados com o prontuário físico (conferencia.py): só o administrador
     "baixa_interno": "baixa", "registrar_envelope": "envelope",

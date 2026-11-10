@@ -20,6 +20,8 @@ from prontuario import CONVENIO_A_DEFINIR, ler_data, ler_valor
 from relatorios import hoje_no_brasil
 from validacao import cpf_valido, fmt_cpf, ler_hora, normalizar_nome, rg_valido, so_digitos
 
+TRIAGEM_EM_ABERTO = ("em_admissao", "lista_espera")      # as situações em que a triagem ainda pode virar internação
+
 MOTIVOS = ["Conclusão", "Desistência", "Desligamento"]
 
 
@@ -181,6 +183,14 @@ def mudar_status(internacao, dados):
     internacao.status = "ativo"
     db.session.commit()
     return {}
+
+
+def triagem_em_aberto(pessoa):
+    """A triagem desta pessoa que ainda está em andamento (em admissão ou na lista de espera), a mais recente; None se não há. Quem pede uma nova
+    internação para quem tem uma dessas deve ser perguntado se a internação sai dela (a triagem passa para a lista de internos) em vez de nascer
+    um segundo registro, e a triagem ficar para sempre na lista de triagens como se fosse outra pessoa."""
+    abertas = [i for i in pessoa.internacoes if i.status in TRIAGEM_EM_ABERTO]
+    return max(abertas, key=lambda i: i.id) if abertas else None
 
 
 # ---------------------------------------------------------------- dar baixa
