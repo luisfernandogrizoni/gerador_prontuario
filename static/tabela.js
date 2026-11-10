@@ -420,7 +420,7 @@ function avatar(nome) {
 // ------------------------------------------------------------------ células usadas pelas listas de pessoas
 // avatar + nome (link para a ficha) e, embaixo, "CPF · 34 anos"
 function celulaPessoa(i) {
-  const dados = [i.cpf || "sem CPF", i.idade != null ? `${i.idade} anos` : ""].filter(Boolean).join(" · ");
+  const dados = [i.cpf || "sem CPF", i.idade != null ? `${i.idade} anos` : "", i.passagens > 1 ? `${i.passagens} passagens` : ""].filter(Boolean).join(" · ");
   const nome = document.createElement("div");
   nome.append(link(i.nome, `/internacoes/${i.id}`), texto("small", dados));
   const caixa = document.createElement("div");

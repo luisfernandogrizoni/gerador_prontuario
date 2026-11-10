@@ -10,6 +10,9 @@ Como funciona:
   * **Só PDF de verdade e inteiro**: começa com %PDF-, termina com %%EOF, até LIMITE_DO_ARQUIVO, sem senha e sem script nem arquivo embutido (um PDF de escaneamento
     comum não tem). É uma conferência do que dá para ver sem abrir o PDF, não um antivírus; quem abre é o leitor de PDF do navegador, que roda isolado.
   * **O mesmo arquivo não entra duas vezes** no mesmo registro (a impressão digital acusa).
+  * **Área**: o documento pode ser vinculado a uma área (Saúde, Financeiro, Serviço Social; sem área = geral) e a central de documentos da ficha filtra por ela. Segue o sigilo
+    de cada uma (app._pode_ver_area_do_anexo): o do Serviço Social só vai a quem lê o Serviço Social, o de Saúde a quem lê a saúde, o Financeiro a quem tem a
+    permissão do financeiro; o geral, a quem tem `documentos`. O administrador vê tudo. Quem não vê uma área também não anexa nela.
   * Quem pode: ver e baixar, quem imprime os documentos do acolhido (permissão `documentos`); anexar e remover, a permissão `anexar`. Remover só esconde (o
     arquivo fica no disco); restaurar e apagar de vez são do administrador, como na lixeira (exclusao.py). Apagar um registro de vez leva os PDFs dele.
   * Toda abertura, download, envio e remoção entra na trilha de auditoria (auditoria.py), sem o nome do arquivo nem o conteúdo.
@@ -30,6 +33,8 @@ LIMITE_DO_ARQUIVO = 25 * 1024 * 1024              # bytes; um escaneamento de v�
 LIMITE_DA_REQUISICAO = LIMITE_DO_ARQUIVO + 2 * 1024 * 1024        # o arquivo e o resto do formulário (app.py e servidor.py usam como teto do envio)
 MAXIMO_POR_REGISTRO = 30
 BLOCO = 1 << 20
+AREAS = {"": "Geral", "saude": "Saúde", "financeiro": "Financeiro", "social": "Serviço Social"}      # a que área o documento está vinculado; "" = sem área
+AREAS_SIGILOSAS = ("saude", "social")        # quem não lê o relatório da área não vê nem anexa nela (app._pode_ver_area_do_anexo)
 TITULOS_SUGERIDOS = ("Prontuário assinado", "Termo de compromisso", "Termo de responsabilidade", "Documento do responsável", "Outro documento")
 
 _NOME_NO_DISCO = re.compile(r"^[0-9a-f]{32}\.pdf$")
@@ -63,6 +68,12 @@ def tamanho_legivel(bytes_):
     if bytes_ < 1024 * 1024:
         return f"{max(1, round(bytes_ / 1024))} KB"
     return f"{bytes_ / (1024 * 1024):.1f}".replace(".", ",") + " MB"
+
+
+def limpar_area(valor):
+    """A área que veio do formulário: uma das AREAS, ou "" (geral) se não for nenhuma."""
+    valor = (valor or "").strip()
+    return valor if valor in AREAS else ""
 
 
 def do_registro(internacao, com_removidos=False):
@@ -124,9 +135,9 @@ def _receber(entrada, pasta_do_arquivo):
     return provisorio, total, impressao.hexdigest()
 
 
-def guardar(internacao, arquivo, titulo, usuario):
-    """Anexa o PDF `arquivo` (o que o Flask entrega em request.files) ao registro. Devolve o Anexo; com um problema que a pessoa corrige, levanta
-    ErroDeAnexo e nada fica gravado nem no disco nem no banco."""
+def guardar(internacao, arquivo, titulo, usuario, area=""):
+    """Anexa o PDF `arquivo` (o que o Flask entrega em request.files) ao registro, vinculado a `area` (veja AREAS). Devolve o Anexo; com um problema que a pessoa
+    corrige, levanta ErroDeAnexo e nada fica gravado nem no disco nem no banco."""
     if arquivo is None or not (arquivo.filename or "").strip():
         raise ErroDeAnexo("Escolha o arquivo PDF.")
     if len(internacao.anexos) >= MAXIMO_POR_REGISTRO:
@@ -143,7 +154,7 @@ def guardar(internacao, arquivo, titulo, usuario):
         titulo = " ".join((titulo or "").split())[:100] or re.sub(r"\.pdf$", "", nome, flags=re.I)[:100] or "Documento escaneado"
         final = pasta_do_arquivo / f"{uuid.uuid4().hex}.pdf"
         os.replace(provisorio, final)
-        anexo = Anexo(internacao=internacao, titulo=titulo, nome_original=nome, arquivo=final.name, tamanho=tamanho, sha256=impressao,
+        anexo = Anexo(internacao=internacao, titulo=titulo, area=limpar_area(area), nome_original=nome, arquivo=final.name, tamanho=tamanho, sha256=impressao,
                       enviado_em=datetime.now(), enviado_por=(usuario or "")[:50])
         db.session.add(anexo)
         db.session.commit()
@@ -154,6 +165,12 @@ def guardar(internacao, arquivo, titulo, usuario):
         if final is not None:
             final.unlink(missing_ok=True)
         raise
+
+
+def mudar_area(anexo, area):
+    """Vincula o documento a outra área (ou tira o vínculo: area = ""). Só mexe na área: o arquivo e o resto continuam."""
+    anexo.area = limpar_area(area)
+    db.session.commit()
 
 
 # ------------------------------------------------------------------ remover, restaurar, apagar

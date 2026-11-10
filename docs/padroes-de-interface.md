@@ -133,26 +133,45 @@ Um botão **cheio** (primário) por tela, para a ação principal. Os outros sã
 - **Cartões** de seção com ícone pastel: `{% call cartao('Título', 'icone', 'tom') %}` (`templates/_cartao.html`).
   Duas colunas em telas largas (`.ficha-grade`): o principal à esquerda e, à direita, o que se consulta toda hora; no celular a
   coluna lateral vem primeiro. Tela de leitura com duas colunas usa `main.largo`, para ficar alinhada às listas.
+- **O prontuário é da PESSOA e é uma página só** (`templates/ficha.html`, endereço `/internacoes/<id>` ou `/pessoas/<id>/prontuario`): o cabeçalho de identidade ("Prontuário nº N · passagem X de Y"),
+  os dados da pessoa e, embaixo, cada passagem (internação) ou triagem num bloco que **abre e fecha** (`details.passagem`; a do endereço aberto sai expandida e as outras minimizadas;
+  "Expandir todas"). Nada de uma página por passagem nem de abas. Dentro de cada bloco: a internação, o responsável, o **Acompanhamento** (acolhimento social, ficha de saúde,
+  relatório de alta, prontuário em papel), as parcelas e a **central de documentos**. As âncoras antigas (`#acolhimento`, `#saude`, `#alta`, `#parcelas`, `#escaneados`, `#envelope`)
+  valem para a passagem do endereço aberto e abrem o bloco onde estão (as outras levam `p<nº>-` na frente).
+- **Uma ação principal por área + menu "Mais"** (`details.mais`, fechado sozinho por `static/base.js`): cada linha do Acompanhamento mostra a situação (selo) e UM botão claro
+  (Preencher, Continuar, Alterar); o secundário (histórico de versões, registros de enfermagem, evolução) vai no menu. Nenhum botão de documento mora dentro de uma área.
 - **Sem redundância**: um dado aparece num lugar só. O cabeçalho mostra só o que se deduz; as datas ficam no cartão. A idade
   está no cabeçalho, não no cadastro.
 - **Vazio não ocupa lugar**: `dados([(rótulo, valor), ...])` mostra só o que tem valor e junta o resto numa linha,
   "Não informado: ...".
-- Impressão: botões e menus saem, uma coluna só, cartões sem cortar.
+- Impressão: botões e menus saem, uma coluna só, cartões sem cortar (os blocos das passagens abrem todos).
+
+## Documentos: impressos e escaneados numa central só
+
+- A **central de documentos** de cada passagem (`section.central` em `templates/ficha.html`) junta os **impressos** (prontuário, capa do envelope, manual, ficha multiprofissional,
+  relatórios do Serviço Social e de alta, pedido de exames, enxoval, declaração) e os **escaneados** (PDFs anexados) numa lista só, com o **filtro por área** (Todos, Saúde, Social,
+  Financeiro, Geral). Cada linha: **Abrir** e o menu "Mais" (Imprimir, Baixar Word; nos escaneados, Baixar PDF, Vincular à área, Remover). Caixinhas nos impressos escolhem vários de uma vez:
+  aparece a barra "N escolhidos" com **Imprimir os escolhidos** e **Baixar Word**. **Anexar PDF** é um botão só (abre uma janela com o arquivo, o título e a **área**). O pop-up "Documentos",
+  a aba de escaneados e os botões de documento dentro de cada área **deixaram de existir**; a página de relatórios usa o mesmo jeito (`templates/_acoes_documento.html`).
+- Quem vê o quê segue o sigilo da área (`app._pode_ver_area_do_anexo`): o do Serviço Social só vai a quem lê o Serviço Social, o de Saúde a quem lê a saúde, o Financeiro a quem tem a
+  permissão do financeiro, o geral a quem tem `documentos`; o administrador vê tudo. Quem não vê uma área também não anexa nela.
 
 ## Anexos (documentos escaneados)
 
-- O PDF do documento físico assinado entra pelo cartão "Documentos escaneados" da ficha (`templates/ficha.html`, `anexos.py`): lista com o chip PDF, o título, quando e por quem foi
-  enviado e o tamanho; **Abrir** (outra aba), **Baixar** e **Remover** (com confirmação). Quem removeu esconde; só o administrador vê o removido (tracejado, título riscado) e restaura
-  ou apaga de vez. O formulário de envio fica embaixo do cartão: a área "Escolher arquivo" (ver Formulários) com o limite dito nela e conferido no navegador antes de enviar (`data-limite`), o título e o botão **Anexar** em pastel (`.botao.suave`, com o ícone de envio); o servidor confere de novo.
-- Quem não pode ver os documentos (`documentos`) não vê o cartão; quem vê mas não pode anexar (`anexar`) não vê o formulário nem o Remover. Na impressão da ficha o formulário e os botões saem.
+- O PDF do documento físico assinado entra pela **central de documentos** da passagem na ficha (`templates/ficha.html`, `anexos.py`): linha com o chip PDF, o título, quando e por quem foi
+  enviado e o tamanho, a área; **Abrir** (outra aba) e, no menu "Mais", **Baixar PDF**, **Vincular à área** e **Remover** (com confirmação). Quem removeu esconde; só o administrador vê o removido
+  (tracejado, título riscado) e restaura ou apaga de vez. **Anexar PDF** abre uma janela: a área "Escolher arquivo" (ver Formulários) com o limite dito nela e conferido no navegador antes de enviar
+  (`data-limite`), o título, a **área** (Geral, Saúde, Financeiro, Serviço Social) e o botão **Anexar** em pastel (`.botao.suave`); o servidor confere de novo.
+- Quem vê mas não pode anexar (`anexar`) não vê o botão **Anexar PDF** nem o Remover. Na impressão da ficha os botões saem.
 
 ## Listas que crescem (internos)
 
 - Lista que pode chegar a milhares de registros **não** baixa tudo para o navegador: `static/tabela.js` (`TabelaPaginada`) pede ao servidor só a página que mostra,
   e `busca_de_internos.py` faz a busca, os filtros, a ordem e a paginação (`GET /api/internos/busca`). A lista de triagens, que é curta e some sozinha,
   continua com a `TabelaDinamica` (tudo no navegador).
+- **Uma linha por PESSOA**: quem teve mais de uma passagem aparece uma vez só, com a mais recente, e o CPF/idade ganha "2 passagens"; as contagens das abas são de pessoas.
 - **Busca**: várias palavras em qualquer ordem (todas precisam aparecer), sem acento e sem diferença de maiúsculas; nome, mãe, responsável, cidade, categoria, situação,
-  e números (CPF, RG, cartão SUS, telefones, com ou sem pontuação); `#123` acha o registro nº 123. Sem ordem escolhida, quem tem o nome começando pelo que foi
+  e números (CPF, RG, cartão SUS, telefones, com ou sem pontuação); `#123` acha a pessoa pelo número de qualquer passagem dela. Sem ordem escolhida, quem tem o nome começando pelo que foi
   digitado vem antes de quem só tem a mãe ou o responsável com aquele nome.
 - **Filtros**: situação (abas Ativos | Inativos | Todos), categoria e ano de início; os números das abas já levam em conta a busca e os outros filtros. "Limpar filtros"
   aparece quando há busca ou filtro. 25, 50 (padrão) ou 100 por página, e "Todos (para imprimir)", que tem teto (`LIMITE_DE_TODOS`).

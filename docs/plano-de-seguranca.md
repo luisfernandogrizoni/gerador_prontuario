@@ -584,7 +584,7 @@ o navegador trava, a aba fecha sem querer, a rede do escritório cai ou o login 
 
 ### Complemento — Documentos escaneados (entregue em 2026-11-05)
 
-A pedido do usuário: anexar a cada prontuário o PDF do documento físico, assinado e escaneado (`anexos.py`, `modelos.Anexo`, cartão "Documentos escaneados" da ficha).
+A pedido do usuário: anexar a cada prontuário o PDF do documento físico, assinado e escaneado (`anexos.py`, `modelos.Anexo`, central de documentos da ficha).
 É o primeiro arquivo que entra no sistema vindo de fora, então o desenho cuida do que um arquivo traz de risco.
 
 - **Onde fica (decisão): em disco, não no banco.** `instance/anexos/<nº do registro>/<código sorteado>.pdf`; a tabela `anexos` guarda título, nome original (só para mostrar), tamanho,
@@ -595,7 +595,8 @@ A pedido do usuário: anexar a cada prontuário o PDF do documento físico, assi
   arquivo embutido (`/EmbeddedFile`) nem mídia rica (`/RichMedia`). Os mesmos bytes não entram duas vezes no mesmo registro (sha256), até 30 documentos por registro. **É uma
   conferência do que dá para ver sem abrir o PDF, não um antivírus**: um PDF que esconda esses marcadores dentro de fluxos comprimidos passa. A defesa de fundo é quem abre: o
   leitor de PDF do navegador, isolado; o sistema serve com `Content-Type: application/pdf`, `nosniff`, sem cache e nunca dentro de outra página (`X-Frame-Options: DENY`).
-- **Quem pode.** Ver e baixar: a permissão `documentos` (quem já imprime o prontuário). Anexar e remover: a permissão nova `anexar` (de fábrica, até o Operador; configurável em
+- **Quem pode.** Ver e baixar: depende da **área** a que o documento foi vinculado (2026-11-10): Serviço Social, só quem lê o Serviço Social; Saúde, só quem lê a saúde; Financeiro, quem tem a
+  permissão do financeiro; sem área (geral), a permissão `documentos` (quem já imprime o prontuário); o administrador vê tudo, e quem não vê uma área não anexa nela. Anexar e remover: a permissão nova `anexar` (de fábrica, até o Operador; configurável em
   Cadastros > Permissões). Restaurar e apagar de vez: só o administrador (permissão fixa `lixeira`). **Remover só esconde** (o arquivo continua no disco), como "excluir" nos
   registros: documento de prontuário tem prazo de guarda (a pesquisa de prontuário digital aponta 20 anos), e quem não é administrador não pode destruí-lo. Apagar um registro
   de vez leva os PDFs dele (`exclusao.apagar`).

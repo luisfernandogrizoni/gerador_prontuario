@@ -12,7 +12,8 @@ A busca (várias palavras, em qualquer ordem, todas precisam aparecer; sem acent
   - letras: nome, mãe, responsável, parentesco, categoria, convênio, cidade e situação ("inativo", "desistência"...);
   - números: CPF, RG, cartão SUS, CPF do responsável e telefones, com ou sem pontuação ("123.456" acha "12345678900");
   - "#123" acha o registro de número 123.
-Sem ordem escolhida, quem tem o nome começando pelo que foi digitado vem antes de quem só tem a mãe ou o responsável com aquele nome.
+Cada PESSOA aparece uma vez só: quem teve mais de uma passagem (internação) sai com a mais recente, e a lista diz quantas são ("2 passagens"); "#123" acha a
+pessoa também pelo número de uma passagem antiga. Sem ordem escolhida, quem tem o nome começando pelo que foi digitado vem antes de quem só tem a mãe ou o responsável com aquele nome.
 """
 
 import math
@@ -38,8 +39,11 @@ _SO_DIGITOS = re.compile(r"\D+")
 
 @dataclass
 class Linha:
-    """O que a busca, os filtros e a ordem enxergam de um interno."""
+    """O que a busca, os filtros e a ordem enxergam de um interno (a passagem mais recente dele)."""
     id: int
+    pessoa_id: int
+    passagens: int                  # quantas passagens (internações de verdade) a pessoa tem
+    ids: tuple                      # os números de todas elas: "#123" acha a pessoa por qualquer um
     status: str
     status_txt: str
     categoria: str
@@ -55,8 +59,9 @@ class Linha:
 
 
 def _linhas():
-    """Todos os internos (ativos e inativos), do início mais recente para o mais antigo: a ordem de quando nenhuma é escolhida."""
-    colunas = (Internacao.id, Internacao.status, Internacao.motivo, Internacao.convenio, Internacao.contribuicao_valor, Internacao.inicio,
+    """Todos os internos (ativos e inativos), um por pessoa (a passagem mais recente), do início mais recente para o mais antigo: a ordem de quando nenhuma é
+    escolhida."""
+    colunas = (Internacao.id, Internacao.pessoa_id, Internacao.status, Internacao.motivo, Internacao.convenio, Internacao.contribuicao_valor, Internacao.inicio,
                Internacao.tratamento_ate, Internacao.termino, Internacao.resp_nome, Internacao.parentesco, Internacao.resp_cpf,
                Pessoa.nome, Pessoa.cpf, Pessoa.rg, Pessoa.cartao_sus, Pessoa.mae, Pessoa.cidade, Pessoa.contato1, Pessoa.contato2, Pessoa.contato3)
     consulta = (db.select(*colunas).join(Pessoa, Internacao.pessoa_id == Pessoa.id)
@@ -64,14 +69,23 @@ def _linhas():
                 .order_by(Internacao.inicio.desc().nulls_last(), Internacao.id.desc()))
     linhas = []
     categorias = {}                                       # (convênio, valor) -> categoria: a conta se repete para quase todos
-    for r in db.session.execute(consulta):
+    todas = db.session.execute(consulta).all()
+    mais_recente, passagens = {}, {}                      # pessoa -> (chave de ordem, id) da passagem mais recente; pessoa -> [ids de todas]
+    for r in todas:
+        chave = (r.inicio or r.termino or date.min, r.id)             # a mesma ordem de Pessoa.passagens
+        passagens.setdefault(r.pessoa_id, []).append(r.id)
+        if r.pessoa_id not in mais_recente or chave > mais_recente[r.pessoa_id][0]:
+            mais_recente[r.pessoa_id] = (chave, r.id)
+    for r in todas:
+        if mais_recente[r.pessoa_id][1] != r.id:                      # as passagens antigas não entram na lista: a pessoa já está nela
+            continue
         situacao = status_texto(r.status, r.motivo)
         categoria = categorias.get((r.convenio, r.contribuicao_valor))
         if categoria is None:
             categoria = categorias[(r.convenio, r.contribuicao_valor)] = categoria_efetiva(r.convenio, r.contribuicao_valor or 0.0)
         letras = " | ".join(p for p in (r.nome, r.mae, r.resp_nome, r.parentesco, categoria, r.convenio, r.cidade, situacao) if p)
         numeros = tuple(d for d in (_SO_DIGITOS.sub("", x or "") for x in (r.cpf, r.rg, r.cartao_sus, r.resp_cpf, r.contato1, r.contato2, r.contato3)) if d)
-        linhas.append(Linha(r.id, r.status, situacao, categoria, r.contribuicao_valor or 0.0, r.inicio, previsao_termino(r.inicio, r.tratamento_ate),
+        linhas.append(Linha(r.id, r.pessoa_id, len(passagens[r.pessoa_id]), tuple(passagens[r.pessoa_id]), r.status, situacao, categoria, r.contribuicao_valor or 0.0, r.inicio, previsao_termino(r.inicio, r.tratamento_ate),
                             r.termino, r.resp_nome or "", r.nome or "", normalizar_nome(r.nome), normalizar_nome(letras), numeros))
     return linhas
 
@@ -93,7 +107,7 @@ def termos_da_busca(q):
 def _casa(linha, termos):
     for termo in termos:
         if termo[0] == "id":
-            ok = linha.id == termo[1]
+            ok = termo[1] in linha.ids
         elif termo[0] == "num":
             ok = any(termo[1] in n for n in linha.numeros) or termo[2] in linha.texto
         else:
@@ -190,7 +204,7 @@ def consultar(args):
     pagina = _inteiro(args.get("pagina"), 1)
     foco = _inteiro(args.get("foco"))
     if foco is not None:
-        posicao = next((n for n, l in enumerate(linhas) if l.id == foco), None)
+        posicao = next((n for n, l in enumerate(linhas) if foco in l.ids), None)
         if posicao is not None:
             pagina = posicao // por + 1
     pagina = min(max(pagina, 1), paginas)
@@ -203,7 +217,8 @@ def consultar(args):
             db.select(Internacao).where(Internacao.id.in_(ids))
             .options(joinedload(Internacao.pessoa), selectinload(Internacao.parcelas), selectinload(Internacao.relatorio_social))).scalars().all()
         por_id = {i.id: i for i in carregados}
-        itens = [por_id[i].para_lista() for i in ids if i in por_id]
+        passagens = {l.id: l.passagens for l in da_pagina}
+        itens = [{**por_id[i].para_lista(), "passagens": passagens[i]} for i in ids if i in por_id]
     de = (pagina - 1) * por + 1 if total else 0
     return {"itens": itens, "total": total, "pagina": pagina, "paginas": paginas, "por": por if por != LIMITE_DE_TODOS else "todos",
             "de": de, "ate": de + len(itens) - 1 if itens else 0, "contagens": contagens}

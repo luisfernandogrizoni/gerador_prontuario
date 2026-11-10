@@ -89,6 +89,17 @@ def _convenio_sus(internacao):
     return False if cadastro.existe(internacao.convenio) else None
 
 
+def _linha_da_passagem(i):
+    """Uma passagem anterior na tabela da capa: ('1ª', início, término, motivo). Data que falta (registro importado de uma pasta antiga) sai como '—'."""
+    return (f"{i.numero_da_passagem}ª", fmt_data(i.inicio) or "—", fmt_data(i.termino) or "—", i.motivo)
+
+
+def passagem_da_capa(internacao):
+    """A capa é do ENVELOPE da pessoa, e o envelope é um só: sai sempre com a internação mais recente (início, término e convênio dela), com as outras
+    passagens listadas, qualquer que seja a passagem aberta quando se pede o impresso. Quem ainda não teve internação de verdade (só triagem) leva o próprio registro."""
+    return (internacao.pessoa.passagens or [internacao])[-1]
+
+
 def _blocos(chave, internacao, hoje, saude=False):
     pessoa = internacao.pessoa
     if chave == "exames":
@@ -104,8 +115,10 @@ def _blocos(chave, internacao, hoje, saude=False):
         return fichas.ficha_multiprofissional(pessoa.nome, f"{idade} anos" if idade is not None else "",
                                               ficha_saude.conteudo(internacao) if saude else None)
     if chave == "capa":
-        return fichas.capa_do_envelope(pessoa.nome, fmt_data(internacao.inicio), _convenio_sus(internacao), pessoa.cidade,
-                                       termino_fmt=fmt_data(internacao.termino), anteriores=[i.periodo_txt for i in internacao.passagens_anteriores])
+        recente = passagem_da_capa(internacao)
+        return fichas.capa_do_envelope(pessoa.nome, fmt_data(recente.inicio), _convenio_sus(recente), pessoa.cidade,
+                                       termino_fmt=fmt_data(recente.termino), anteriores=[_linha_da_passagem(i) for i in recente.passagens_anteriores],
+                                       motivo=recente.motivo if recente.status == "inativo" else "")
     if chave == "resumo-social":
         return [Pagina(), *servico_social.blocos_resumo(internacao, internacao.relatorio_social, hoje)]
     if chave == "relatorio-alta":
@@ -137,12 +150,30 @@ def _aviso_do_item(chave, internacao, saude=False):
     if chave == "relatorio-alta":
         situacao = relatorio_alta.estado(internacao.relatorio_alta)
         return "" if situacao == "finalizado" else (situacao or "em branco")
+    if chave == "capa":              # pedida de uma passagem que não é a mais recente: a barra avisa de qual ela sai
+        recente = passagem_da_capa(internacao)
+        return "" if recente.id == internacao.id else f"da passagem {recente.numero_da_passagem}, a mais recente" if recente.numero_da_passagem else "da passagem mais recente"
     if chave not in ("resumo-social", "relatorio-social"):
         return ""
     situacao = servico_social.estado(internacao.relatorio_social)
     if situacao == "finalizado":
         return ""
     return situacao or "em branco"
+
+
+AREA = {"exames": "", "enxoval": "", "prontuario": "", "manual": "", "multiprofissional": "saude", "capa": "",
+        "resumo-social": "social", "relatorio-social": "social", "relatorio-alta": "social"}          # a que área cada impresso pertence ("" = geral); a central de documentos filtra por isso
+
+
+def disponiveis(internacao, completo=False, saude=False):
+    """Os impressos desta passagem, na ordem de impressão: [{chave, rotulo, area, aviso}]. A triagem leva o pedido de exames e o enxoval; a internação, o prontuário,
+    o manual, a ficha multiprofissional e a capa do envelope; o Serviço Social entra depois de finalizado (o relatório completo para quem pode vê-lo, a folha-resumo
+    para os outros); o relatório de alta, para quem já recebeu baixa e pode vê-lo. `completo` e `saude`: como em barra()."""
+    chaves = list(DA_TRIAGEM) if internacao.e_triagem else ["prontuario", "manual", "multiprofissional", "capa"]
+    chaves += _social(internacao, completo)
+    if internacao.status == "inativo" and completo:
+        chaves.append("relatorio-alta")
+    return [{"chave": c, "rotulo": ROTULOS[c], "area": AREA[c], "aviso": _aviso_do_item(c, internacao, saude)} for c in ORDEM if c in chaves]
 
 
 def barra(internacao, itens, endereco, completo=False, saude=False):

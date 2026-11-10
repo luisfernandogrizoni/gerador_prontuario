@@ -6,7 +6,8 @@
 //     data-imprimir            no botão: abre a janela de impressão;
 //     data-trocar-emissor      no <select>: recarrega o documento com quem assina (função trocarEmissor da própria página);
 //  3) nomes e endereços escritos do mesmo jeito (data-forma);
-//  4) escolher arquivo (data-escolher-arquivo): nome e tamanho depois da escolha, aviso na hora, destaque no arrasto.
+//  4) escolher arquivo (data-escolher-arquivo): nome e tamanho depois da escolha, aviso na hora, destaque no arrasto;
+//  5) os menus "Mais" (<details class="mais">): fecham ao clicar fora, com Esc e ao abrir outro.
 (function () {
   var meta = document.querySelector('meta[name="csrf-token"]');
   var token = meta ? meta.content : "";
@@ -158,4 +159,15 @@
   }
   document.addEventListener("DOMContentLoaded", atualizarTodasAsEscolhas);
   window.addEventListener("pageshow", function (e) { if (e.persisted) atualizarTodasAsEscolhas(); });
+
+  // ---- 5) menus "Mais": um aberto por vez, fecham ao clicar fora e com Esc
+  document.addEventListener("click", function (e) {
+    var abertos = document.querySelectorAll("details.mais[open]");
+    for (var k = 0; k < abertos.length; k++) if (!abertos[k].contains(e.target)) abertos[k].open = false;
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    var abertos = document.querySelectorAll("details.mais[open]");
+    for (var k = 0; k < abertos.length; k++) abertos[k].open = false;
+  });
 })();

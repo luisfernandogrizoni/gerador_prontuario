@@ -74,34 +74,44 @@ def enxoval(nome=""):
 
 
 # ======================================================================== capa do envelope
-PASSAGENS_POR_COLUNA = 6        # quantas linhas de passagens anteriores cabem numa coluna da folha em paisagem; mais que isso vai em 2 colunas (até 12) ou 3 (até 18)
-def capa_do_envelope(nome, inicio_fmt, convenio_sus, cidade, termino_fmt="", anteriores=()):
+MOTIVOS_DA_SAIDA = ("Conclusão", "Desistência", "Desligamento")       # as caixas de "Motivo" da capa: os mesmos motivos de baixa do sistema (servicos.MOTIVOS)
+COLUNAS_DAS_PASSAGENS = (("Passagem", 2000), ("Início", 3000), ("Término", 3000), ("Motivo", 4600))
+LETRA_DA_TABELA = ((4, 14), (6, 11), (14, 10), (99, 8))     # (até quantas passagens, tamanho da letra): a tabela cresce com as passagens e a capa segue numa folha só
+PASSAGENS_EM_UMA_TABELA = 6                                 # acima disso a tabela vira "de duas em duas": as passagens em duas metades lado a lado, na mesma tabela
+LARGURAS_EM_DUAS_METADES = (1200, 1900, 1900, 2500)
+
+
+def capa_do_envelope(nome, inicio_fmt, convenio_sus, cidade, termino_fmt="", anteriores=(), motivo=""):
     """Capa em paisagem, sem timbre, só com a logo. `convenio_sus`: True (Sim), False (Não) ou None (em branco).
-    O término sai preenchido quando já está no sistema (`termino_fmt`); sem ele fica em branco, para escrever na baixa. O motivo fica sempre em branco:
-    é marcado à mão. `anteriores`: os períodos das passagens anteriores da pessoa, já em texto ("05/02/2019 a 12/08/2019"), da mais antiga para a mais
-    nova; quem só teve esta internação não leva nada a mais, e a capa fica como sempre foi."""
+    O bloco é o da internação mais recente: o término sai preenchido quando já está no sistema (`termino_fmt`; sem ele fica em branco, para escrever
+    na baixa) e o motivo da saída (`motivo`: Conclusão, Desistência ou Desligamento, os mesmos do sistema) sai marcado quando ela já recebeu baixa; sem
+    ele as caixas ficam em branco, para marcar à mão. `anteriores`: as passagens anteriores da pessoa, da mais antiga para a mais nova, cada uma como
+    (passagem, início, término, motivo) já em texto; saem numa tabela embaixo. Quem só teve esta internação não leva a tabela: a capa fica como sempre foi."""
     grande = lambda partes, **kw: Paragrafo(partes, **{"tamanho": 26, "fonte": "Arial", **kw})
     tamanho_do_nome = 26 if len(nome) <= 30 else 22 if len(nome) <= 38 else 18
     x = lambda marcado: "X" if marcado else " "
     periodo = f"Início: {inicio_fmt}          Término:" + (f" {termino_fmt}" if termino_fmt else "")
-    passagens = []
+    historico = []
     if anteriores:
-        quantas = 1 if len(anteriores) <= PASSAGENS_POR_COLUNA else 2 if len(anteriores) <= 2 * PASSAGENS_POR_COLUNA else 3
-        linha = lambda texto: grande([N(texto)], tamanho=20 if quantas < 3 else 16, recuo=567, depois=2)
-        if quantas == 1:
-            lista = [linha(texto) for texto in anteriores]
-        else:           # muitas passagens: em colunas, para a capa continuar sendo uma folha só
-            por_coluna = -(-len(anteriores) // quantas)
-            lista = [Colunas([[linha(texto) for texto in anteriores[k * por_coluna:(k + 1) * por_coluna]] for k in range(quantas)], espaco=360)]
-        passagens = [grande([N("Passagens anteriores:")], tamanho=20, depois=4), *lista]
+        tamanho = next(letra for ate, letra in LETRA_DA_TABELA if len(anteriores) <= ate)
+        if len(anteriores) <= PASSAGENS_EM_UMA_TABELA:
+            colunas = [Coluna(titulo, largura, "centro") for titulo, largura in COLUNAS_DAS_PASSAGENS]
+            linhas = [list(a) for a in anteriores]
+        else:           # muitas passagens: duas metades lado a lado (as mais antigas à esquerda), para a capa continuar sendo uma folha só
+            metade = -(-len(anteriores) // 2)
+            colunas = [Coluna(titulo, largura, "centro") for _ in range(2) for (titulo, _), largura in zip(COLUNAS_DAS_PASSAGENS, LARGURAS_EM_DUAS_METADES)]
+            esquerda, direita = anteriores[:metade], anteriores[metade:]
+            linhas = [list(esquerda[k]) + (list(direita[k]) if k < len(direita) else [""] * 4) for k in range(metade)]
+        historico = [grande([N("PASSAGENS ANTERIORES")], tamanho=16, antes=18, depois=6, unido_ao_proximo=True),
+                     Tabela(colunas=colunas, linhas=linhas, tamanho=tamanho, sombreado=True, cor_borda="000000")]
     return [Pagina(paisagem=True, timbre=False),
             Imagem("timbre/logo-topo.jpg", 28),
             grande([Texto(f"Nome: {nome}", negrito=True, sublinhado=True)], alinhamento="centro", tamanho=tamanho_do_nome, antes=6, depois=18),
-            grande([N(f"Motivo: ( {x(False)} ) Conclusão     ( {x(False)} ) Desistência     ( {x(False)} ) Exclusão")], alinhamento="centro", antes=26, depois=36),
-            grande([N(periodo)], depois=12 if not anteriores else 6),
-            *passagens,
-            grande([N(f"Convênio SUS: ( {x(convenio_sus is True)} ) Sim     ( {x(convenio_sus is False)} ) Não")], antes=12 if anteriores else 0, depois=12),
-            grande([N(f"CIDADE: {cidade}")], fonte="Calibri")]
+            grande([N("Motivo: " + "     ".join(f"( {x(motivo == m)} ) {m}" for m in MOTIVOS_DA_SAIDA))], alinhamento="centro", antes=26, depois=36),
+            grande([N(periodo)], depois=12),
+            grande([N(f"Convênio SUS: ( {x(convenio_sus is True)} ) Sim     ( {x(convenio_sus is False)} ) Não")], depois=12),
+            grande([N(f"CIDADE: {cidade}")], fonte="Calibri"),
+            *historico]
 
 
 # ======================================================================== ficha multiprofissional de saúde

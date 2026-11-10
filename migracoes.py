@@ -109,6 +109,11 @@ def migrar(db):
         db.session.execute(text("ALTER TABLE internacoes ADD COLUMN conferido_por VARCHAR(50) NOT NULL DEFAULT ''"))
         db.session.commit()
 
+    # 6h) os documentos escaneados passam a poder ser vinculados a uma área (saúde, financeiro, social): os que já existem ficam sem área (geral)
+    if "area" not in _colunas(db, "anexos"):
+        db.session.execute(text("ALTER TABLE anexos ADD COLUMN area VARCHAR(12) NOT NULL DEFAULT ''"))
+        db.session.commit()
+
     # 6) o relatório de rejeição virou o parecer do acolhimento social: o que já foi escrito passa para lá
     _rejeicoes_para_o_acolhimento(db)
 
