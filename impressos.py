@@ -161,19 +161,15 @@ def _aviso_do_item(chave, internacao, saude=False):
     return situacao or "em branco"
 
 
-AREA = {"exames": "", "enxoval": "", "prontuario": "", "manual": "", "multiprofissional": "saude", "capa": "",
-        "resumo-social": "social", "relatorio-social": "social", "relatorio-alta": "social"}          # a que área cada impresso pertence ("" = geral); a central de documentos filtra por isso
-
-
 def disponiveis(internacao, completo=False, saude=False):
-    """Os impressos desta passagem, na ordem de impressão: [{chave, rotulo, area, aviso}]. A triagem leva o pedido de exames e o enxoval; a internação, o prontuário,
+    """Os impressos desta passagem, na ordem de impressão: [{chave, rotulo, aviso}]. A triagem leva o pedido de exames e o enxoval; a internação, o prontuário,
     o manual, a ficha multiprofissional e a capa do envelope; o Serviço Social entra depois de finalizado (o relatório completo para quem pode vê-lo, a folha-resumo
     para os outros); o relatório de alta, para quem já recebeu baixa e pode vê-lo. `completo` e `saude`: como em barra()."""
     chaves = list(DA_TRIAGEM) if internacao.e_triagem else ["prontuario", "manual", "multiprofissional", "capa"]
     chaves += _social(internacao, completo)
     if internacao.status == "inativo" and completo:
         chaves.append("relatorio-alta")
-    return [{"chave": c, "rotulo": ROTULOS[c], "area": AREA[c], "aviso": _aviso_do_item(c, internacao, saude)} for c in ORDEM if c in chaves]
+    return [{"chave": c, "rotulo": ROTULOS[c], "aviso": _aviso_do_item(c, internacao, saude)} for c in ORDEM if c in chaves]
 
 
 def barra(internacao, itens, endereco, completo=False, saude=False):

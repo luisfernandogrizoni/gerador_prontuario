@@ -274,8 +274,7 @@ class TabelaPaginada extends TabelaDinamica {
   }
 
   // ---------------------------------------------------------------- dados
-  // `foco`: o número de um registro que precisa aparecer; o servidor devolve a página em que ele está
-  async carregar({ foco = null } = {}) {
+  async carregar() {
     if (this.jaCarregou && document.hidden) return;          // aba escondida: a atualização automática espera
     const sequencia = ++this.sequencia;
     this.pedido?.abort();
@@ -286,7 +285,6 @@ class TabelaPaginada extends TabelaDinamica {
     if (this.ordem.chave) { p.set("ordem", this.ordem.chave); p.set("dir", this.ordem.crescente ? "asc" : "desc"); }
     p.set("por", this.porPagina.value);
     p.set("pagina", this.pagina);
-    if (foco) p.set("foco", foco);
     clearTimeout(this.demora);
     this.demora = setTimeout(() => this.moldura.setAttribute("aria-busy", "true"), 300);       // só escurece se a resposta demorar
     let resposta;

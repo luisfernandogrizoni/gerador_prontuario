@@ -584,7 +584,7 @@ o navegador trava, a aba fecha sem querer, a rede do escritório cai ou o login 
 
 ### Complemento — Documentos escaneados (entregue em 2026-11-05)
 
-A pedido do usuário: anexar a cada prontuário o PDF do documento físico, assinado e escaneado (`anexos.py`, `modelos.Anexo`, central de documentos da ficha).
+A pedido do usuário: anexar a cada prontuário o PDF do documento físico, assinado e escaneado (`anexos.py`, `modelos.Anexo`, cartão "Documentos escaneados" da ficha).
 É o primeiro arquivo que entra no sistema vindo de fora, então o desenho cuida do que um arquivo traz de risco.
 
 - **Onde fica (decisão): em disco, não no banco.** `instance/anexos/<nº do registro>/<código sorteado>.pdf`; a tabela `anexos` guarda título, nome original (só para mostrar), tamanho,

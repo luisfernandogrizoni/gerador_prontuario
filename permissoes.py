@@ -71,7 +71,7 @@ GRUPOS = (
         Permissao("internacao", "Registrar e editar prontuários", "Internações e dados do acolhido; o polo Escritório e a enfermeira(o)"),
         Permissao("baixa", "Dar baixa", "Saída do interno; só a enfermeira(o) do polo Saúde (o Escritório não)"),
         Permissao("envelope", "Anotar a chegada do prontuário em papel", "O envelope que volta da casa de acolhida; o polo Escritório"),
-        Permissao("anexar", "Anexar e remover documentos escaneados", "O PDF do documento físico assinado, na central de documentos da ficha, vinculado a uma área; quem vê segue o sigilo da área (Serviço Social, Saúde, Financeiro); só o administrador apaga de vez"),
+        Permissao("anexar", "Anexar e remover documentos escaneados", "O PDF do documento físico assinado, no cartão Documentos escaneados da ficha, vinculado a uma área; quem vê segue o sigilo da área (Serviço Social, Saúde, Financeiro); só o administrador apaga de vez"),
         Permissao("financeiro", "Lançar e excluir parcelas", "Contribuição de cada internação"),
         Permissao("excluir", "Excluir registros", "Vão para a lixeira; só o administrador apaga de vez"),
         Permissao("unificar", "Unificar cadastros duplicados", "Junta duas fichas da mesma pessoa", padrao=0),

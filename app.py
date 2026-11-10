@@ -639,9 +639,7 @@ def mudar_status(id):
 # ================================================================== internos
 @app.get("/internos")
 def lista_internos():
-    # novo = registro recém-gravado (a linha é destacada); baixar = 1 baixa o .docx dele
-    return render_template("internos.html", novo=request.args.get("novo", type=int),
-                           baixar=request.args.get("baixar", type=int), motivos=servicos.MOTIVOS, tamanhos=busca_de_internos.TAMANHOS,
+    return render_template("internos.html", motivos=servicos.MOTIVOS, tamanhos=busca_de_internos.TAMANHOS,
                            tamanho_padrao=busca_de_internos.TAMANHO_PADRAO, **busca_de_internos.opcoes_dos_filtros())
 
 
@@ -758,9 +756,10 @@ def gerar():
         notificacoes.avisar_baixa(internacao, g.usuario)                      # a baixa veio pelo formulário do prontuário
     if internacao.a_conferir and request.form.get("acao") in ("proximo", "conferido") and permissoes.pode("conferir"):
         return _seguir_conferindo(internacao, request.form.get("acao") == "conferido")
-    # Post/Redirect/Get: a lista destaca a linha e, se foi "Salvar e baixar", baixa o .docx
+    # Post/Redirect/Get: a pessoa vai para a ficha dela (o prontuário que acabou de salvar) e, se foi "Salvar e baixar", a ficha começa o download do .docx
     baixar = 1 if request.form.get("acao") == "baixar" and permissoes.pode("documentos") else None
-    return redirect(url_for("lista_internos", novo=internacao.id, baixar=baixar))
+    flash(f"Prontuário de {internacao.pessoa.nome} salvo." + (" O download do conjunto da internação começou." if baixar else ""))
+    return redirect(url_for("ficha", id=internacao.id, baixar=baixar))
 
 
 # ===================================================================== conferência dos importados (conferencia.py)
@@ -817,7 +816,7 @@ def ficha(id):
                            previsao=previsao_termino(internacao.inicio, internacao.tratamento_ate) if internacao.inicio else None,
                            permanencia=_duracao(permanencia) if permanencia is not None and permanencia >= 0 else "",
                            avatar=avatar_da_pessoa(p.nome),
-                           titulos_de_anexo=anexos.TITULOS_SUGERIDOS, rotulos_das_areas=anexos.AREAS,
+                           baixar=request.args.get("baixar", type=int), titulos_de_anexo=anexos.TITULOS_SUGERIDOS, rotulos_das_areas=anexos.AREAS,
                            areas_de_anexo=[(chave, rotulo) for chave, rotulo in anexos.AREAS.items() if _pode_anexar_na_area(chave)],
                            limite_do_anexo=anexos.LIMITE_DO_ARQUIVO,
                            passagens=passagens, n_passagens=len(p.passagens))
@@ -844,15 +843,15 @@ def _periodo_do_registro(o):
 
 
 def _documentos_da_passagem(o):
-    """Os impressos da central de documentos de UMA passagem: o que quem abre a ficha pode imprimir. Quem tem `documentos` vê todos; quem só lê o Serviço Social
-    ou a saúde vê (e imprime) o que lê. Cada um: {chave, rotulo, area, aviso, impresso}. A declaração (internação ou ex-interno) é outro documento: tem endereço próprio
+    """Os documentos PARA IMPRIMIR de UMA passagem (o cartão "Documentos para imprimir" da ficha): o que quem abre a ficha pode imprimir. Quem tem `documentos` vê todos; quem só lê o Serviço Social
+    ou a saúde vê (e imprime) o que lê. Cada um: {chave, rotulo, aviso, impresso}. A declaração (internação ou ex-interno) é outro documento: tem endereço próprio
     e não se junta aos outros na mesma impressão."""
     geral = permissoes.pode("documentos")
     leitores = permissoes.QUEM_LE_O_IMPRESSO
     lista = [dict(d, impresso=True) for d in impressos.disponiveis(o, _pode_ler_social(), _pode_ler_saude())
              if geral or (d["chave"] in leitores and leitores[d["chave"]](g.get("usuario")))]
     if geral and declaracoes.tipo_da_declaracao(o) is not None:
-        lista.append({"chave": "declaracao", "rotulo": "Declaração de internação" if o.status == "ativo" else "Declaração de ex-interno", "area": "", "aviso": "", "impresso": False})
+        lista.append({"chave": "declaracao", "rotulo": "Declaração de internação" if o.status == "ativo" else "Declaração de ex-interno", "aviso": "", "impresso": False})
     return lista
 
 
@@ -1511,7 +1510,7 @@ def _anexos_visiveis(internacao):
 
 
 def _de_volta_aos_anexos(id):
-    """Depois de mexer num documento escaneado, a ficha volta à central de documentos daquela passagem."""
+    """Depois de mexer num documento escaneado, a ficha volta ao cartão "Documentos escaneados" daquela passagem."""
     return redirect(url_for("ficha", id=id, _anchor="escaneados"))
 
 

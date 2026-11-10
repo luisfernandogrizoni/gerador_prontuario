@@ -136,7 +136,7 @@ Um botão **cheio** (primário) por tela, para a ação principal. Os outros sã
 - **O prontuário é da PESSOA e é uma página só** (`templates/ficha.html`, endereço `/internacoes/<id>` ou `/pessoas/<id>/prontuario`): o cabeçalho de identidade ("Prontuário nº N · passagem X de Y"),
   os dados da pessoa e, embaixo, cada passagem (internação) ou triagem num bloco que **abre e fecha** (`details.passagem`; a do endereço aberto sai expandida e as outras minimizadas;
   "Expandir todas"). Nada de uma página por passagem nem de abas. Dentro de cada bloco: a internação, o responsável, o **Acompanhamento** (acolhimento social, ficha de saúde,
-  relatório de alta, prontuário em papel), as parcelas e a **central de documentos**. As âncoras antigas (`#acolhimento`, `#saude`, `#alta`, `#parcelas`, `#escaneados`, `#envelope`)
+  relatório de alta, prontuário em papel), as parcelas e os **documentos** (dois cartões separados: para imprimir e escaneados). As âncoras antigas (`#acolhimento`, `#saude`, `#alta`, `#parcelas`, `#escaneados`, `#envelope`)
   valem para a passagem do endereço aberto e abrem o bloco onde estão (as outras levam `p<nº>-` na frente).
 - **Uma ação principal por área + menu "Mais"** (`details.mais`, fechado sozinho por `static/base.js`): cada linha do Acompanhamento mostra a situação (selo) e UM botão claro
   (Preencher, Continuar, Alterar); o secundário (histórico de versões, registros de enfermagem, evolução) vai no menu. Nenhum botão de documento mora dentro de uma área.
@@ -146,19 +146,20 @@ Um botão **cheio** (primário) por tela, para a ação principal. Os outros sã
   "Não informado: ...".
 - Impressão: botões e menus saem, uma coluna só, cartões sem cortar (os blocos das passagens abrem todos).
 
-## Documentos: impressos e escaneados numa central só
+## Documentos: os que se imprimem e os escaneados ficam SEPARADOS
 
-- A **central de documentos** de cada passagem (`section.central` em `templates/ficha.html`) junta os **impressos** (prontuário, capa do envelope, manual, ficha multiprofissional,
-  relatórios do Serviço Social e de alta, pedido de exames, enxoval, declaração) e os **escaneados** (PDFs anexados) numa lista só, com o **filtro por área** (Todos, Saúde, Social,
-  Financeiro, Geral). Cada linha: **Abrir** e o menu "Mais" (Imprimir, Baixar Word; nos escaneados, Baixar PDF, Vincular à área, Remover). Caixinhas nos impressos escolhem vários de uma vez:
-  aparece a barra "N escolhidos" com **Imprimir os escolhidos** e **Baixar Word**. **Anexar PDF** é um botão só (abre uma janela com o arquivo, o título e a **área**). O pop-up "Documentos",
-  a aba de escaneados e os botões de documento dentro de cada área **deixaram de existir**; a página de relatórios usa o mesmo jeito (`templates/_acoes_documento.html`).
-- Quem vê o quê segue o sigilo da área (`app._pode_ver_area_do_anexo`): o do Serviço Social só vai a quem lê o Serviço Social, o de Saúde a quem lê a saúde, o Financeiro a quem tem a
-  permissão do financeiro, o geral a quem tem `documentos`; o administrador vê tudo. Quem não vê uma área também não anexa nela.
+- Em cada passagem da ficha (`templates/ficha.html`) há dois cartões lado a lado (um embaixo do outro no celular), cada um com um propósito: **Documentos para imprimir** (o que o sistema
+  gera: prontuário, capa do envelope, manual, ficha multiprofissional, relatórios do Serviço Social e de alta, pedido de exames, enxoval, declaração) e **Documentos escaneados** (os PDFs do
+  papel assinado). Nunca na mesma lista: quem quer imprimir não vê PDF, e quem procura um PDF não vê impresso.
+- **Para imprimir**: cada linha tem **Abrir** e o menu "Mais" (Imprimir, Baixar Word); caixinhas escolhem vários de uma vez e aparece a barra "N escolhidos" com **Imprimir os escolhidos** e
+  **Baixar Word**. Os botões de documento **não** moram dentro das áreas (Acompanhamento); a página de relatórios usa o mesmo jeito (`templates/_acoes_documento.html`).
+- **Escaneados**: um botão só, **Anexar PDF** (abre uma janela com o arquivo, o título e a **área**), a lista com o chip da área e o **filtro por área** (Todos, Saúde, Social, Financeiro, Geral).
+- O que cada pessoa vê dos escaneados segue o sigilo da área (`app._pode_ver_area_do_anexo`): o do Serviço Social só vai a quem lê o Serviço Social, o de Saúde a quem lê a saúde, o Financeiro a quem
+  tem a permissão do financeiro, o geral a quem tem `documentos`; o administrador vê tudo. Quem não vê uma área também não anexa nela.
 
 ## Anexos (documentos escaneados)
 
-- O PDF do documento físico assinado entra pela **central de documentos** da passagem na ficha (`templates/ficha.html`, `anexos.py`): linha com o chip PDF, o título, quando e por quem foi
+- O PDF do documento físico assinado entra pelo cartão **Documentos escaneados** da passagem na ficha (`templates/ficha.html`, `anexos.py`): linha com o chip PDF, o título, quando e por quem foi
   enviado e o tamanho, a área; **Abrir** (outra aba) e, no menu "Mais", **Baixar PDF**, **Vincular à área** e **Remover** (com confirmação). Quem removeu esconde; só o administrador vê o removido
   (tracejado, título riscado) e restaura ou apaga de vez. **Anexar PDF** abre uma janela: a área "Escolher arquivo" (ver Formulários) com o limite dito nela e conferido no navegador antes de enviar
   (`data-limite`), o título, a **área** (Geral, Saúde, Financeiro, Serviço Social) e o botão **Anexar** em pastel (`.botao.suave`); o servidor confere de novo.
@@ -175,8 +176,8 @@ Um botão **cheio** (primário) por tela, para a ação principal. Os outros sã
   digitado vem antes de quem só tem a mãe ou o responsável com aquele nome.
 - **Filtros**: situação (abas Ativos | Inativos | Todos), categoria e ano de início; os números das abas já levam em conta a busca e os outros filtros. "Limpar filtros"
   aparece quando há busca ou filtro. 25, 50 (padrão) ou 100 por página, e "Todos (para imprimir)", que tem teto (`LIMITE_DE_TODOS`).
-- Tudo o que a pessoa escolhe (busca, filtros, ordem, página, tamanho) fica na URL; o "voltar" reencontra a lista como estava. Registro recém-gravado (`?novo=`) abre
-  na página em que ele está (`foco`). A atualização automática (30 s) só pede a página atual e espera se a aba está escondida.
+- Tudo o que a pessoa escolhe (busca, filtros, ordem, página, tamanho) fica na URL; o "voltar" reencontra a lista como estava. **Salvar um prontuário leva à ficha da
+  pessoa** (não à lista): a ficha confirma "Prontuário de X salvo." e, em "Salvar e baixar prontuário", começa o download do conjunto (`?baixar=1`). A atualização automática (30 s) só pede a página atual e espera se a aba está escondida.
 - **Auditoria**: cada consulta à lista é uma leitura de dados pessoais, mas a trilha guarda UMA linha por pessoa a cada minuto (e por tipo: com ou sem busca), nunca o
   texto buscado (`auditoria._leitura_da_lista`).
 - Limite conhecido: o filtro roda em Python sobre uma consulta leve de todos os internos (cerca de 0,2 s com 5 mil registros). Passando de dezenas de milhares, o próximo
