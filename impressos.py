@@ -29,6 +29,7 @@ import re
 from datetime import date
 
 import catalogo
+import declaracoes
 import ficha_saude
 import fichas
 import manual_de_orientacao
@@ -47,10 +48,12 @@ ROTULOS = {
     "resumo-social": "Resumo do Serviço Social",
     "relatorio-social": "Relatório do Serviço Social",
     "relatorio-alta": "Relatório de alta",
+    "declaracao": "Declaração",                 # (o nome certo, de internação ou de ex-interno, vem de _rotulo)
 }
 GRUPOS = (("Triagem", ("exames", "enxoval")),
           ("Na internação", ("prontuario", "manual", "multiprofissional", "capa")),
-          ("Serviço Social", ("resumo-social", "relatorio-social", "relatorio-alta")))
+          ("Serviço Social", ("resumo-social", "relatorio-social", "relatorio-alta")),
+          ("Declaração", ("declaracao",)))
 ORDEM = tuple(chave for _, chaves in GRUPOS for chave in chaves)
 DA_TRIAGEM = ("exames", "enxoval")
 SIGILOSOS = ("relatorio-social", "relatorio-alta")          # só quem é do Serviço Social (ou administrador) e quem lê os sigilosos vê
@@ -76,8 +79,14 @@ def itens_padrao(internacao, completo=False):
 def ler_itens(texto, internacao, completo=False):
     """?itens=a,b -> só os que existem e que quem pede pode ver, na ordem de impressão; sem nenhum válido, o conjunto padrão."""
     pedidos = {p.strip() for p in (texto or "").split(",")}
-    escolhidos = tuple(chave for chave in ORDEM if chave in pedidos and (completo or chave not in SIGILOSOS))
+    escolhidos = tuple(chave for chave in ORDEM if chave in pedidos and (completo or chave not in SIGILOSOS)
+                       and (chave != "declaracao" or declaracoes.tipo_da_declaracao(internacao) is not None))        # triagem ainda não tem declaração
     return escolhidos or itens_padrao(internacao, completo)
+
+
+def _rotulo(chave, internacao):
+    """O nome do impresso (a declaração é 'de internação' ou 'de ex-interno', conforme a situação)."""
+    return declaracoes.rotulo(internacao) if chave == "declaracao" else ROTULOS[chave]
 
 
 def _convenio_sus(internacao):
@@ -99,8 +108,10 @@ def passagem_da_capa(internacao):
     return (internacao.pessoa.passagens or [internacao])[-1]
 
 
-def _blocos(chave, internacao, hoje, saude=False):
+def _blocos(chave, internacao, hoje, saude=False, emissor=None):
     pessoa = internacao.pessoa
+    if chave == "declaracao":             # outra fonte e outras margens que o resto do conjunto: a Pagina leva as dela
+        return [Pagina(fonte=declaracoes.FONTE, tamanho=declaracoes.TAMANHO, margem_lateral=declaracoes.MARGEM_LATERAL), *declaracoes.blocos(internacao, hoje, emissor)]
     if chave == "exames":
         return fichas.pedido_de_exames(pessoa.nome)
     if chave == "enxoval":
@@ -129,13 +140,14 @@ def _nome_do_arquivo(texto):
     return re.sub(r'[\\/:*?"<>|]+', " ", texto).strip()
 
 
-def documento(internacao, itens, hoje=None, saude=False):
+def documento(internacao, itens, hoje=None, saude=False, emissor=None):
     """O Documento (documentos.py) com os `itens` pedidos, um depois do outro, cada um em página nova. `saude`: quem pede pode ler a ficha de saúde
-    (senão a ficha multiprofissional sai em branco)."""
+    (senão a ficha multiprofissional sai em branco). `emissor`: quem assina a declaração, se ela estiver entre os itens."""
     hoje = hoje or date.today()
-    blocos = [bloco for chave in itens for bloco in _blocos(chave, internacao, hoje, saude)]
-    rotulo = (ROTULOS[itens[0]] if len(itens) == 1
-              else " e ".join(ROTULOS[c].lower() if i else ROTULOS[c] for i, c in enumerate(itens)) if len(itens) == 2
+    blocos = [bloco for chave in itens for bloco in _blocos(chave, internacao, hoje, saude, emissor)]
+    rotulos = [_rotulo(c, internacao) for c in itens]
+    rotulo = (rotulos[0] if len(itens) == 1
+              else " e ".join(r.lower() if i else r for i, r in enumerate(rotulos)) if len(itens) == 2
               else "Impressos da internação")
     titulo = f"{rotulo} - {internacao.pessoa.nome}"
     return Documento(nome_arquivo=_nome_do_arquivo(titulo), titulo=titulo, blocos=blocos, fonte="Arial", tamanho=12, margem_lateral=720)
@@ -162,7 +174,7 @@ def _aviso_do_item(chave, internacao, saude=False):
 
 def disponiveis(internacao, completo=False, saude=False, pedidos=()):
     """Os impressos desta passagem, na ordem de impressão: [{chave, rotulo, aviso}] (a lista da aba Imprimir). A triagem leva o pedido de exames e o enxoval; a internação, o prontuário,
-    o manual, a ficha multiprofissional e a capa do envelope; o Serviço Social entra assim que o acolhimento foi começado (em rascunho ele serve para preencher à mão: o aviso diz) ou quando
+    o manual, a ficha multiprofissional e a capa do envelope (e a declaração, de quem está ou esteve internado); o Serviço Social entra assim que o acolhimento foi começado (em rascunho ele serve para preencher à mão: o aviso diz) ou quando
     foi `pedidos` (um "Salvar e imprimir" do acolhimento): o relatório completo para quem pode vê-lo, a folha-resumo para os outros; o relatório de alta, para quem já recebeu baixa e pode vê-lo.
     `completo`: quem pede pode ver o relatório do Serviço Social; `saude`: pode ler a ficha de saúde (o aviso de "em branco" ou "rascunho")."""
     chaves = list(DA_TRIAGEM) if internacao.e_triagem else ["prontuario", "manual", "multiprofissional", "capa"]
@@ -171,4 +183,6 @@ def disponiveis(internacao, completo=False, saude=False, pedidos=()):
         chaves.append(social)
     if internacao.status == "inativo" and completo:
         chaves.append("relatorio-alta")
-    return [{"chave": c, "rotulo": ROTULOS[c], "aviso": _aviso_do_item(c, internacao, saude)} for c in ORDEM if c in chaves]
+    if declaracoes.tipo_da_declaracao(internacao) is not None:
+        chaves.append("declaracao")
+    return [{"chave": c, "rotulo": _rotulo(c, internacao), "aviso": _aviso_do_item(c, internacao, saude)} for c in ORDEM if c in chaves]

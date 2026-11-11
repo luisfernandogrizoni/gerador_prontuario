@@ -6,6 +6,7 @@
   aparece dentro da aba "Imprimir" da ficha, ao lado da caixa que escolhe os documentos: só as folhas, sem o menu do sistema, o "Voltar", o título, os botões nem as opções).
 #}
 
+{% set pilhas_de_fonte = {'Arial': 'Arial, Helvetica, sans-serif', 'Verdana': 'Verdana, Geneva, "DejaVu Sans", sans-serif', 'Times New Roman': '"Times New Roman", Times, serif'} %}
 {% block titulo %}{{ doc.titulo }}{% endblock %}
 
 {% block estilo %}
@@ -71,7 +72,7 @@
   .timbre .link { color: #0563c1; text-decoration: underline; }
 
   /* corpo */
-  .doc-corpo { font-family: {{ {'Verdana': 'Verdana, Geneva, "DejaVu Sans", sans-serif', 'Times New Roman': '"Times New Roman", Times, serif'}.get(doc.fonte, 'Arial, Helvetica, sans-serif') | safe }}; font-size: {{ doc.tamanho }}pt; }
+  .doc-corpo { font-family: {{ pilhas_de_fonte.get(doc.fonte, pilhas_de_fonte['Arial']) | safe }}; font-size: {{ doc.tamanho }}pt; }
   .doc-corpo h2 { text-align: center; font-weight: 700; line-height: 1.2; }
   .doc-corpo p { margin: 0; line-height: 1.15; }
   .doc-corpo p, .doc-corpo td, .doc-corpo th { white-space: pre-wrap; }
@@ -302,7 +303,7 @@
 
   <div class="mesa">
     {% for folha in doc.paginas() %}
-    <article class="papel{{ ' larga' if doc.tem_tabela_larga }}{{ ' paisagem' if folha.paisagem }}" style="--margem: {{ (doc.margem_lateral / 56.7) | round(1) }}mm;">
+    <article class="papel{{ ' larga' if doc.tem_tabela_larga }}{{ ' paisagem' if folha.paisagem }}" style="--margem: {{ ((folha.margem_lateral or doc.margem_lateral) / 56.7) | round(1) }}mm;">
       <table class="folha">
         {% if folha.timbre %}
         <thead><tr><td>
@@ -312,7 +313,7 @@
           </div>
         </td></tr></thead>
         {% endif %}
-        <tbody><tr><td class="doc-corpo">{{ corpo(folha.blocos, doc, doc.largura_da(folha)) }}</td></tr></tbody>
+        <tbody><tr><td class="doc-corpo"{% if folha.fonte or folha.tamanho %} style="font-family: {{ pilhas_de_fonte.get(folha.fonte or doc.fonte, pilhas_de_fonte['Arial']) | safe }}; font-size: {{ folha.tamanho or doc.tamanho }}pt;"{% endif %}>{{ corpo(folha.blocos, doc, doc.largura_da(folha)) }}</td></tr></tbody>
         {% if folha.timbre %}
         <tfoot><tr><td>
           <div class="timbre timbre-rodape">
