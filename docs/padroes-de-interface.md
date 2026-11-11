@@ -144,10 +144,13 @@ Todo botão é **pílula** (`--r-botao`); o cartão em que ele fica tem só 6 px
   endereço aberto e abrem a aba onde estão (as outras levam `p<nº>-` na frente). Nada de blocos que abrem e fecham por passagem, nem de uma página por passagem.
 - **A aba Imprimir é o único lugar de impressão dos impressos: a caixa "Documentos para imprimir" AO LADO do preview** (decisão do usuário, 2026-11-10; **não existe página de impressão à parte**).
   À esquerda, a caixa com uma caixinha por documento (os do conjunto padrão da passagem vêm marcados; o Serviço Social entra assim que o acolhimento começa, com o aviso "rascunho"), o menu "⋯" em cada linha
-  (**Imprimir só este**, que marca só ele e imprime; **Baixar Word**), a declaração (outro documento, sem caixinha, que tem a escolha de quem assina e por isso abre a própria página: Abrir + menu) e a barra
+  (**Imprimir só este**, que marca só ele e imprime; **Baixar Word**), a **declaração** (de internação ou de ex-interno; só de quem tem `documentos`), que é um impresso como os outros e vem desmarcada, e a barra
   "N escolhidos" com **Imprimir os escolhidos** e **Baixar Word**. À direita, o **preview das folhas**: `/internacoes/<id>/impressos?itens=...&embutido=1` num `iframe`, carregado só quando a aba abre e
   **recarregado a cada caixinha marcada ou desmarcada** (sem nenhuma marcada, some e dá lugar a um aviso). Nada de barra em cima do preview: `?embutido=1` mostra só as folhas.
   **Imprimir** = recarregar o preview com `?imprimir=1`, e a página das folhas manda imprimir ao abrir (só assim o impresso conta como impresso: auditoria `doc.imprimir` e a marca do pedido de exames/enxoval).
+  **A declaração** sai com a fonte (Verdana 10) e as margens (2 cm) de sempre mesmo no meio de um conjunto em Arial 12: a `Pagina` do `documentos.py` aceita `fonte`, `tamanho` e `margem_lateral` próprios
+  (no Word, uma seção por impresso). Enquanto ela está marcada aparece, na linha dela, **"Quem assina"** (os funcionários ativos; quem está sem o registro profissional vem desabilitado), que vai em
+  `?emissor=` no preview, no Imprimir e no Word. Não há página própria da declaração: `/internacoes/<id>/declaracao` e `declaracao.docx` só redirecionam (a aba e o Word dos impressos).
   Os atalhos de imprimir (depois de "Salvar e imprimir" do acolhimento, da alta e da ficha de saúde; "Imprimir" das triagens e da página inicial) vão direto à ficha:
   `/internacoes/<id>?itens=a,b&imprimir=1#aba-imprimir` marca esses documentos e já manda imprimir (o `?imprimir=1` sai do endereço, e F5 não imprime de novo). Um endereço antigo
   `/internacoes/<id>/impressos` (sem `embutido`) só redireciona para a aba. Quem não tem a permissão `documentos` e só lê relatórios sigilosos vê, na mesma caixa, só o que lê (o preview pede só esses itens,

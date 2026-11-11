@@ -807,7 +807,15 @@ def ficha(id):
     notificacoes.marcar_lidas(g.usuario, id)              # abrir a ficha é ficar sabendo: as notificações de quem abriu, sobre esta pessoa, ficam lidas
     p, hoje = internacao.pessoa, relatorios.hoje_no_brasil()
     passagens = _passagens_da_pessoa(p, internacao, hoje, request.args.get("itens"))
-    return render_template("ficha.html", i=internacao, imprimir_ao_abrir=bool(request.args.get("imprimir")), idade=calcular_idade(p.nascimento, hoje), avatar=avatar_da_pessoa(p.nome),
+    emissores, emissor_escolhido = [], None
+    if permissoes.pode("documentos"):                      # quem assina a declaração: a escolha só aparece se há mais de um funcionário ativo (senão assina o único)
+        ativos = [f for f in cadastros_.funcionarios() if f.ativo]
+        emissores = [(f.id, cadastros_.rotulo_do_emissor(f), cadastros_.sem_registro(f)) for f in ativos] if len(ativos) > 1 else []
+        try:
+            emissor_escolhido = _emissor()[1]               # o que veio em ?emissor=, senão o funcionário de quem está logado, senão o padrão
+        except cadastros_.ErroDeAssinatura:                 # quem seria o de sempre está sem o registro profissional: a pessoa escolhe outro
+            emissor_escolhido = None
+    return render_template("ficha.html", i=internacao, imprimir_ao_abrir=bool(request.args.get("imprimir")), emissores=emissores, emissor_escolhido=emissor_escolhido, idade=calcular_idade(p.nascimento, hoje), avatar=avatar_da_pessoa(p.nome),
                            baixar=request.args.get("baixar", type=int), titulos_de_anexo=anexos.TITULOS_SUGERIDOS, rotulos_das_areas=anexos.AREAS,
                            areas_de_anexo=[(chave, rotulo) for chave, rotulo in anexos.AREAS.items() if _pode_anexar_na_area(chave)],
                            limite_do_anexo=anexos.LIMITE_DO_ARQUIVO,
@@ -836,15 +844,13 @@ def _periodo_do_registro(o):
 
 def _documentos_da_passagem(o, itens=None):
     """Os documentos PARA IMPRIMIR de UMA passagem (a aba "Imprimir" da ficha): o que quem abre a ficha pode imprimir. Quem tem `documentos` vê todos; quem só lê o Serviço Social
-    ou a saúde vê (e imprime) o que lê. Cada um: {chave, rotulo, aviso, impresso, marcado}. A declaração (internação ou ex-interno) é outro documento: tem endereço próprio
-    e não se junta aos outros na mesma impressão. `marcado`: faz parte do conjunto que a aba já mostra no preview (as caixinhas vêm marcadas): o que `itens` pediu (um atalho de imprimir) ou, sem isso, o conjunto padrão da passagem."""
+    ou a saúde vê (e imprime) o que lê. Cada um: {chave, rotulo, aviso, impresso, marcado}. A declaração (de internação ou de ex-interno) é um deles (só de quem tem `documentos`):
+    sai com a fonte e as margens dela e com a assinatura de quem a pessoa escolher. `marcado`: faz parte do conjunto que a aba já mostra no preview (as caixinhas vêm marcadas): o que `itens` pediu (um atalho de imprimir) ou, sem isso, o conjunto padrão da passagem."""
     geral = permissoes.pode("documentos")
     leitores = permissoes.QUEM_LE_O_IMPRESSO
     padrao = set(impressos.ler_itens(itens, o, _pode_ler_social()))       # os marcados: o que o atalho pediu (?itens=) ou o conjunto padrão
     lista = [dict(d, impresso=True, marcado=d["chave"] in padrao) for d in impressos.disponiveis(o, _pode_ler_social(), _pode_ler_saude(), pedidos=padrao if itens else ())
              if geral or (d["chave"] in leitores and leitores[d["chave"]](g.get("usuario")))]
-    if geral and declaracoes.tipo_da_declaracao(o) is not None:
-        lista.append({"chave": "declaracao", "rotulo": "Declaração de internação" if o.status == "ativo" else "Declaração de ex-interno", "aviso": "", "impresso": False, "marcado": False})
     return lista
 
 
@@ -1052,11 +1058,12 @@ def _baixar(doc):
     return send_file(documentos.para_docx(doc), as_attachment=True, download_name=doc.nome_arquivo + ".docx")
 
 
-def _declaracao(id, emissor):
+def _declaracao_de(id):
+    """A internação (ativa ou inativa) da declaração pedida; triagem ainda não é interno: não há o que declarar."""
     internacao = _buscar(Internacao, id)
-    if declaracoes.tipo_da_declaracao(internacao) is None:      # triagem ainda não é interno: não há o que declarar
+    if declaracoes.tipo_da_declaracao(internacao) is None:
         abort(404)
-    return declaracoes.documento(internacao, relatorios.hoje_no_brasil(), emissor)
+    return internacao
 
 
 @app.get("/internacoes/<int:id>/prontuario/visualizar")
@@ -1067,14 +1074,15 @@ def ver_prontuario(id):
 
 @app.get("/internacoes/<int:id>/declaracao")
 def ver_declaracao(id):
-    emissor, emissor_id = _emissor()
-    return _mostrar(_declaracao(id, emissor), url_for("baixar_declaracao", id=id, emissor=_escolha_de_emissor()),
-                    url_for("ficha", id=id), barra=_barra(emissor_id))
+    """A declaração é um impresso da aba Imprimir (com a escolha de quem assina): o endereço de antes só leva para lá."""
+    _declaracao_de(id)
+    return redirect(_para_impressao(id, "declaracao", bool(request.args.get("imprimir")), _escolha_de_emissor()))
 
 
 @app.get("/internacoes/<int:id>/declaracao.docx")
 def baixar_declaracao(id):
-    return _baixar(_declaracao(id, _emissor()[0]))
+    _declaracao_de(id)
+    return redirect(url_for("baixar_impressos", id=id, itens="declaracao", emissor=_escolha_de_emissor()))
 
 
 # Os impressos da triagem (pedido de exames, enxoval) e da internação (prontuário, ficha multiprofissional, capa do
@@ -1082,7 +1090,8 @@ def baixar_declaracao(id):
 def _impresso(id):
     internacao = _buscar(Internacao, id)
     itens = impressos.ler_itens(request.args.get("itens"), internacao, _pode_ler_social())
-    return internacao, itens, impressos.documento(internacao, itens, relatorios.hoje_no_brasil(), saude=_pode_ler_saude())
+    return internacao, itens, impressos.documento(internacao, itens, relatorios.hoje_no_brasil(), saude=_pode_ler_saude(),
+                                                  emissor=_emissor()[0] if "declaracao" in itens else None)        # quem assina só importa se a declaração estiver entre os itens
 
 
 def _anotar_impressao(internacao, itens):
@@ -1094,9 +1103,10 @@ def _anotar_impressao(internacao, itens):
         db.session.commit()
 
 
-def _para_impressao(id, itens, imprimir=False):
-    """A aba Imprimir da ficha, com os `itens` marcados (e, com `imprimir`, já mandando imprimir): é para onde vão os atalhos de imprimir (não existe mais uma página de impressão à parte)."""
-    return url_for("ficha", id=id, itens=itens, imprimir=1 if imprimir else None, _anchor="aba-imprimir")
+def _para_impressao(id, itens, imprimir=False, emissor=None):
+    """A aba Imprimir da ficha, com os `itens` marcados (e, com `imprimir`, já mandando imprimir; `emissor`: quem assina a declaração): é para onde vão os atalhos de imprimir
+    (não existe mais uma página de impressão à parte)."""
+    return url_for("ficha", id=id, itens=itens, imprimir=1 if imprimir else None, emissor=emissor, _anchor="aba-imprimir")
 
 
 @app.get("/internacoes/<int:id>/impressos")
@@ -1106,11 +1116,11 @@ def ver_impressos(id):
     internacao = _buscar(Internacao, id)
     itens = impressos.ler_itens(request.args.get("itens"), internacao, _pode_ler_social())
     if not request.args.get("embutido"):
-        return redirect(_para_impressao(id, ",".join(itens), bool(request.args.get("imprimir"))))
+        return redirect(_para_impressao(id, ",".join(itens), bool(request.args.get("imprimir")), _escolha_de_emissor()))
     if request.args.get("imprimir"):                      # só quem vai imprimir; ver o documento não conta como impresso
         _anotar_impressao(internacao, itens)
-    doc = impressos.documento(internacao, itens, relatorios.hoje_no_brasil(), saude=_pode_ler_saude())
-    return _mostrar(doc, url_for("baixar_impressos", id=id, itens=",".join(itens)), url_for("ficha", id=id), embutido=True)
+    doc = impressos.documento(internacao, itens, relatorios.hoje_no_brasil(), saude=_pode_ler_saude(), emissor=_emissor()[0] if "declaracao" in itens else None)
+    return _mostrar(doc, url_for("baixar_impressos", id=id, itens=",".join(itens), emissor=_escolha_de_emissor()), url_for("ficha", id=id), embutido=True)
 
 
 @app.get("/internacoes/<int:id>/impressos.docx")

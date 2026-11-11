@@ -23,6 +23,7 @@ CID = " CID F 14/F10."
 EM_BRANCO = "_" * 14          # dado que falta no cadastro: fica uma linha para escrever à mão
 
 TIPOS = {"ativo": "interno", "inativo": "ex-interno"}
+FONTE, TAMANHO, MARGEM_LATERAL = "Verdana", 10, 1134          # a declaração é em Verdana 10, com as margens de sempre (2 cm), também quando sai no meio de um conjunto (impressos.py)
 
 
 def tipo_da_declaracao(internacao):
@@ -38,9 +39,13 @@ def _nome_de_arquivo(texto):
     return re.sub(r'[\\/:*?"<>|]+', " ", texto).strip()
 
 
-def documento(internacao, hoje, emissor=None):
-    """Internação ativa ou inativa -> Documento (blocos). Levanta ValueError para triagem.
-    `emissor` assina como responsável pela emissão (sem ele, o de fábrica)."""
+def rotulo(internacao):
+    """'Declaração de internação' (ativo) ou 'Declaração de ex-interno' (inativo); o nome do impresso na aba Imprimir."""
+    return "Declaração de internação" if tipo_da_declaracao(internacao) == "interno" else "Declaração de ex-interno"
+
+
+def blocos(internacao, hoje, emissor=None):
+    """Os blocos da declaração (o título, o texto e o fecho com a assinatura de `emissor`; sem ele, o de fábrica). Levanta ValueError para triagem."""
     tipo = tipo_da_declaracao(internacao)
     if tipo is None:
         raise ValueError("só internos ativos ou inativos têm declaração")
@@ -52,12 +57,15 @@ def documento(internacao, hoje, emissor=None):
         situacao = ["encontra-se internado na ", N(ENTIDADE), APRESENTACAO, " desde o dia ", _dado(fmt_data(internacao.inicio)),
                     f", {FINALIDADE}, com prazo de término no dia ",
                     _dado(fmt_data(previsao_termino(internacao.inicio, internacao.tratamento_ate))), "." + CID]
-        titulo = f"Declaração de internação - {pessoa.nome}"
     else:
         situacao = ["encontrava-se internado na ", N(ENTIDADE), APRESENTACAO, " no período de ", _dado(fmt_data(internacao.inicio)),
                     " a ", _dado(fmt_data(internacao.termino)), f", {FINALIDADE}." + CID]
-        titulo = f"Declaração de ex-interno - {pessoa.nome}"
-    blocos = [Titulo("Declaração", tamanho=14, antes=30, depois=26),
-              Paragrafo(identificacao + situacao, "justificado", primeira_linha=708, entrelinha=1.5)]
-    blocos += fecho(hoje, emissor)
-    return Documento(nome_arquivo=_nome_de_arquivo(titulo), titulo=titulo, blocos=blocos, fonte="Verdana", tamanho=10)
+    return [Titulo("Declaração", tamanho=14, antes=30, depois=26),
+            Paragrafo(identificacao + situacao, "justificado", primeira_linha=708, entrelinha=1.5),
+            *fecho(hoje, emissor)]
+
+
+def documento(internacao, hoje, emissor=None):
+    """A declaração sozinha, como Documento (Verdana 10): internação ativa ou inativa. Levanta ValueError para triagem. `emissor` assina como responsável pela emissão."""
+    titulo = f"{rotulo(internacao)} - {internacao.pessoa.nome}"
+    return Documento(nome_arquivo=_nome_de_arquivo(titulo), titulo=titulo, blocos=blocos(internacao, hoje, emissor), fonte=FONTE, tamanho=TAMANHO)

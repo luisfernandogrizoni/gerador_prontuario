@@ -16,7 +16,7 @@ cada página vira uma folha A4 com o seu timbre. Uma página que precisa ser dif
 como a capa do envelope) começa com um bloco `Pagina(...)`: no Word vira uma seção nova.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from io import BytesIO
 from pathlib import Path
 from typing import ClassVar
@@ -195,11 +195,14 @@ class Assinatura:
 
 @dataclass
 class Pagina:
-    """Começa uma página nova que não é a comum: em paisagem e/ou sem o timbre (a capa do envelope). Vale até o
-    próximo `Pagina`; as páginas começadas por `quebra_antes` seguem o jeito da anterior."""
+    """Começa uma página nova que não é a comum: em paisagem e/ou sem o timbre (a capa do envelope), ou com fonte, tamanho e margem lateral próprios (a declaração, no meio de um conjunto
+    em outra fonte; None = o do documento). Vale até o próximo `Pagina`; as páginas começadas por `quebra_antes` seguem o jeito da anterior."""
     tipo: ClassVar[str] = "pagina"
     paisagem: bool = False
     timbre: bool = True
+    fonte: str | None = None
+    tamanho: float | None = None
+    margem_lateral: int | None = None
 
 
 @dataclass
@@ -232,6 +235,9 @@ class Folha:
     paisagem: bool = False
     timbre: bool = True
     secao: bool = False                # começou por um `Pagina`: no Word é uma seção nova
+    fonte: str | None = None           # None = a do documento
+    tamanho: float | None = None
+    margem_lateral: int | None = None
 
 
 @dataclass
@@ -249,8 +255,14 @@ class Documento:
         return LARGURA_PAGINA - 2 * self.margem_lateral
 
     def largura_da(self, folha):
-        """Largura útil (entre as margens) de uma `Folha`, em twips: a paisagem é mais larga."""
-        return (ALTURA_PAGINA if folha.paisagem else LARGURA_PAGINA) - 2 * self.margem_lateral
+        """Largura útil (entre as margens) de uma `Folha`, em twips: a paisagem é mais larga e a folha pode ter margem própria."""
+        return (ALTURA_PAGINA if folha.paisagem else LARGURA_PAGINA) - 2 * (folha.margem_lateral or self.margem_lateral)
+
+    def da_folha(self, folha):
+        """O documento como esta `Folha` o enxerga: com a fonte, o tamanho e a margem lateral dela, se ela tiver os seus (o gerador do Word usa uma cópia por folha)."""
+        if not (folha.fonte or folha.tamanho or folha.margem_lateral):
+            return self
+        return replace(self, fonte=folha.fonte or self.fonte, tamanho=folha.tamanho or self.tamanho, margem_lateral=folha.margem_lateral or self.margem_lateral)
 
     @property
     def tem_tabela_larga(self):
@@ -262,11 +274,13 @@ class Documento:
         folhas = []
         for bloco in self.blocos:
             if getattr(bloco, "tipo", "") == "pagina":
-                folhas.append(Folha([], bloco.paisagem, bloco.timbre, secao=bool(folhas)))
+                folhas.append(Folha([], bloco.paisagem, bloco.timbre, secao=bool(folhas), fonte=bloco.fonte, tamanho=bloco.tamanho, margem_lateral=bloco.margem_lateral))
                 continue
             if not folhas or (getattr(bloco, "quebra_antes", False) and folhas[-1].blocos):
                 anterior = folhas[-1] if folhas else None
-                folhas.append(Folha([], anterior.paisagem if anterior else False, anterior.timbre if anterior else True))
+                folhas.append(Folha([], anterior.paisagem if anterior else False, anterior.timbre if anterior else True,
+                                    fonte=anterior.fonte if anterior else None, tamanho=anterior.tamanho if anterior else None,
+                                    margem_lateral=anterior.margem_lateral if anterior else None))
             folhas[-1].blocos.append(bloco)
         return folhas
 
@@ -594,10 +608,12 @@ def _assinatura_docx(d, doc, bloco):
 def para_docx(doc):
     """Documento -> BytesIO com o arquivo .docx pronto para enviar."""
     d = _base_docx(doc)
+    base = doc
     for numero, folha in enumerate(doc.paginas()):
+        doc = base.da_folha(folha)                           # a fonte, o tamanho e a margem desta folha (a declaração, no meio de um conjunto, tem os dela)
         if numero == 0:
             _configurar_secao(d.sections[0], doc, folha)
-        elif folha.secao:                                    # página diferente (paisagem, sem timbre): seção nova
+        elif folha.secao:                                    # página diferente (paisagem, sem timbre, outra fonte ou margem): seção nova
             secao = d.add_section(WD_SECTION.NEW_PAGE)
             _miniatura(d.paragraphs[-1])                     # o parágrafo com a marca de fim da seção anterior não pode abrir uma página em branco
             _configurar_secao(secao, doc, folha)
@@ -621,6 +637,7 @@ def para_docx(doc):
                 _imagem_docx(d, doc, bloco)
             elif bloco.tipo == "assinatura":
                 _assinatura_docx(d, doc, bloco)
+    doc = base
     propriedades = d.core_properties
     propriedades.title, propriedades.author, propriedades.last_modified_by = doc.titulo, "Sistema de Prontuários", "Sistema de Prontuários"
     propriedades.comments = propriedades.subject = propriedades.keywords = ""

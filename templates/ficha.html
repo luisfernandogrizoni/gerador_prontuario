@@ -125,6 +125,8 @@
   .lista-docs li.removido { background: #fafafa; border-style: dashed; }
   .lista-docs li.removido .nome-doc { text-decoration: line-through; color: var(--suave); }
   .lista-docs label.escolha { gap: 10px; flex: 1 1 150px; min-width: 0; font-weight: 400; color: inherit; }
+  .lista-docs .linha-emissor { flex: 1 1 100%; flex-direction: row; align-items: center; gap: 8px; margin: 2px 0 0; font-size: .84rem; font-weight: 600; color: var(--suave); }
+  .lista-docs .linha-emissor select { width: auto; flex: 1 1 auto; min-width: 0; padding: 5px 9px; font-size: .86rem; }
   .lista-docs .sem-caixa { flex: 1 1 150px; min-width: 0; display: flex; align-items: center; gap: 10px; }
   .lista-docs .nome-doc { font-weight: 600; overflow-wrap: anywhere; }
   .lista-docs small { display: block; color: var(--suave); font-weight: 400; }
@@ -577,30 +579,23 @@
             <ul class="lista-docs">
               {% for d in r.documentos %}
               <li>
-                {% if d.impresso %}
                 <label class="escolha caixa"><input type="checkbox" data-chave="{{ d.chave }}" aria-label="Mostrar e imprimir: {{ d.rotulo }}"{{ ' checked' if d.marcado }}>
                   <span class="chip-doc" aria-hidden="true"><svg class="icone"><use href="#i-documento"/></svg></span>
                   <span><span class="nome-doc">{{ d.rotulo }}</span>{% if d.aviso %}<small class="tipo">{{ d.aviso }}</small>{% endif %}</span></label>
-                {% else %}
-                <div class="sem-caixa"><span class="chip-doc" aria-hidden="true"><svg class="icone"><use href="#i-documento"/></svg></span>
-                  <span class="nome-doc">{{ d.rotulo }}</span></div>
-                {% endif %}
                 <div class="acoes-doc">
-                  {% if d.impresso %}
                   <details class="mais"><summary class="botao secundario pequeno" aria-label="Mais ações de {{ d.rotulo }}"><svg class="icone"><use href="#i-pontos"/></svg></summary>
                     <div class="menu-mais">
                       <button type="button" data-so-este="{{ d.chave }}"><svg class="icone"><use href="#i-impressora"/></svg>Imprimir só este</button>
-                      <a href="{{ url_for('baixar_impressos', id=o.id, itens=d.chave) }}"><svg class="icone"><use href="#i-baixar"/></svg>Baixar Word</a>
+                      <a href="{{ url_for('baixar_impressos', id=o.id, itens=d.chave, emissor=emissor_escolhido if d.chave == 'declaracao' else None) }}"{% if d.chave == 'declaracao' %} data-docx-declaracao data-base="{{ url_for('baixar_impressos', id=o.id) }}"{% endif %}><svg class="icone"><use href="#i-baixar"/></svg>Baixar Word</a>
                     </div></details>
-                  {% else %}
-                  <a class="botao pequeno secundario" href="{{ url_for('ver_declaracao', id=o.id) }}">Abrir</a>
-                  <details class="mais"><summary class="botao secundario pequeno" aria-label="Mais ações de {{ d.rotulo }}"><svg class="icone"><use href="#i-pontos"/></svg></summary>
-                    <div class="menu-mais">
-                      <a href="{{ url_for('ver_declaracao', id=o.id, imprimir=1) }}" target="_blank" rel="noopener"><svg class="icone"><use href="#i-impressora"/></svg>Imprimir</a>
-                      <a href="{{ url_for('baixar_declaracao', id=o.id) }}"><svg class="icone"><use href="#i-baixar"/></svg>Baixar Word</a>
-                    </div></details>
-                  {% endif %}
                 </div>
+                {% if d.chave == 'declaracao' and emissores %}
+                {# a declaração leva a assinatura de quem emite: a escolha aparece enquanto ela está marcada #}
+                <label class="linha-emissor" data-linha-emissor{{ ' hidden' if not d.marcado }}>Quem assina
+                  <select data-emissor aria-label="Responsável pela emissão da declaração">
+                    {% for fid, rotulo, sem_registro in emissores %}<option value="{{ fid }}"{{ ' selected' if fid == emissor_escolhido }}{{ ' disabled' if sem_registro and fid != emissor_escolhido }}>{{ rotulo }}</option>{% endfor %}
+                  </select></label>
+                {% endif %}
               </li>
               {% endfor %}
             </ul>
@@ -820,32 +815,37 @@
     todos("[data-impressos]").forEach(function (area) {
       var marcas = todos("input[data-chave]", area), barra = area.querySelector("[data-selecao]"), quadro = area.querySelector("iframe"), vazio = area.querySelector("[data-sem-preview]");
       var espera = null;
+      var emissor = area.querySelector("[data-emissor]"), linhaEmissor = area.querySelector("[data-linha-emissor]");
+      var assina = function () { return emissor && emissor.value ? "&emissor=" + emissor.value : ""; };                  // quem assina a declaração (só se a escolha existe)
       var escolhidos = function () { return marcas.filter(function (m) { return m.checked; }).map(function (m) { return m.getAttribute("data-chave"); }).join(","); };
       // imprimir = recarregar o preview com ?imprimir=1: a página das folhas manda imprimir ao abrir (só assim o impresso conta como impresso, na auditoria e na triagem); o "n" garante a recarga
       area.imprimirEscolhidos = function () {
         var lista = escolhidos();
         if (!quadro || !lista) return;
         quadro.hidden = false;
-        quadro.setAttribute("src", area.getAttribute("data-ver") + "?itens=" + lista + "&embutido=1&imprimir=1&n=" + Date.now());
+        quadro.setAttribute("src", area.getAttribute("data-ver") + "?itens=" + lista + assina() + "&embutido=1&imprimir=1&n=" + Date.now());
       };
       var atualizar = function () {
         var itens = marcas.filter(function (m) { return m.checked; }).map(function (m) { return m.getAttribute("data-chave"); }), lista = itens.join(",");
         if (barra) {
           barra.hidden = itens.length === 0;
           barra.querySelector("[data-contagem]").textContent = itens.length + (itens.length === 1 ? " escolhido" : " escolhidos");
-          barra.querySelector("[data-baixar]").setAttribute("href", area.getAttribute("data-docx") + "?itens=" + lista);
+          barra.querySelector("[data-baixar]").setAttribute("href", area.getAttribute("data-docx") + "?itens=" + lista + assina());
         }
+        todos("[data-docx-declaracao]", area).forEach(function (a) { a.setAttribute("href", a.getAttribute("data-base") + "?itens=declaracao" + assina()); });
+        if (linhaEmissor) linhaEmissor.hidden = !marcas.some(function (m) { return m.getAttribute("data-chave") === "declaracao" && m.checked; });
         if (quadro) {
           quadro.hidden = itens.length === 0;
           if (vazio) vazio.hidden = itens.length > 0;
           if (itens.length) {
-            var url = area.getAttribute("data-ver") + "?itens=" + lista + "&embutido=1";
+            var url = area.getAttribute("data-ver") + "?itens=" + lista + assina() + "&embutido=1";
             quadro.setAttribute("data-src", url);                              // (se a aba ainda não abriu, ela carrega já com a escolha)
             if (quadro.getAttribute("src")) { clearTimeout(espera); espera = setTimeout(function () { quadro.setAttribute("src", url); }, 250); }
           }
         }
       };
       marcas.forEach(function (m) { m.addEventListener("change", atualizar); });
+      if (emissor) emissor.addEventListener("change", atualizar);
       if (barra) barra.querySelector("[data-imprimir-escolhidos]").addEventListener("click", function () { area.imprimirEscolhidos(); });
       todos("[data-so-este]", area).forEach(function (b) {                       // "Imprimir só este": marca só ele (o preview mostra o que sai) e imprime
         b.addEventListener("click", function () {
