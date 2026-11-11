@@ -4,8 +4,9 @@
 {#
   O prontuário da PESSOA, numa página só: o cabeçalho de identidade e, embaixo, as ABAS por função (Resumo, Dados pessoais, Serviço Social, Saúde, Financeiro,
   Imprimir e Escaneados). Quem teve mais de uma passagem (ou uma triagem) vê, entre o cabeçalho e as abas, a faixa de passagens: escolher uma troca o cabeçalho e as
-  abas para a dela, sem sair da página (cada passagem é uma "visão" já na página; a do endereço aberto sai à mostra). A aba "Imprimir" mostra, dentro da ficha, a mesma
-  página de impressão com o preview das folhas (/internacoes/<id>/impressos?embutido=1), carregada só quando a aba é aberta. As âncoras antigas (#acolhimento, #saude,
+  abas para a dela, sem sair da página (cada passagem é uma "visão" já na página; a do endereço aberto sai à mostra). A aba "Imprimir" tem a caixa que escolhe os documentos e, ao lado,
+  o preview das folhas (/internacoes/<id>/impressos?embutido=1), carregado só quando a aba é aberta; "Imprimir" manda imprimir o próprio preview (não há outra página de impressão).
+  ?itens=a,b marca os documentos (os atalhos de imprimir usam) e ?imprimir=1 já manda imprimir ao abrir. As âncoras antigas (#acolhimento, #saude,
   #alta, #parcelas, #escaneados, #envelope) valem para a passagem do endereço aberto e abrem a aba onde estão; #aba-social etc. abre a aba pedida.
   Variáveis: i (o registro do endereço), passagens (todas, do mais novo para o mais antigo), n_passagens, rotulos_das_areas, areas_de_anexo e as de sempre.
 #}
@@ -584,15 +585,21 @@
                 <div class="sem-caixa"><span class="chip-doc" aria-hidden="true"><svg class="icone"><use href="#i-documento"/></svg></span>
                   <span class="nome-doc">{{ d.rotulo }}</span></div>
                 {% endif %}
-                {% set ver = url_for('ver_impressos', id=o.id, itens=d.chave) if d.impresso else url_for('ver_declaracao', id=o.id) %}
-                {% set docx = url_for('baixar_impressos', id=o.id, itens=d.chave) if d.impresso else url_for('baixar_declaracao', id=o.id) %}
                 <div class="acoes-doc">
-                  <a class="botao pequeno secundario" href="{{ ver }}">Abrir</a>
+                  {% if d.impresso %}
                   <details class="mais"><summary class="botao secundario pequeno" aria-label="Mais ações de {{ d.rotulo }}"><svg class="icone"><use href="#i-pontos"/></svg></summary>
                     <div class="menu-mais">
-                      <a href="{{ ver }}{{ '&' if '?' in ver else '?' }}imprimir=1" target="_blank" rel="noopener"><svg class="icone"><use href="#i-impressora"/></svg>Imprimir</a>
-                      <a href="{{ docx }}"><svg class="icone"><use href="#i-baixar"/></svg>Baixar Word</a>
+                      <button type="button" data-so-este="{{ d.chave }}"><svg class="icone"><use href="#i-impressora"/></svg>Imprimir só este</button>
+                      <a href="{{ url_for('baixar_impressos', id=o.id, itens=d.chave) }}"><svg class="icone"><use href="#i-baixar"/></svg>Baixar Word</a>
                     </div></details>
+                  {% else %}
+                  <a class="botao pequeno secundario" href="{{ url_for('ver_declaracao', id=o.id) }}">Abrir</a>
+                  <details class="mais"><summary class="botao secundario pequeno" aria-label="Mais ações de {{ d.rotulo }}"><svg class="icone"><use href="#i-pontos"/></svg></summary>
+                    <div class="menu-mais">
+                      <a href="{{ url_for('ver_declaracao', id=o.id, imprimir=1) }}" target="_blank" rel="noopener"><svg class="icone"><use href="#i-impressora"/></svg>Imprimir</a>
+                      <a href="{{ url_for('baixar_declaracao', id=o.id) }}"><svg class="icone"><use href="#i-baixar"/></svg>Baixar Word</a>
+                    </div></details>
+                  {% endif %}
                 </div>
               </li>
               {% endfor %}
@@ -600,7 +607,7 @@
             {% if com_preview %}
             <div class="barra-selecao" data-selecao hidden>
               <span data-contagem>0 escolhidos</span>
-              <a class="botao" data-imprimir-escolhidos href="#" target="_blank" rel="noopener"><svg class="icone"><use href="#i-impressora"/></svg>Imprimir os escolhidos</a>
+              <button type="button" class="botao" data-imprimir-escolhidos><svg class="icone"><use href="#i-impressora"/></svg>Imprimir os escolhidos</button>
               <a class="botao secundario" data-baixar href="#"><svg class="icone"><use href="#i-baixar"/></svg>Baixar Word</a>
             </div>
             {% endif %}
@@ -754,9 +761,10 @@
     var visaoDe = function (id) { return visoes.filter(function (v) { return v.getAttribute("data-passagem") === String(id); })[0]; };
 
     // a página de impressão (com o preview) dentro da aba Imprimir: só carrega quando a aba aparece (as folhas se medem na tela)
+    var imprimirAoAbrir = {{ 'true' if imprimir_ao_abrir else 'false' }};                // vindo de um atalho de imprimir (?imprimir=1): o preview já carrega mandando imprimir, uma vez só
     var carregarImpressao = function (visao) {
       var quadro = visao.querySelector("iframe[data-src]");
-      if (quadro && !quadro.getAttribute("src")) quadro.setAttribute("src", quadro.getAttribute("data-src"));
+      if (quadro && !imprimirAoAbrir && !quadro.getAttribute("src")) quadro.setAttribute("src", quadro.getAttribute("data-src"));
     };
 
     var daHash = function () {            // #aba-social, ou a âncora de um cartão (#acolhimento, #p12-parcelas...): a aba e a passagem onde ele está
@@ -812,12 +820,19 @@
     todos("[data-impressos]").forEach(function (area) {
       var marcas = todos("input[data-chave]", area), barra = area.querySelector("[data-selecao]"), quadro = area.querySelector("iframe"), vazio = area.querySelector("[data-sem-preview]");
       var espera = null;
+      var escolhidos = function () { return marcas.filter(function (m) { return m.checked; }).map(function (m) { return m.getAttribute("data-chave"); }).join(","); };
+      // imprimir = recarregar o preview com ?imprimir=1: a página das folhas manda imprimir ao abrir (só assim o impresso conta como impresso, na auditoria e na triagem); o "n" garante a recarga
+      area.imprimirEscolhidos = function () {
+        var lista = escolhidos();
+        if (!quadro || !lista) return;
+        quadro.hidden = false;
+        quadro.setAttribute("src", area.getAttribute("data-ver") + "?itens=" + lista + "&embutido=1&imprimir=1&n=" + Date.now());
+      };
       var atualizar = function () {
         var itens = marcas.filter(function (m) { return m.checked; }).map(function (m) { return m.getAttribute("data-chave"); }), lista = itens.join(",");
         if (barra) {
           barra.hidden = itens.length === 0;
           barra.querySelector("[data-contagem]").textContent = itens.length + (itens.length === 1 ? " escolhido" : " escolhidos");
-          barra.querySelector("[data-imprimir-escolhidos]").setAttribute("href", area.getAttribute("data-ver") + "?itens=" + lista + "&imprimir=1");
           barra.querySelector("[data-baixar]").setAttribute("href", area.getAttribute("data-docx") + "?itens=" + lista);
         }
         if (quadro) {
@@ -831,8 +846,24 @@
         }
       };
       marcas.forEach(function (m) { m.addEventListener("change", atualizar); });
+      if (barra) barra.querySelector("[data-imprimir-escolhidos]").addEventListener("click", function () { area.imprimirEscolhidos(); });
+      todos("[data-so-este]", area).forEach(function (b) {                       // "Imprimir só este": marca só ele (o preview mostra o que sai) e imprime
+        b.addEventListener("click", function () {
+          var menu = b.closest("details"); if (menu) menu.open = false;
+          marcas.forEach(function (m) { m.checked = m.getAttribute("data-chave") === b.getAttribute("data-so-este"); });
+          atualizar();
+          area.imprimirEscolhidos();
+        });
+      });
       atualizar();                                                              // (o navegador devolve as caixinhas marcadas ao voltar à página: o preview acompanha)
     });
+
+    {% if imprimir_ao_abrir %}
+    imprimirAoAbrir = false;
+    history.replaceState(null, "", location.pathname + location.hash);
+    var areaAberta = document.querySelector(".visao:not([hidden]) [data-impressos]");
+    if (areaAberta && areaAberta.imprimirEscolhidos) areaAberta.imprimirEscolhidos();
+    {% endif %}
 
     // ---- documentos escaneados: o filtro por área
     todos("[data-escaneados]").forEach(function (area) {

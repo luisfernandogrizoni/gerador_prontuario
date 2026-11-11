@@ -28,9 +28,9 @@ Telas:
     /login/codigo                   segunda etapa da entrada de quem ativou o segundo fator (aplicativo autenticador)
     /seguranca                      Minha segurança: confirmar o e-mail e ativar ou desativar o segundo fator
     /internacoes/<id>/prontuario    baixa o .docx
-    /internacoes/<id>/impressos     os impressos da triagem (pedido de exames, enxoval) e da internação (prontuário, manual
-                                    de orientação, ficha multiprofissional, capa do envelope, relatório do Serviço Social)
-                                    num documento só
+    /internacoes/<id>/impressos     as folhas dos impressos da triagem (pedido de exames, enxoval) e da internação (prontuário,
+                                    manual de orientação, ficha multiprofissional, capa do envelope, relatório do Serviço Social)
+                                    num documento só, para o preview da aba Imprimir da ficha (?embutido=1); não é uma tela à parte
     /internacoes/<id>/relatorio-social   o acolhimento social: a assistente social preenche a ficha, escreve o relatório, classifica
                                     o risco e dá o parecer no sistema (sigiloso: só Serviço Social e administrador); depois de finalizado
                                     ela ainda o altera, cada alteração vira uma versão do histórico; um parecer "não condizente" marca a
@@ -806,8 +806,8 @@ def ficha(id):
     internacao = _buscar(Internacao, id)
     notificacoes.marcar_lidas(g.usuario, id)              # abrir a ficha é ficar sabendo: as notificações de quem abriu, sobre esta pessoa, ficam lidas
     p, hoje = internacao.pessoa, relatorios.hoje_no_brasil()
-    passagens = _passagens_da_pessoa(p, internacao, hoje)
-    return render_template("ficha.html", i=internacao, idade=calcular_idade(p.nascimento, hoje), avatar=avatar_da_pessoa(p.nome),
+    passagens = _passagens_da_pessoa(p, internacao, hoje, request.args.get("itens"))
+    return render_template("ficha.html", i=internacao, imprimir_ao_abrir=bool(request.args.get("imprimir")), idade=calcular_idade(p.nascimento, hoje), avatar=avatar_da_pessoa(p.nome),
                            baixar=request.args.get("baixar", type=int), titulos_de_anexo=anexos.TITULOS_SUGERIDOS, rotulos_das_areas=anexos.AREAS,
                            areas_de_anexo=[(chave, rotulo) for chave, rotulo in anexos.AREAS.items() if _pode_anexar_na_area(chave)],
                            limite_do_anexo=anexos.LIMITE_DO_ARQUIVO,
@@ -834,25 +834,25 @@ def _periodo_do_registro(o):
     return o.periodo_txt
 
 
-def _documentos_da_passagem(o):
+def _documentos_da_passagem(o, itens=None):
     """Os documentos PARA IMPRIMIR de UMA passagem (a aba "Imprimir" da ficha): o que quem abre a ficha pode imprimir. Quem tem `documentos` vê todos; quem só lê o Serviço Social
     ou a saúde vê (e imprime) o que lê. Cada um: {chave, rotulo, aviso, impresso, marcado}. A declaração (internação ou ex-interno) é outro documento: tem endereço próprio
-    e não se junta aos outros na mesma impressão. `marcado`: faz parte do conjunto padrão da passagem, que a aba já mostra no preview (as caixinhas vêm marcadas)."""
+    e não se junta aos outros na mesma impressão. `marcado`: faz parte do conjunto que a aba já mostra no preview (as caixinhas vêm marcadas): o que `itens` pediu (um atalho de imprimir) ou, sem isso, o conjunto padrão da passagem."""
     geral = permissoes.pode("documentos")
     leitores = permissoes.QUEM_LE_O_IMPRESSO
-    padrao = set(impressos.ler_itens(None, o, _pode_ler_social()))
-    lista = [dict(d, impresso=True, marcado=d["chave"] in padrao) for d in impressos.disponiveis(o, _pode_ler_social(), _pode_ler_saude())
+    padrao = set(impressos.ler_itens(itens, o, _pode_ler_social()))       # os marcados: o que o atalho pediu (?itens=) ou o conjunto padrão
+    lista = [dict(d, impresso=True, marcado=d["chave"] in padrao) for d in impressos.disponiveis(o, _pode_ler_social(), _pode_ler_saude(), pedidos=padrao if itens else ())
              if geral or (d["chave"] in leitores and leitores[d["chave"]](g.get("usuario")))]
     if geral and declaracoes.tipo_da_declaracao(o) is not None:
         lista.append({"chave": "declaracao", "rotulo": "Declaração de internação" if o.status == "ativo" else "Declaração de ex-interno", "aviso": "", "impresso": False, "marcado": False})
     return lista
 
 
-def _passagens_da_pessoa(pessoa, atual, hoje):
+def _passagens_da_pessoa(pessoa, atual, hoje, itens=None):
     """Todos os registros da pessoa (as passagens, que são internações de verdade, e as triagens), do mais novo para o mais antigo: cada um tem a sua visão na ficha
     (o cabeçalho e as abas, com tudo o que ele tem; a faixa de passagens troca de uma para a outra sem sair da página). O que a visão mostra de cada relatório é o que a
     ficha sempre mostrou a quem a abre (em que pé está; o conteúdo sigiloso fica nas próprias telas). `atual`: o registro do endereço aberto, que sai à mostra e leva os
-    ids de sempre (#acolhimento, #parcelas...); os outros levam o número do registro na frente (#p12-acolhimento)."""
+    ids de sempre (#acolhimento, #parcelas...); os outros levam o número do registro na frente (#p12-acolhimento). `itens`: os documentos da aba Imprimir que a abertura pediu (só vale para `atual`)."""
     passagens = []
     for o in reversed(pessoa.registros):
         n = o.numero_da_passagem
@@ -864,7 +864,7 @@ def _passagens_da_pessoa(pessoa, atual, hoje):
                           "previsao": previsao_termino(o.inicio, o.tratamento_ate) if o.inicio else None,
                           "acolhimento": _resumo_do_acolhimento(o), "saude": _resumo_da_saude(o), "alta": _resumo_da_alta(o),
                           "envelope_tempo": tempo_decorrido(espera) if espera is not None else "", "envelope_atrasado": atrasado,
-                          "documentos": _documentos_da_passagem(o), "escaneados": _anexos_visiveis(o)})
+                          "documentos": _documentos_da_passagem(o, itens if o.id == atual.id else None), "escaneados": _anexos_visiveis(o)})
     return passagens
 
 
@@ -1094,15 +1094,23 @@ def _anotar_impressao(internacao, itens):
         db.session.commit()
 
 
+def _para_impressao(id, itens, imprimir=False):
+    """A aba Imprimir da ficha, com os `itens` marcados (e, com `imprimir`, já mandando imprimir): é para onde vão os atalhos de imprimir (não existe mais uma página de impressão à parte)."""
+    return url_for("ficha", id=id, itens=itens, imprimir=1 if imprimir else None, _anchor="aba-imprimir")
+
+
 @app.get("/internacoes/<int:id>/impressos")
 def ver_impressos(id):
-    internacao, itens, doc = _impresso(id)
+    """As folhas dos impressos que o preview da aba Imprimir carrega (?embutido=1; ?imprimir=1 faz a página mandar imprimir ao abrir, e é só aí que o impresso conta como impresso).
+    Quem chega sem ?embutido=1 (um endereço antigo, uma aba aberta antes da mudança) vai para a aba Imprimir da ficha, com os mesmos documentos marcados."""
+    internacao = _buscar(Internacao, id)
+    itens = impressos.ler_itens(request.args.get("itens"), internacao, _pode_ler_social())
+    if not request.args.get("embutido"):
+        return redirect(_para_impressao(id, ",".join(itens), bool(request.args.get("imprimir"))))
     if request.args.get("imprimir"):                      # só quem vai imprimir; ver o documento não conta como impresso
         _anotar_impressao(internacao, itens)
-    embutido = bool(request.args.get("embutido"))         # a aba "Imprimir" da ficha mostra esta página dentro dela (o iframe pede ?embutido=1)
-    barra = {"itens": impressos.barra(internacao, itens, lambda novos: url_for("ver_impressos", id=id, itens=",".join(novos), embutido=1 if embutido else None),
-                                      _pode_ler_social(), _pode_ler_saude())}
-    return _mostrar(doc, url_for("baixar_impressos", id=id, itens=",".join(itens)), url_for("ficha", id=id), barra=barra, embutido=embutido)
+    doc = impressos.documento(internacao, itens, relatorios.hoje_no_brasil(), saude=_pode_ler_saude())
+    return _mostrar(doc, url_for("baixar_impressos", id=id, itens=",".join(itens)), url_for("ficha", id=id), embutido=True)
 
 
 @app.get("/internacoes/<int:id>/impressos.docx")
@@ -1141,7 +1149,7 @@ def relatorio_social(id):
     if not _pode_servico_social():
         finalizado = internacao.relatorio_social is not None and internacao.relatorio_social.finalizado
         if request.method == "GET" and finalizado and _pode_ler_social():       # só leitura: abre o documento finalizado
-            return redirect(url_for("ver_impressos", id=id, itens="relatorio-social"))
+            return redirect(_para_impressao(id, "relatorio-social"))
         return _so_servico_social(id)
     relatorio = internacao.relatorio_social
     finalizado = relatorio is not None and relatorio.finalizado
@@ -1164,7 +1172,7 @@ def relatorio_social(id):
             else:
                 flash("Nada foi alterado.")
             if acao == "imprimir":
-                return redirect(url_for("ver_impressos", id=id, itens="relatorio-social", imprimir=1))
+                return redirect(_para_impressao(id, "relatorio-social", imprimir=True))
             return redirect(url_for("ficha", id=id) + "#acolhimento")
         auditoria.registrar("acolhimento.finalizar" if acao == "finalizar" else "acolhimento.salvar", "internacao", id, internacao.pessoa_id,
                             "a triagem foi marcada como rejeitada" if acao == "finalizar" and internacao.status == "rejeitado" else "")
@@ -1173,7 +1181,7 @@ def relatorio_social(id):
                                                       if internacao.status == "rejeitado" else ""))
             return redirect(url_for("ficha", id=id) + "#acolhimento")
         if acao == "imprimir":
-            return redirect(url_for("ver_impressos", id=id, itens="relatorio-social", imprimir=1))
+            return redirect(_para_impressao(id, "relatorio-social", imprimir=True))
         flash("Rascunho salvo.")
         return redirect(url_for("relatorio_social", id=id))
     rascunho = rascunhos.do_registro(g.usuario, "acolhimento", id)
@@ -1201,7 +1209,7 @@ def relatorio_de_alta(id):
     if not _pode_servico_social():
         finalizado = internacao.relatorio_alta is not None and internacao.relatorio_alta.finalizado
         if request.method == "GET" and finalizado and _pode_ler_social():       # só leitura: abre o documento finalizado
-            return redirect(url_for("ver_impressos", id=id, itens="relatorio-alta"))
+            return redirect(_para_impressao(id, "relatorio-alta"))
         flash("Você lê o relatório de alta depois de finalizado, mas só a assistente social e o administrador o escrevem." if _pode_ler_social()
               else "O relatório de alta é sigiloso: só a assistente social e o administrador abrem.")
         return redirect(url_for("ficha", id=id))
@@ -1226,14 +1234,14 @@ def relatorio_de_alta(id):
             else:
                 flash("Nada foi alterado.")
             if acao == "imprimir":
-                return redirect(url_for("ver_impressos", id=id, itens="relatorio-alta", imprimir=1))
+                return redirect(_para_impressao(id, "relatorio-alta", imprimir=True))
             return redirect(url_for("ficha", id=id) + "#alta")
         auditoria.registrar("alta.finalizar" if acao == "finalizar" else "alta.salvar", "internacao", id, internacao.pessoa_id)
         if acao == "finalizar":
             flash("Relatório de alta finalizado.")
             return redirect(url_for("ficha", id=id) + "#alta")
         if acao == "imprimir":
-            return redirect(url_for("ver_impressos", id=id, itens="relatorio-alta", imprimir=1))
+            return redirect(_para_impressao(id, "relatorio-alta", imprimir=True))
         flash("Rascunho salvo.")
         return redirect(url_for("relatorio_de_alta", id=id))
     rascunho = rascunhos.do_registro(g.usuario, "alta", id)
@@ -1286,7 +1294,7 @@ def saude_anamnese(id):
     ficha = internacao.ficha_saude
     finalizada = ficha is not None and ficha.finalizado
     if finalizada and request.method == "GET" and not _pode_assinar_saude():     # finalizada: só a enfermeira a abre para alterar; os outros abrem o documento
-        return redirect(url_for("ver_impressos", id=id, itens="multiprofissional"))
+        return redirect(_para_impressao(id, "multiprofissional"))
     if not _pode_escrever_saude():                           # só leitura (a permissão de ler os sigilosos): lê depois de finalizada
         flash("Você lê a ficha de saúde, mas só a enfermeira a escreve." if request.method == "POST"
               else "A ficha de saúde ainda não foi finalizada: você a lê depois que a enfermeira finalizar.")
@@ -1313,14 +1321,14 @@ def saude_anamnese(id):
             else:
                 flash("Nada foi alterado.")
             if acao == "imprimir":
-                return redirect(url_for("ver_impressos", id=id, itens="multiprofissional", imprimir=1))
+                return redirect(_para_impressao(id, "multiprofissional", imprimir=True))
             return redirect(url_for("ficha", id=id) + "#saude")
         auditoria.registrar("saude.finalizar" if acao == "finalizar" else "saude.salvar", "internacao", id, internacao.pessoa_id)
         if acao == "finalizar":
             flash("Ficha de saúde finalizada.")
             return redirect(url_for("ficha", id=id) + "#saude")
         if acao == "imprimir":
-            return redirect(url_for("ver_impressos", id=id, itens="multiprofissional", imprimir=1))
+            return redirect(_para_impressao(id, "multiprofissional", imprimir=True))
         flash("Rascunho salvo.")
         return redirect(url_for("ficha_saude", id=id))
     rascunho = rascunhos.do_registro(g.usuario, "saude", id)

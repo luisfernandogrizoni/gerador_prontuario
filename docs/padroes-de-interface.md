@@ -142,13 +142,17 @@ Todo botão é **pílula** (`--r-botao`); o cartão em que ele fica tem só 6 px
   **sem sair da página** (cada passagem é uma "visão" `.visao` já na página; a do endereço aberto sai à mostra e o endereço passa a ser o da escolhida). A aba aberta fica no endereço (`#aba-social`)
   e é lembrada por pessoa na sessão (salvar um relatório volta à mesma aba). As âncoras antigas (`#acolhimento`, `#saude`, `#alta`, `#parcelas`, `#escaneados`, `#envelope`) valem para a passagem do
   endereço aberto e abrem a aba onde estão (as outras levam `p<nº>-` na frente). Nada de blocos que abrem e fecham por passagem, nem de uma página por passagem.
-- **A aba Imprimir: a caixa "Documentos para imprimir" AO LADO do preview** (decisão do usuário, 2026-11-10). À esquerda, a caixa com uma caixinha por documento (os do conjunto padrão da passagem vêm
-  marcados), "Abrir" e o menu "⋯" (Imprimir, Baixar Word) em cada linha, a declaração (outro documento, sem caixinha) e a barra "N escolhidos" com **Imprimir os escolhidos** e **Baixar Word**. À direita, o
-  **preview das folhas**: a página de impressão (`/internacoes/<id>/impressos?itens=...&embutido=1`) num `iframe`, carregado só quando a aba abre e **recarregado a cada caixinha marcada ou desmarcada**
-  (sem nenhuma marcada, some e dá lugar a um aviso). **Nada de barra flutuante em cima do preview**: `?embutido=1` mostra só as folhas (sem menu do sistema, "Voltar", título, Imprimir, Baixar Word nem as
-  opções). "Imprimir os escolhidos" abre a página inteira com `imprimir=1` (é o que anota o pedido de exames/enxoval como impresso e registra a impressão na auditoria). Quem não tem a permissão `documentos` e só lê
-  relatórios sigilosos vê, na mesma caixa, só o que lê (o preview pede só esses itens, que abrem sem a permissão). No celular a caixa fica em cima e o preview embaixo.
-  É a **única** página que pode ficar dentro de outra (mesmo endereço: `X-Frame-Options: SAMEORIGIN` e `frame-ancestors 'self'`, em `csrf.EMOLDURAVEIS`); todas as outras seguem em `DENY`.
+- **A aba Imprimir é o único lugar de impressão dos impressos: a caixa "Documentos para imprimir" AO LADO do preview** (decisão do usuário, 2026-11-10; **não existe página de impressão à parte**).
+  À esquerda, a caixa com uma caixinha por documento (os do conjunto padrão da passagem vêm marcados; o Serviço Social entra assim que o acolhimento começa, com o aviso "rascunho"), o menu "⋯" em cada linha
+  (**Imprimir só este**, que marca só ele e imprime; **Baixar Word**), a declaração (outro documento, sem caixinha, que tem a escolha de quem assina e por isso abre a própria página: Abrir + menu) e a barra
+  "N escolhidos" com **Imprimir os escolhidos** e **Baixar Word**. À direita, o **preview das folhas**: `/internacoes/<id>/impressos?itens=...&embutido=1` num `iframe`, carregado só quando a aba abre e
+  **recarregado a cada caixinha marcada ou desmarcada** (sem nenhuma marcada, some e dá lugar a um aviso). Nada de barra em cima do preview: `?embutido=1` mostra só as folhas.
+  **Imprimir** = recarregar o preview com `?imprimir=1`, e a página das folhas manda imprimir ao abrir (só assim o impresso conta como impresso: auditoria `doc.imprimir` e a marca do pedido de exames/enxoval).
+  Os atalhos de imprimir (depois de "Salvar e imprimir" do acolhimento, da alta e da ficha de saúde; "Imprimir" das triagens e da página inicial) vão direto à ficha:
+  `/internacoes/<id>?itens=a,b&imprimir=1#aba-imprimir` marca esses documentos e já manda imprimir (o `?imprimir=1` sai do endereço, e F5 não imprime de novo). Um endereço antigo
+  `/internacoes/<id>/impressos` (sem `embutido`) só redireciona para a aba. Quem não tem a permissão `documentos` e só lê relatórios sigilosos vê, na mesma caixa, só o que lê (o preview pede só esses itens,
+  que abrem sem a permissão). No celular a caixa fica em cima e o preview embaixo.
+  O preview é a **única** página que pode ficar dentro de outra (mesmo endereço: `X-Frame-Options: SAMEORIGIN` e `frame-ancestors 'self'`, em `csrf.EMOLDURAVEIS`); todas as outras seguem em `DENY`.
 - **Uma ação principal por área + menu "Mais"** (`details.mais`, fechado sozinho por `static/base.js`): cada linha do Acompanhamento mostra a situação (selo) e UM botão claro
   (Preencher, Continuar, Alterar); o secundário (histórico de versões, registros de enfermagem, evolução) vai no menu. Nenhum botão de documento mora dentro de uma área.
 - **Sem redundância**: um dado aparece num lugar só. O cabeçalho mostra só o que se deduz; as datas ficam no cartão. A idade
