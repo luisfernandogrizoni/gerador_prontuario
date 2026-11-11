@@ -1,5 +1,5 @@
 """
-Os impressos de cada acolhido, reunidos num documento só (um arquivo Word, ou uma página para ver e imprimir):
+Os impressos de cada acolhido, reunidos num documento só (um arquivo Word, ou as folhas que o preview da aba Imprimir da ficha mostra):
 
     Triagem               Na internação                                   Serviço Social
       exames   Pedido       prontuario         o prontuário                resumo-social      Resumo do acolhimento social
@@ -7,7 +7,7 @@ Os impressos de cada acolhido, reunidos num documento só (um arquivo Word, ou u
                             multiprofissional  Ficha multiprofissional                        (ficha, relatório e parecer)
                             capa               Capa do envelope            relatorio-alta     Relatório de alta (só de quem recebeu baixa)
 
-Quem escolhe o que entra é a barra acima do documento (?itens=exames,enxoval). Sem escolha, vale o conjunto de cada
+Quem escolhe o que entra são as caixinhas da aba Imprimir da ficha (?itens=exames,enxoval). Sem escolha, vale o conjunto de cada
 situação: a triagem leva exames e enxoval; a internação leva o prontuário, o manual, a ficha multiprofissional e a capa
 do envelope, mais o Serviço Social quando o acolhimento social já foi finalizado (em rascunho ele só serviria para
 preencher à mão).
@@ -16,7 +16,7 @@ A capa do envelope traz o término quando ele já está no sistema e, para quem 
 (Internacao.passagens_anteriores); quem só tem uma internação leva a capa de sempre, com o término em branco para escrever na baixa.
 
 O acolhimento social é sigiloso (cadastros.pode_servico_social): quem é do Serviço Social ou administrador leva o
-relatório completo; os outros levam só a folha-resumo (classificação e conclusão) e não vêem o relatório nem na barra.
+relatório completo; os outros levam só a folha-resumo (classificação e conclusão) e não vêem o relatório nem na lista da aba Imprimir.
 
 A ficha multiprofissional de saúde (ficha_saude.py) sai com o que a enfermagem e a equipe escreveram no sistema só para quem pode ler a ficha
 (cadastros.pode_ler_saude); os outros levam a ficha em branco, para escrever à mão, sem nada do conteúdo.
@@ -54,7 +54,6 @@ GRUPOS = (("Triagem", ("exames", "enxoval")),
 ORDEM = tuple(chave for _, chaves in GRUPOS for chave in chaves)
 DA_TRIAGEM = ("exames", "enxoval")
 SIGILOSOS = ("relatorio-social", "relatorio-alta")          # só quem é do Serviço Social (ou administrador) e quem lê os sigilosos vê
-DA_BAIXA = ("relatorio-alta",)                              # só entram na barra de quem já recebeu baixa
 
 
 def _social(internacao, completo):
@@ -143,14 +142,14 @@ def documento(internacao, itens, hoje=None, saude=False):
 
 
 def _aviso_do_item(chave, internacao, saude=False):
-    """O que a barra diz do item quando ele ainda não está pronto: 'em branco' ou 'rascunho'. Da ficha multiprofissional só para quem a lê."""
+    """O que a lista da aba Imprimir diz do item quando ele ainda não está pronto: 'em branco' ou 'rascunho'. Da ficha multiprofissional só para quem a lê."""
     if chave == "multiprofissional":
         situacao = ficha_saude.estado(internacao.ficha_saude) if saude else "finalizado"
         return "" if situacao == "finalizado" else (situacao or "em branco")
     if chave == "relatorio-alta":
         situacao = relatorio_alta.estado(internacao.relatorio_alta)
         return "" if situacao == "finalizado" else (situacao or "em branco")
-    if chave == "capa":              # pedida de uma passagem que não é a mais recente: a barra avisa de qual ela sai
+    if chave == "capa":              # pedida de uma passagem que não é a mais recente: a lista avisa de qual ela sai
         recente = passagem_da_capa(internacao)
         return "" if recente.id == internacao.id else f"da passagem {recente.numero_da_passagem}, a mais recente" if recente.numero_da_passagem else "da passagem mais recente"
     if chave not in ("resumo-social", "relatorio-social"):
@@ -161,30 +160,15 @@ def _aviso_do_item(chave, internacao, saude=False):
     return situacao or "em branco"
 
 
-def disponiveis(internacao, completo=False, saude=False):
-    """Os impressos desta passagem, na ordem de impressão: [{chave, rotulo, aviso}]. A triagem leva o pedido de exames e o enxoval; a internação, o prontuário,
-    o manual, a ficha multiprofissional e a capa do envelope; o Serviço Social entra depois de finalizado (o relatório completo para quem pode vê-lo, a folha-resumo
-    para os outros); o relatório de alta, para quem já recebeu baixa e pode vê-lo. `completo` e `saude`: como em barra()."""
+def disponiveis(internacao, completo=False, saude=False, pedidos=()):
+    """Os impressos desta passagem, na ordem de impressão: [{chave, rotulo, aviso}] (a lista da aba Imprimir). A triagem leva o pedido de exames e o enxoval; a internação, o prontuário,
+    o manual, a ficha multiprofissional e a capa do envelope; o Serviço Social entra assim que o acolhimento foi começado (em rascunho ele serve para preencher à mão: o aviso diz) ou quando
+    foi `pedidos` (um "Salvar e imprimir" do acolhimento): o relatório completo para quem pode vê-lo, a folha-resumo para os outros; o relatório de alta, para quem já recebeu baixa e pode vê-lo.
+    `completo`: quem pede pode ver o relatório do Serviço Social; `saude`: pode ler a ficha de saúde (o aviso de "em branco" ou "rascunho")."""
     chaves = list(DA_TRIAGEM) if internacao.e_triagem else ["prontuario", "manual", "multiprofissional", "capa"]
-    chaves += _social(internacao, completo)
+    social = "relatorio-social" if completo else "resumo-social"
+    if servico_social.estado(internacao.relatorio_social) or social in pedidos:
+        chaves.append(social)
     if internacao.status == "inativo" and completo:
         chaves.append("relatorio-alta")
     return [{"chave": c, "rotulo": ROTULOS[c], "aviso": _aviso_do_item(c, internacao, saude)} for c in ORDEM if c in chaves]
-
-
-def barra(internacao, itens, endereco, completo=False, saude=False):
-    """O que a barra acima do documento mostra: os impressos em grupos, cada um ligado ou desligado.
-    `endereco(itens)` devolve o endereço de quem clicar. Nunca deixa ficar sem nenhum. `completo` = quem vê pode ver o
-    relatório do Serviço Social (senão ele nem aparece); `saude`, pode ler a ficha de saúde (o aviso de "em branco" ou "rascunho")."""
-    grupos = []
-    for titulo, chaves in GRUPOS:
-        marcas = []
-        for chave in (c for c in chaves if (completo or c not in SIGILOSOS) and (c not in DA_BAIXA or internacao.status == "inativo")):
-            ativa = chave in itens
-            novos = [c for c in ORDEM if (c in itens) != (c == chave)]
-            marcas.append({"nome": ROTULOS[chave], "ativa": ativa,
-                           "url": endereco(novos) if novos else endereco(list(itens)),
-                           "aviso": _aviso_do_item(chave, internacao, saude)})
-        if marcas:
-            grupos.append({"titulo": titulo, "itens": marcas})
-    return grupos

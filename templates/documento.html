@@ -2,8 +2,8 @@
 {% from "_voltar.html" import voltar with context %}
 {#
   Mostra um Documento (documentos.py) para ver e imprimir no navegador: cada página é uma folha A4 com o timbre.
-  Variáveis: doc (Documento), docx (endereço do download), avisos (alertas só da tela), cabecalho/rodape (timbre), embutido (a página aparece dentro da aba
-  "Imprimir" da ficha, ao lado da caixa que escolhe os documentos: só as folhas, sem o menu do sistema, o "Voltar", o título, os botões nem as opções).
+  Variáveis: doc (Documento), docx (endereço do download), avisos (alertas só da tela), cabecalho/rodape (timbre), embutido (os impressos: a página
+  aparece dentro da aba "Imprimir" da ficha, ao lado da caixa que escolhe os documentos: só as folhas, sem o menu do sistema, o "Voltar", o título, os botões nem as opções).
 #}
 
 {% block titulo %}{{ doc.titulo }}{% endblock %}
@@ -26,7 +26,6 @@
   .opcao-coluna .ponto { width: 9px; height: 9px; border-radius: 50%; background: var(--cor); box-shadow: inset 0 0 0 1px rgba(16,24,40,.15); flex: none; }
   .opcao-coluna .marca { font-weight: 700; width: 1em; text-align: center; }
   .opcao-coluna.ativa { border-color: transparent; }   /* ativa: fundo e texto são os da cor do convênio (.tipo-<cor>, base.html) */
-  .opcao-coluna .aviso-item { font-weight: 500; opacity: .75; }
   @media (max-width: 760px) { .opcoes-doc { margin-top: 0; } }
   /* detalhar as internações (relatório anual): o botão e a caixa para escolher os anos e meses */
   button.opcao-coluna { font-family: inherit; cursor: pointer; }
@@ -209,17 +208,8 @@
     </div>
   </div>
   {% endif %}
-  {% if not embutido and barra and (barra.colunas or barra.emissores or barra.itens or barra.detalhar or barra.nomes or barra.informacoes) %}
+  {% if not embutido and barra and (barra.colunas or barra.emissores or barra.detalhar or barra.nomes or barra.informacoes) %}
   <div class="opcoes-doc">
-    {% for grupo in barra.itens or [] %}
-    <div class="grupo" role="group" aria-label="{{ grupo.titulo }}">
-      <span class="rotulo">{{ grupo.titulo }}</span>
-      {% for c in grupo.itens %}
-        <a class="opcao-coluna tipo-particular{{ ' ativa' if c.ativa }}" href="{{ c.url }}" data-substituir aria-pressed="{{ 'true' if c.ativa else 'false' }}"
-           title="{{ 'Tirar' if c.ativa else 'Incluir' }}: {{ c.nome }}"><span class="marca">{{ '✓' if c.ativa else '+' }}</span>{{ c.nome }}{% if c.aviso %}<small class="aviso-item">({{ c.aviso }})</small>{% endif %}</a>
-      {% endfor %}
-    </div>
-    {% endfor %}
     {% if barra.colunas %}
     <div class="grupo" role="group" aria-label="Colunas por convênio">
       <span class="rotulo">Colunas por convênio</span>

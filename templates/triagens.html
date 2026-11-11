@@ -147,7 +147,7 @@
     const ancora = document.getElementById("imprimir-link");
     document.getElementById("imprimir-nome").textContent = item.nome;
     document.getElementById("imprimir-data").textContent = item.agendada_fmt;
-    ancora.href = `/internacoes/${item.id}/impressos?itens=exames,enxoval&imprimir=1`;
+    ancora.href = `/internacoes/${item.id}?itens=exames,enxoval&imprimir=1#aba-imprimir`;
     ancora.onclick = () => setTimeout(() => dialogo.close(), 0);
     dialogo.showModal();
   }
@@ -192,7 +192,7 @@
     const caixa = document.createElement("div");
     caixa.className = "acoes-linha";
     if (PODE.documentos && i.agendada && i.agendada >= hojeIso() && (i.status === "em_admissao" || i.status === "lista_espera")) {
-      const imprimir = link("Imprimir", `/internacoes/${i.id}/impressos?itens=exames,enxoval&imprimir=1`, "botao pequeno secundario");
+      const imprimir = link("Imprimir", `/internacoes/${i.id}?itens=exames,enxoval&imprimir=1#aba-imprimir`, "botao pequeno secundario");
       imprimir.target = "_blank"; imprimir.rel = "noopener"; imprimir.title = "Pedido de exames e enxoval";
       imprimir.prepend(icone("impressora"));
       caixa.append(imprimir);
