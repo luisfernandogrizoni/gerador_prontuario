@@ -341,6 +341,11 @@ mesmo endereço `https://...ts.net`. O sistema é um só, com um banco só: os d
   pode demorar: a tela Cadastros > Backup mostra "Copiando, faltam N de M"). Quem imprime os
   documentos abre e baixa; anexar e remover é a permissão "Anexar e remover documentos escaneados" (Cadastros > Permissões); apagar de vez, só o administrador. Anexar o escaneamento
   não substitui o papel assinado. Detalhes em `docs\plano-de-seguranca.md` e `implantacao\RESTAURAR.md`.
+- **Contribuições recebidas** (permissão "Lançar e excluir parcelas e ver o que entrou", a mesma de quem lança as parcelas): o **Início** mostra o card compacto "Contribuições do mês" (quatro números: o que já entrou, o que falta
+  receber no mês, a **inadimplência** e quantos contribuintes já pagaram; e duas listas curtas: quem está em atraso e as últimas entradas) e a página **Relatórios** tem o cartão "Contribuições recebidas em <ano>" com o **relatório total do ano**, em
+  Word e na tela: total, mês a mês, por categoria e por interno (só iniciais, como os outros relatórios; a chave "Anonimizar" mostra o nome). Tudo vem das parcelas lançadas na aba Financeiro da ficha;
+  o valor combinado é tratado como mensal, e parcela sem valor não entra na soma (a tela avisa). **Inadimplência** = parcelas que já venceram e não foram lançadas: a 1ª vence no dia da
+  internação (o valor é pago no ato) e as outras, uma por mês no mesmo dia, até o fim do tratamento (9 meses ou a previsão de término da ficha); pagar atrasado quita as mais antigas (conta a quantidade de parcelas, não o mês). Quem não tem a permissão não vê nem o bloco nem o relatório.
 - **Nomes e endereços** são gravados com a regra de maiúsculas e minúsculas do sistema (FULANO DE TAL -> Fulano de Tal; sem inventar acento). O que foi gravado antes
   continua como estava, até alguém editar o cadastro. Para arrumar de uma vez, depois de atualizar: `python normalizar_cadastros.py` mostra o que mudaria (não grava nada) e
   `python normalizar_cadastros.py --aplicar` faz um backup e grava. Não mexe em relatórios e fichas já escritos nem em "alterado em".

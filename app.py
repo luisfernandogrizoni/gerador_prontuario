@@ -97,6 +97,7 @@ import banco
 import cadastros as cadastros_
 import catalogo
 import contas
+import contribuicoes
 import csrf
 import copia_externa
 import declaracoes
@@ -489,6 +490,7 @@ def home():
                                                   pode_assinar_saude=_pode_assinar_saude(), novos_prontuarios=notificacoes.do_quadro(g.usuario),
                                                   sem_polo=_sem_polo() if _e_administrador() else ()), vagas=lista_de_vagas, vagas_total=totais(lista_de_vagas),
                            resumo=painel.resumo(), agenda=painel.agenda(hoje=hoje),
+                           contribuicoes=contribuicoes.do_mes(hoje) if permissoes.pode("financeiro") else None,       # o que entrou no mês: dado financeiro, só de quem tem a permissão
                            para_imprimir=painel.impressos_da_internacao(hoje=hoje) if permissoes.pode("documentos") else {"total": 0, "itens": []},
                            dias_da_agenda=painel.DIAS_DA_AGENDA, fim_do_tratamento=painel.tratamentos_a_finalizar(hoje=hoje),
                            hoje_por_extenso=painel.data_por_extenso(hoje),
@@ -1695,8 +1697,12 @@ def apagar_registro(id):
 def pagina_relatorios():
     hoje = relatorios.hoje_no_brasil()
     anual = relatorios.resumo_anual(hoje)
+    financeiro = permissoes.pode("financeiro")                  # o relatório de contribuições é dado financeiro: só de quem lança as parcelas
+    entradas = contribuicoes.resumo_do_ano(hoje.year, hoje) if financeiro else None
     return render_template("relatorios.html", blocos=relatorios.painel(_anonimo()), hoje=hoje, anual=anual, aviso_anual=relatorios.aviso_do_resumo(anual),
-                           anonimo=_anonimo(), nomes=_nomes_pedidos(), alternar=_alternar_nomes())
+                           anonimo=_anonimo(), nomes=_nomes_pedidos(), alternar=_alternar_nomes(),
+                           contribuicoes=entradas, aviso_contribuicoes=contribuicoes.aviso_do_ano(entradas) if entradas else "",
+                           anos_das_contribuicoes=contribuicoes.anos_disponiveis(hoje) if financeiro else [])
 
 
 def _relatorio_do_convenio(slug, emissor):
@@ -1754,6 +1760,29 @@ def ver_relatorio_anual():
 def baixar_relatorio_anual():
     hoje = relatorios.hoje_no_brasil()
     return _baixar(relatorios.documento_anual(hoje, _colunas_do_relatorio_anual(hoje)[0], _emissor()[0], relatorios.ler_meses(request.args.getlist("mes"), hoje), _anonimo(), _informacoes_pedidas()))
+
+
+def _ano_das_contribuicoes(ano):
+    """O ano do relatório de contribuições: de 2000 até o ano de hoje (um ano que ainda não começou não tem o que mostrar)."""
+    hoje = relatorios.hoje_no_brasil()
+    if not 2000 <= ano <= hoje.year:
+        abort(404)
+    return hoje
+
+
+@app.get("/relatorios/contribuicoes/<int:ano>")
+def ver_relatorio_contribuicoes(ano):
+    hoje = _ano_das_contribuicoes(ano)
+    emissor, emissor_id = _emissor()
+    aviso = contribuicoes.aviso_do_ano(contribuicoes.resumo_do_ano(ano, hoje, _anonimo()))
+    return _mostrar(contribuicoes.documento_do_ano(ano, hoje, emissor, _anonimo()), url_for("baixar_relatorio_contribuicoes", ano=ano, emissor=_escolha_de_emissor(), **_escolhas()),
+                    url_for("pagina_relatorios", nomes=_nomes_pedidos()), barra=_barra(emissor_id, nomes=_chave_dos_nomes()), avisos=[aviso] if aviso else [])
+
+
+@app.get("/relatorios/contribuicoes/<int:ano>.docx")
+def baixar_relatorio_contribuicoes(ano):
+    hoje = _ano_das_contribuicoes(ano)
+    return _baixar(contribuicoes.documento_do_ano(ano, hoje, _emissor()[0], _anonimo()))
 
 
 # ================================================================= cadastros

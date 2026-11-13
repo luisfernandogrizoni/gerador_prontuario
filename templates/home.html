@@ -63,6 +63,34 @@
   .vagas-resumo .barra { flex: 1 1 220px; margin: 0; height: 10px; }
   .vagas-resumo .barra span { background: #475467; }
 
+  /* ---- contribuições do mês (só de quem tem a permissão do financeiro): o card é compacto, com quatro números e duas listas curtas ---- */
+  .entradas .bloco-topo { padding: 12px 18px; }
+  .entradas .bloco-corpo { padding: 14px 18px 16px; }
+  .entradas-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+  .tile { padding: 10px 13px 11px; border: 1px solid var(--borda); border-radius: var(--r-md); background: #fff; min-width: 0; }
+  .tile .rotulo { display: block; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--suave); }
+  .tile strong { display: block; margin-top: 3px; font-size: 1.3rem; line-height: 1.15; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .tile small { display: block; margin-top: 3px; color: var(--suave); font-size: .76rem; }
+  .tile .barra { height: 5px; margin: 8px 0 0; }
+  .tile .barra span { background: var(--verde, #3f9d5a); }
+  .tile.atraso { background: var(--perigo-suave); border-color: var(--perigo-borda); }
+  .tile.atraso strong, .tile.atraso .rotulo { color: var(--perigo); }
+  .tile.em-dia { background: var(--sucesso-suave, #eaf6ec); border-color: var(--sucesso-borda, #bfe2c6); }
+  .tile.em-dia strong, .tile.em-dia .rotulo { color: #17501f; }
+  .entradas-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 4px 28px; margin-top: 12px; }
+  .entradas-grade h3 { margin: 4px 0 2px; display: flex; align-items: center; gap: 8px; font-size: .74rem; font-weight: 700; color: var(--suave); text-transform: uppercase; letter-spacing: .05em; }
+  .entradas-lista { list-style: none; margin: 0; padding: 0; }
+  .entradas-lista li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 12px; align-items: baseline; padding: 6px 0; border-top: 1px dashed #edf0f4; font-size: .86rem; }
+  .entradas-lista li:first-child { border-top: 0; }
+  .entradas-lista a { font-weight: 600; color: var(--texto); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .entradas-lista a:hover { color: var(--vermelho); }
+  .entradas-lista .meta { grid-column: 1; color: var(--suave); font-size: .74rem; }
+  .entradas-lista .valor { grid-row: 1; grid-column: 2; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .entradas-lista .valor.atraso { color: var(--perigo); }
+  .entradas-vazio { display: flex; align-items: center; gap: 8px; margin: 4px 0 0; color: var(--suave); font-size: .84rem; }
+  .entradas-vazio .icone { color: var(--verde); flex: none; }
+  .entradas-nota { margin: 10px 0 0; color: var(--suave); font-size: .76rem; }
+
   /* ---- vagas por categoria ---- */
   .vagas { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
   .vaga { padding: 14px 16px 15px; border: 1px solid var(--borda); border-radius: var(--r-md); background: #fff; }
@@ -232,6 +260,73 @@
 
   <div class="painel-grade">
     <div class="principal">
+      {% if contribuicoes %}
+      {% set c = contribuicoes %}
+      <section class="bloco entradas" id="contribuicoes" aria-labelledby="t-contribuicoes">
+        <div class="bloco-topo">
+          <h2 id="t-contribuicoes"><svg class="icone"><use href="#i-moeda"/></svg>Contribuições de {{ c.mes }}</h2>
+          <span class="bloco-nota"><a href="{{ url_for('ver_relatorio_contribuicoes', ano=c.ano) }}">Relatório de {{ c.ano }}</a></span>
+        </div>
+        <div class="bloco-corpo">
+          <div class="entradas-tiles">
+            <div class="tile">
+              <span class="rotulo">Recebido no mês</span>
+              <strong>{{ c.recebido_fmt }}</strong>
+              {% if c.esperado %}
+              <div class="barra" role="img" aria-label="{{ c.percentual }}% do esperado já entrou"><span style="width: {{ c.percentual }}%"></span></div>
+              <small>{{ c.percentual }}% dos {{ c.esperado_fmt }} esperados</small>
+              {% else %}<small>{{ c.lancamentos }} lançamento{{ '' if c.lancamentos == 1 else 's' }}</small>{% endif %}
+            </div>
+            <div class="tile">
+              <span class="rotulo">Falta receber</span>
+              <strong>{{ c.a_receber.valor_fmt }}</strong>
+              <small>{{ c.a_receber.internos }} interno{{ '' if c.a_receber.internos == 1 else 's' }} ainda não pag{{ 'ou' if c.a_receber.internos == 1 else 'aram' }} em {{ c.mes }}</small>
+            </div>
+            <div class="tile {{ 'atraso' if c.inadimplencia.internos else 'em-dia' }}">
+              <span class="rotulo">Inadimplência</span>
+              <strong>{{ c.inadimplencia.valor_fmt }}</strong>
+              <small>{% if c.inadimplencia.internos %}{{ c.inadimplencia.taxa }}% do vencido · {{ c.inadimplencia.internos }} interno{{ '' if c.inadimplencia.internos == 1 else 's' }}, {{ c.inadimplencia.parcelas }} parcela{{ '' if c.inadimplencia.parcelas == 1 else 's' }}{% else %}ninguém com parcela vencida{% endif %}</small>
+            </div>
+            <div class="tile">
+              <span class="rotulo">Contribuintes</span>
+              <strong>{{ c.pagaram }} de {{ c.contribuintes }}</strong>
+              <small>já pagaram em {{ c.mes }} · {{ c.lancamentos }} lançamento{{ '' if c.lancamentos == 1 else 's' }}</small>
+            </div>
+          </div>
+          <div class="entradas-grade">
+            <div>
+              <h3>Em atraso {% if c.inadimplencia.internos %}<span class="pilula alerta">{{ c.inadimplencia.internos }}</span>{% endif %}</h3>
+              {% if c.inadimplencia.itens %}
+              <ul class="entradas-lista">
+                {% for e in c.inadimplencia.itens %}
+                <li><a href="{{ e.url }}">{{ e.nome }}</a><span class="valor atraso">{{ e.valor_fmt }}</span><span class="meta">{{ e.detalhe }}</span></li>
+                {% endfor %}
+              </ul>
+              {% if c.inadimplencia.internos > c.inadimplencia.itens | length %}<p class="entradas-nota">+ {{ c.inadimplencia.internos - (c.inadimplencia.itens | length) }} em atraso (os mais antigos estão acima)</p>{% endif %}
+              {% elif c.contribuintes %}
+              <p class="entradas-vazio"><svg class="icone"><use href="#i-ok"/></svg>Nenhuma parcela vencida sem pagamento.</p>
+              {% else %}
+              <p class="entradas-vazio">Ninguém internado contribui financeiramente.</p>
+              {% endif %}
+            </div>
+            <div>
+              <h3>Últimas entradas</h3>
+              {% if c.ultimas %}
+              <ul class="entradas-lista">
+                {% for e in c.ultimas %}
+                <li><a href="{{ e.url }}">{{ e.nome }}</a><span class="valor">{{ e.valor_fmt }}</span><span class="meta">{{ e.numero }}ª parcela · {{ e.data_fmt }}</span></li>
+                {% endfor %}
+              </ul>
+              {% else %}
+              <p class="entradas-vazio">Nenhuma contribuição lançada em {{ c.mes }}.</p>
+              {% endif %}
+            </div>
+          </div>
+          {% if c.sem_valor %}<p class="entradas-nota"><strong>{{ c.sem_valor }} lançamento{{ '' if c.sem_valor == 1 else 's' }} sem valor informado</strong> (não entra na soma).</p>{% endif %}
+        </div>
+      </section>
+      {% endif %}
+
       <section class="bloco" id="vagas" aria-labelledby="t-vagas">
         <div class="bloco-topo">
           <h2 id="t-vagas"><svg class="icone"><use href="#i-usuarios"/></svg>Vagas por categoria</h2>

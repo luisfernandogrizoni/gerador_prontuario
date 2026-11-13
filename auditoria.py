@@ -218,6 +218,8 @@ LEITURAS = {
     "baixar_relatorio": lambda: ("relatorio.baixar", "", None, None, f"internos ativos: {(request.view_args or {}).get('slug', '')}" + _com_nomes()),
     "ver_relatorio_anual": lambda: ("relatorio.ver", "", None, None, "quem passou pela casa no ano" + _com_nomes()),
     "baixar_relatorio_anual": lambda: ("relatorio.baixar", "", None, None, "quem passou pela casa no ano" + _com_nomes()),
+    "ver_relatorio_contribuicoes": lambda: ("relatorio.ver", "", None, None, f"contribuições recebidas em {(request.view_args or {}).get('ano')}" + _com_nomes()),
+    "baixar_relatorio_contribuicoes": lambda: ("relatorio.baixar", "", None, None, f"contribuições recebidas em {(request.view_args or {}).get('ano')}" + _com_nomes()),
     "api_triagens": lambda: ("ver.lista", "", None, None, "triagens"),
     "api_internos": lambda: ("ver.lista", "", None, None, "internos"),
     "api_internos_busca": lambda: _leitura_da_lista("internos · com busca" if request.args.get("q", "").strip() else "internos"),

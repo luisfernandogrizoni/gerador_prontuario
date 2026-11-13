@@ -72,7 +72,7 @@ GRUPOS = (
         Permissao("baixa", "Dar baixa", "Saída do interno; só a enfermeira(o) do polo Saúde (o Escritório não)"),
         Permissao("envelope", "Anotar a chegada do prontuário em papel", "O envelope que volta da casa de acolhida; o polo Escritório"),
         Permissao("anexar", "Anexar e remover documentos escaneados", "O PDF do documento físico assinado, no cartão Documentos escaneados da ficha, vinculado a uma área; quem vê segue o sigilo da área (Serviço Social, Saúde, Financeiro); só o administrador apaga de vez"),
-        Permissao("financeiro", "Lançar e excluir parcelas", "Contribuição de cada internação"),
+        Permissao("financeiro", "Lançar e excluir parcelas e ver o que entrou", "Contribuição de cada internação; o bloco \"Contribuições do mês\" do Início e o relatório de contribuições do ano"),
         Permissao("excluir", "Excluir registros", "Vão para a lixeira; só o administrador apaga de vez"),
         Permissao("unificar", "Unificar cadastros duplicados", "Junta duas fichas da mesma pessoa", padrao=0),
     )),
@@ -269,6 +269,7 @@ REGRAS = {
     "baixar_declaracao": "documentos", "ver_impressos": _quem_imprime, "baixar_impressos": _quem_imprime,
     "pagina_relatorios": "relatorios", "ver_relatorio": "relatorios", "baixar_relatorio": "relatorios",
     "ver_relatorio_anual": "relatorios", "baixar_relatorio_anual": "relatorios",
+    "ver_relatorio_contribuicoes": "financeiro", "baixar_relatorio_contribuicoes": "financeiro",       # dado financeiro: quem lança as parcelas
 
     "nova_triagem": "triagem", "salvar_triagem": "triagem", "mudar_status": _quem_muda_status, "internar_da_triagem": "admitir",
     "formulario": "internacao", "gerar": "internacao", "editar_internacao": _quem_edita,
