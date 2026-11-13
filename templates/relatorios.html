@@ -25,6 +25,8 @@
   .numeros > div { background: #fff; padding: 16px 20px; }
   .numeros strong { display: block; font-size: 1.7rem; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
   .numeros .total strong { font-size: 2.3rem; }
+  .numeros-3 { grid-template-columns: 1.4fr repeat(2, 1fr); }
+  .outros-anos { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 12px 20px; border-top: 1px solid #f0f2f5; color: var(--suave); font-size: .85rem; }
   .numeros span { display: block; margin-top: 6px; color: var(--suave); font-size: .82rem; }
   .relatorio .aviso { margin: 0; border-radius: 0; border-width: 1px 0 0; }
   @media (max-width: 900px) { .numeros { grid-template-columns: repeat(2, 1fr); } .numeros .total { grid-column: 1 / -1; } }
@@ -72,6 +74,27 @@
     </div>
     {% if aviso_anual %}<div class="aviso erro">{{ aviso_anual }}</div>{% endif %}
   </section>
+
+  {% if contribuicoes is not none %}
+  <section class="relatorio" aria-labelledby="rel-contribuicoes">
+    <div class="relatorio-topo">
+      <h2 id="rel-contribuicoes"><svg class="icone"><use href="#i-moeda"/></svg>Contribuições recebidas em {{ contribuicoes.ano }}</h2>
+      <span class="conta">relatório total do ano</span>
+      {{ acoes_documento(url_for('ver_relatorio_contribuicoes', ano=contribuicoes.ano, nomes=nomes), url_for('baixar_relatorio_contribuicoes', ano=contribuicoes.ano, nomes=nomes)) }}
+    </div>
+    <div class="numeros numeros-3">
+      <div class="total"><strong>{{ contribuicoes.total | reais }}</strong><span>recebidos até hoje</span></div>
+      <div><strong>{{ contribuicoes.lancamentos }}</strong><span>lançamento{{ '' if contribuicoes.lancamentos == 1 else 's' }}</span></div>
+      <div><strong>{{ contribuicoes.pessoas }}</strong><span>interno{{ '' if contribuicoes.pessoas == 1 else 's' }} que contribuíram</span></div>
+    </div>
+    {% if aviso_contribuicoes %}<div class="aviso erro">{{ aviso_contribuicoes }}</div>{% endif %}
+    {% if anos_das_contribuicoes | length > 1 %}
+    <div class="outros-anos">Outros anos:
+      {% for a in anos_das_contribuicoes if a != contribuicoes.ano %}<a class="botao pequeno secundario" href="{{ url_for('ver_relatorio_contribuicoes', ano=a, nomes=nomes) }}">{{ a }}</a>{% endfor %}
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
 
   {% for b in blocos %}
   <section class="relatorio" aria-labelledby="rel-{{ b.slug }}">
